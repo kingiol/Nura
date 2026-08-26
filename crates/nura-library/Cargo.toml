@@ -1,0 +1,10 @@
+[package]
+name = "nura-library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nura-domain = { path = "../nura-domain" }
+rusqlite.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,5 @@
+/target/
+/build/
+macos/NuraMac/.build/
+macos/NuraMac/.swiftpm/
+*.xcuserstate

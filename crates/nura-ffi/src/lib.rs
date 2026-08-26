@@ -1,0 +1,595 @@
+use std::collections::VecDeque;
+use std::ffi::{CStr, CString, c_char, c_int};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock, mpsc};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use nura_domain::TrackKind;
+use nura_library::SqliteHistoryRepository;
+use nura_mpv::{MpvEngine, SharedMpvEngine};
+use nura_player_core::{PlayerEvent, PlayerSession};
+
+type Reply = mpsc::SyncSender<Result<(), String>>;
+
+enum Command {
+    Open(PathBuf, Reply),
+    Play(Reply),
+    Pause(Reply),
+    Toggle(Reply),
+    Seek(f64, Reply),
+    Volume(f64, Reply),
+    Mute(bool, Reply),
+    AudioTrack(Option<i64>, Reply),
+    SubtitleTrack(Option<i64>, Reply),
+    Async(AsyncCommand),
+    Shutdown(Reply),
+}
+
+enum AsyncCommand {
+    Open(PathBuf),
+    Toggle,
+    Seek(f64),
+    Mute(bool),
+    AudioTrack(Option<i64>),
+    SubtitleTrack(Option<i64>),
+}
+
+pub struct NuraPlayer {
+    commands: mpsc::SyncSender<Command>,
+    pending_volume: Arc<Mutex<Option<f64>>>,
+    events: Arc<Mutex<VecDeque<PlayerEvent>>>,
+    engine: SharedMpvEngine,
+    worker: Option<JoinHandle<()>>,
+}
+
+static LAST_ERROR: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+fn last_error_slot() -> &'static Mutex<Option<String>> {
+    LAST_ERROR.get_or_init(|| Mutex::new(None))
+}
+
+fn set_last_error(error: impl Into<String>) {
+    if let Ok(mut slot) = last_error_slot().lock() {
+        *slot = Some(error.into());
+    }
+}
+
+fn take_last_error() -> CString {
+    let value = last_error_slot()
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take())
+        .unwrap_or_default();
+    CString::new(value).unwrap_or_default()
+}
+
+fn push_events(
+    session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
+    events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
+) {
+    if let Ok(mut queue) = events.lock() {
+        queue.extend(session.take_events());
+    }
+}
+
+fn push_error(events: &Arc<Mutex<VecDeque<PlayerEvent>>>, error: impl Into<String>) {
+    if let Ok(mut queue) = events.lock() {
+        queue.push_back(PlayerEvent::Error {
+            message: error.into(),
+        });
+    }
+}
+
+fn handle_async_command(
+    session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
+    command: AsyncCommand,
+    events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
+) {
+    let result = match command {
+        AsyncCommand::Open(path) => session.open(path),
+        AsyncCommand::Toggle => session.toggle_playback(),
+        AsyncCommand::Seek(position) => session.seek(position),
+        AsyncCommand::Mute(muted) => session.set_mute(muted),
+        AsyncCommand::AudioTrack(id) => session.select_track(TrackKind::Audio, id),
+        AsyncCommand::SubtitleTrack(id) => session.select_track(TrackKind::Subtitle, id),
+    };
+    if let Err(error) = result {
+        push_error(events, error.to_string());
+    }
+}
+
+fn set_pending_volume(pending_volume: &Mutex<Option<f64>>, volume: f64) -> Result<(), String> {
+    let mut pending_volume = pending_volume
+        .lock()
+        .map_err(|_| "pending volume lock poisoned".to_owned())?;
+    *pending_volume = Some(volume);
+    Ok(())
+}
+
+fn take_pending_volume(pending_volume: &Mutex<Option<f64>>) -> Option<f64> {
+    pending_volume
+        .lock()
+        .ok()
+        .and_then(|mut volume| volume.take())
+}
+
+fn apply_pending_volume(
+    session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
+    pending_volume: &Mutex<Option<f64>>,
+    events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
+) {
+    let Some(volume) = take_pending_volume(pending_volume) else {
+        return;
+    };
+    if let Err(error) = session.set_volume(volume) {
+        push_error(events, error.to_string());
+    }
+}
+
+fn handle_command(
+    session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
+    command: Command,
+    events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
+) -> bool {
+    let (operation, reply) = match command {
+        Command::Open(path, reply) => (session.open(path), reply),
+        Command::Play(reply) => (session.play(), reply),
+        Command::Pause(reply) => (session.pause(), reply),
+        Command::Toggle(reply) => (session.toggle_playback(), reply),
+        Command::Async(command) => {
+            handle_async_command(session, command, events);
+            return false;
+        }
+        Command::Seek(position, reply) => (session.seek(position), reply),
+        Command::Volume(volume, reply) => (session.set_volume(volume), reply),
+        Command::Mute(muted, reply) => (session.set_mute(muted), reply),
+        Command::AudioTrack(id, reply) => (session.select_track(TrackKind::Audio, id), reply),
+        Command::SubtitleTrack(id, reply) => (session.select_track(TrackKind::Subtitle, id), reply),
+        Command::Shutdown(reply) => {
+            let result = session.shutdown().map_err(|error| error.to_string());
+            let _ = reply.send(result);
+            return true;
+        }
+    };
+    let result = operation.map_err(|error| error.to_string());
+    let _ = reply.send(result);
+    false
+}
+
+fn spawn_worker(
+    receiver: mpsc::Receiver<Command>,
+    engine: SharedMpvEngine,
+    history_path: PathBuf,
+    pending_volume: Arc<Mutex<Option<f64>>>,
+    events: Arc<Mutex<VecDeque<PlayerEvent>>>,
+) -> Result<JoinHandle<()>, String> {
+    let history = SqliteHistoryRepository::open(history_path).map_err(|error| error.to_string())?;
+    Ok(thread::spawn(move || {
+        let mut session = PlayerSession::new(engine, history);
+        loop {
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(command) => {
+                    if handle_command(&mut session, command, &events) {
+                        break;
+                    }
+                }
+
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+            }
+            apply_pending_volume(&mut session, &pending_volume, &events);
+            if let Err(error) = session.poll() {
+                push_error(&events, error.to_string());
+            }
+            push_events(&mut session, &events);
+        }
+        push_events(&mut session, &events);
+    }))
+}
+
+fn send_command(player: &NuraPlayer, command: impl FnOnce(Reply) -> Command) -> Result<(), String> {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    player
+        .commands
+        .send(command(sender))
+        .map_err(|_| "player worker has stopped".to_owned())?;
+    receiver
+        .recv()
+        .map_err(|_| "player worker did not reply".to_owned())?
+}
+
+fn enqueue_command(commands: &mpsc::SyncSender<Command>, command: Command) -> Result<(), String> {
+    commands.try_send(command).map_err(|error| match error {
+        mpsc::TrySendError::Full(_) => "player command queue is full".to_owned(),
+        mpsc::TrySendError::Disconnected(_) => "player worker has stopped".to_owned(),
+    })
+}
+
+fn enqueue_async(
+    commands: &mpsc::SyncSender<Command>,
+    command: AsyncCommand,
+) -> Result<(), String> {
+    enqueue_command(commands, Command::Async(command))
+}
+
+unsafe fn read_string(value: *const c_char) -> Result<String, String> {
+    if value.is_null() {
+        return Err("received a null string".to_owned());
+    }
+    CStr::from_ptr(value)
+        .to_str()
+        .map(|value| value.to_owned())
+        .map_err(|_| "received invalid UTF-8".to_owned())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nura_last_error() -> *mut c_char {
+    take_last_error().into_raw()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nura_player_create(data_directory: *const c_char) -> *mut NuraPlayer {
+    let result: Result<Box<NuraPlayer>, String> = (|| {
+        let data_directory = unsafe { read_string(data_directory) }?;
+        let directory = PathBuf::from(data_directory);
+        std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let engine = SharedMpvEngine(Arc::new(Mutex::new(
+            MpvEngine::new().map_err(|error| error.to_string())?,
+        )));
+        let (sender, receiver) = mpsc::sync_channel(32);
+        let pending_volume = Arc::new(Mutex::new(None));
+        let events = Arc::new(Mutex::new(VecDeque::new()));
+        let worker = spawn_worker(
+            receiver,
+            engine.clone(),
+            directory.join("history.sqlite"),
+            pending_volume.clone(),
+            events.clone(),
+        )?;
+        Ok(Box::new(NuraPlayer {
+            commands: sender,
+            pending_volume,
+            events,
+            engine,
+            worker: Some(worker),
+        }))
+    })();
+    match result {
+        Ok(player) => Box::into_raw(player),
+        Err(error) => {
+            set_last_error(error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_destroy(player: *mut NuraPlayer) {
+    if player.is_null() {
+        return;
+    }
+    let mut player = Box::from_raw(player);
+    let _ = send_command(&player, Command::Shutdown);
+    if let Some(worker) = player.worker.take() {
+        let _ = worker.join();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_open(player: *mut NuraPlayer, path: *const c_char) -> c_int {
+    let path = match read_string(path) {
+        Ok(path) => path,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    command_result(player, move |reply| {
+        Command::Open(PathBuf::from(path), reply)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_open_async(
+    player: *mut NuraPlayer,
+    path: *const c_char,
+) -> c_int {
+    let path = match read_string(path) {
+        Ok(path) => path,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Open(PathBuf::from(path)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_play(player: *mut NuraPlayer) -> c_int {
+    command_result(player, Command::Play)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_pause(player: *mut NuraPlayer) -> c_int {
+    command_result(player, Command::Pause)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_toggle(player: *mut NuraPlayer) -> c_int {
+    command_result(player, Command::Toggle)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_toggle_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Toggle)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_seek(player: *mut NuraPlayer, position: f64) -> c_int {
+    command_result(player, |reply| Command::Seek(position, reply))
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_seek_async(player: *mut NuraPlayer, position: f64) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Seek(position))
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_volume(player: *mut NuraPlayer, volume: f64) -> c_int {
+    command_result(player, |reply| Command::Volume(volume, reply))
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_volume_async(
+    player: *mut NuraPlayer,
+    volume: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    match set_pending_volume(&player.pending_volume, volume) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error);
+            -1
+        }
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_mute(player: *mut NuraPlayer, muted: c_int) -> c_int {
+    command_result(player, |reply| Command::Mute(muted != 0, reply))
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_mute_async(
+    player: *mut NuraPlayer,
+    muted: c_int,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Mute(muted != 0))
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_select_audio_track(
+    player: *mut NuraPlayer,
+    track_id: i64,
+) -> c_int {
+    command_result(player, |reply| {
+        Command::AudioTrack((track_id >= 0).then_some(track_id), reply)
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_select_audio_track_async(
+    player: *mut NuraPlayer,
+    track_id: i64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(
+        player,
+        AsyncCommand::AudioTrack((track_id >= 0).then_some(track_id)),
+    )
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_select_subtitle_track(
+    player: *mut NuraPlayer,
+    track_id: i64,
+) -> c_int {
+    command_result(player, |reply| {
+        Command::SubtitleTrack((track_id >= 0).then_some(track_id), reply)
+    })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_select_subtitle_track_async(
+    player: *mut NuraPlayer,
+    track_id: i64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(
+        player,
+        AsyncCommand::SubtitleTrack((track_id >= 0).then_some(track_id)),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_attach_opengl_context(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        return -1;
+    };
+    match player
+        .engine
+        .0
+        .lock()
+        .map_err(|_| "player lock poisoned".to_owned())
+        .and_then(|mut engine| {
+            engine
+                .attach_opengl_context()
+                .map_err(|error| error.to_string())
+        }) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error.to_string());
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_render_opengl(
+    player: *mut NuraPlayer,
+    fbo: i32,
+    width: i32,
+    height: i32,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        return -1;
+    };
+    match player
+        .engine
+        .0
+        .lock()
+        .map_err(|_| "player lock poisoned".to_owned())
+        .and_then(|mut engine| {
+            engine
+                .render_opengl(fbo, width, height)
+                .map_err(|error| error.to_string())
+        }) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error.to_string());
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_next_event(player: *mut NuraPlayer) -> *mut c_char {
+    let Some(player) = player.as_ref() else {
+        return std::ptr::null_mut();
+    };
+    let event = player
+        .events
+        .lock()
+        .ok()
+        .and_then(|mut queue| queue.pop_front());
+    event
+        .and_then(|event| serde_json::to_string(&event).ok())
+        .and_then(|event| CString::new(event).ok())
+        .map(CString::into_raw)
+        .unwrap_or(std::ptr::null_mut())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_string_free(value: *mut c_char) {
+    if !value.is_null() {
+        drop(CString::from_raw(value));
+    }
+}
+
+unsafe fn command_result(player: *mut NuraPlayer, command: impl FnOnce(Reply) -> Command) -> c_int {
+    let Some(player) = player.as_ref() else {
+        return -1;
+    };
+    match send_command(player, command) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error);
+            -1
+        }
+    }
+}
+
+fn async_command_result(player: &NuraPlayer, command: AsyncCommand) -> c_int {
+    match enqueue_async(&player.commands, command) {
+        Ok(()) => 0,
+        Err(error) => {
+            set_last_error(error);
+            -1
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enqueue_toggle_does_not_wait_for_worker_reply() {
+        let (commands, receiver) = mpsc::sync_channel(1);
+
+        enqueue_async(&commands, AsyncCommand::Toggle).expect("toggle should be queued");
+
+        let command = receiver.try_recv().expect("command should be available");
+        match command {
+            Command::Async(AsyncCommand::Toggle) => {}
+            _ => panic!("expected asynchronous toggle command"),
+        }
+    }
+
+    #[test]
+    fn enqueue_mute_does_not_wait_for_worker_reply() {
+        let (commands, receiver) = mpsc::sync_channel(1);
+
+        enqueue_async(&commands, AsyncCommand::Mute(true)).expect("mute should be queued");
+
+        let command = receiver.try_recv().expect("command should be available");
+        match command {
+            Command::Async(AsyncCommand::Mute(true)) => {}
+            _ => panic!("expected asynchronous mute command"),
+        }
+    }
+
+    #[test]
+    fn enqueue_seek_and_track_changes_do_not_wait_for_worker_reply() {
+        let (commands, receiver) = mpsc::sync_channel(3);
+
+        enqueue_async(&commands, AsyncCommand::Seek(42.0)).expect("seek should be queued");
+        enqueue_async(&commands, AsyncCommand::AudioTrack(Some(1)))
+            .expect("audio track should be queued");
+        enqueue_async(&commands, AsyncCommand::SubtitleTrack(None))
+            .expect("subtitle track should be queued");
+
+        match receiver.try_recv().expect("seek should be available") {
+            Command::Async(AsyncCommand::Seek(position)) => assert_eq!(position, 42.0),
+            _ => panic!("expected asynchronous seek command"),
+        }
+        match receiver
+            .try_recv()
+            .expect("audio track should be available")
+        {
+            Command::Async(AsyncCommand::AudioTrack(Some(1))) => {}
+            _ => panic!("expected asynchronous audio track command"),
+        }
+        match receiver
+            .try_recv()
+            .expect("subtitle track should be available")
+        {
+            Command::Async(AsyncCommand::SubtitleTrack(None)) => {}
+            _ => panic!("expected asynchronous subtitle track command"),
+        }
+    }
+
+    #[test]
+    fn pending_volume_keeps_only_the_latest_value() {
+        let pending_volume = Mutex::new(None);
+
+        set_pending_volume(&pending_volume, 20.0).expect("first volume should be accepted");
+        set_pending_volume(&pending_volume, 80.0).expect("latest volume should be accepted");
+
+        assert_eq!(take_pending_volume(&pending_volume), Some(80.0));
+        assert_eq!(take_pending_volume(&pending_volume), None);
+    }
+}

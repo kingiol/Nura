@@ -1,0 +1,11 @@
+[package]
+name = "nura-player-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nura-domain = { path = "../nura-domain" }
+nura-library = { path = "../nura-library" }
+serde.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "nura-mpv"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+libc = "0.2"
+libloading.workspace = true
+nura-domain = { path = "../nura-domain" }
+nura-player-core = { path = "../nura-player-core" }
+thiserror.workspace = true
