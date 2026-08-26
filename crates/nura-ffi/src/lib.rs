@@ -14,25 +14,41 @@ type Reply = mpsc::SyncSender<Result<(), String>>;
 
 enum Command {
     Open(PathBuf, Reply),
+    Enqueue(PathBuf, Reply),
+    PlayIndex(usize, Reply),
+    Next(Reply),
+    Previous(Reply),
     Play(Reply),
     Pause(Reply),
     Toggle(Reply),
     Seek(f64, Reply),
     Volume(f64, Reply),
     Mute(bool, Reply),
+    Speed(f64, Reply),
+    Loop(bool, Reply),
+    Screenshot(Reply),
     AudioTrack(Option<i64>, Reply),
     SubtitleTrack(Option<i64>, Reply),
+    VideoTrack(Option<i64>, Reply),
     Async(AsyncCommand),
     Shutdown(Reply),
 }
 
 enum AsyncCommand {
     Open(PathBuf),
+    Enqueue(PathBuf),
+    PlayIndex(usize),
+    Next,
+    Previous,
     Toggle,
     Seek(f64),
     Mute(bool),
+    Speed(f64),
+    Loop(bool),
+    Screenshot,
     AudioTrack(Option<i64>),
     SubtitleTrack(Option<i64>),
+    VideoTrack(Option<i64>),
 }
 
 pub struct NuraPlayer {
@@ -81,18 +97,49 @@ fn push_error(events: &Arc<Mutex<VecDeque<PlayerEvent>>>, error: impl Into<Strin
     }
 }
 
+fn open_locator(
+    session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
+    locator: PathBuf,
+) -> Result<(), nura_player_core::PlayerError> {
+    let locator = locator.to_string_lossy().into_owned();
+    if locator.starts_with("http://") || locator.starts_with("https://") {
+        session.open_url(locator)
+    } else {
+        session.open(locator)
+    }
+}
+
 fn handle_async_command(
     session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
     command: AsyncCommand,
     events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
 ) {
     let result = match command {
-        AsyncCommand::Open(path) => session.open(path),
+        AsyncCommand::Open(path) => open_locator(session, path),
+        AsyncCommand::Enqueue(path) => {
+            let locator = path.to_string_lossy().into_owned();
+            if locator.starts_with("http://") || locator.starts_with("https://") {
+                nura_domain::MediaItem::from_url(locator)
+                    .map_err(nura_player_core::PlayerError::Domain)
+                    .and_then(|item| session.enqueue_item(item))
+            } else {
+                nura_domain::MediaItem::from_path(path)
+                    .map_err(nura_player_core::PlayerError::Domain)
+                    .and_then(|item| session.enqueue_item(item))
+            }
+        }
+        AsyncCommand::PlayIndex(index) => session.play_playlist_index(index),
+        AsyncCommand::Next => session.next(),
+        AsyncCommand::Previous => session.previous(),
         AsyncCommand::Toggle => session.toggle_playback(),
         AsyncCommand::Seek(position) => session.seek(position),
         AsyncCommand::Mute(muted) => session.set_mute(muted),
+        AsyncCommand::Speed(speed) => session.set_speed(speed),
+        AsyncCommand::Loop(enabled) => session.set_loop(enabled),
+        AsyncCommand::Screenshot => session.screenshot(),
         AsyncCommand::AudioTrack(id) => session.select_track(TrackKind::Audio, id),
         AsyncCommand::SubtitleTrack(id) => session.select_track(TrackKind::Subtitle, id),
+        AsyncCommand::VideoTrack(id) => session.select_track(TrackKind::Video, id),
     };
     if let Err(error) = result {
         push_error(events, error.to_string());
@@ -133,7 +180,23 @@ fn handle_command(
     events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
 ) -> bool {
     let (operation, reply) = match command {
-        Command::Open(path, reply) => (session.open(path), reply),
+        Command::Open(path, reply) => (open_locator(session, path), reply),
+        Command::Enqueue(path, reply) => {
+            let locator = path.to_string_lossy().into_owned();
+            let result = if locator.starts_with("http://") || locator.starts_with("https://") {
+                nura_domain::MediaItem::from_url(locator)
+                    .map_err(nura_player_core::PlayerError::Domain)
+                    .and_then(|item| session.enqueue_item(item))
+            } else {
+                nura_domain::MediaItem::from_path(path)
+                    .map_err(nura_player_core::PlayerError::Domain)
+                    .and_then(|item| session.enqueue_item(item))
+            };
+            (result, reply)
+        }
+        Command::PlayIndex(index, reply) => (session.play_playlist_index(index), reply),
+        Command::Next(reply) => (session.next(), reply),
+        Command::Previous(reply) => (session.previous(), reply),
         Command::Play(reply) => (session.play(), reply),
         Command::Pause(reply) => (session.pause(), reply),
         Command::Toggle(reply) => (session.toggle_playback(), reply),
@@ -144,8 +207,12 @@ fn handle_command(
         Command::Seek(position, reply) => (session.seek(position), reply),
         Command::Volume(volume, reply) => (session.set_volume(volume), reply),
         Command::Mute(muted, reply) => (session.set_mute(muted), reply),
+        Command::Speed(speed, reply) => (session.set_speed(speed), reply),
+        Command::Loop(enabled, reply) => (session.set_loop(enabled), reply),
+        Command::Screenshot(reply) => (session.screenshot(), reply),
         Command::AudioTrack(id, reply) => (session.select_track(TrackKind::Audio, id), reply),
         Command::SubtitleTrack(id, reply) => (session.select_track(TrackKind::Subtitle, id), reply),
+        Command::VideoTrack(id, reply) => (session.select_track(TrackKind::Video, id), reply),
         Command::Shutdown(reply) => {
             let result = session.shutdown().map_err(|error| error.to_string());
             let _ = reply.send(result);
@@ -310,6 +377,74 @@ pub unsafe extern "C" fn nura_player_open_async(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_open_url_async(
+    player: *mut NuraPlayer,
+    url: *const c_char,
+) -> c_int {
+    let url = match read_string(url) {
+        Ok(url) => url,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Open(PathBuf::from(url)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_enqueue_async(
+    player: *mut NuraPlayer,
+    locator: *const c_char,
+) -> c_int {
+    let locator = match read_string(locator) {
+        Ok(locator) => locator,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Enqueue(PathBuf::from(locator)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_play_index_async(
+    player: *mut NuraPlayer,
+    index: usize,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::PlayIndex(index))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_next_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Next)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_previous_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Previous)
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_play(player: *mut NuraPlayer) -> c_int {
     command_result(player, Command::Play)
 }
@@ -377,6 +512,36 @@ pub unsafe extern "C" fn nura_player_set_mute_async(
     };
     async_command_result(player, AsyncCommand::Mute(muted != 0))
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_speed_async(player: *mut NuraPlayer, speed: f64) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Speed(speed))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_screenshot_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Screenshot)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_loop_async(
+    player: *mut NuraPlayer,
+    enabled: c_int,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Loop(enabled != 0))
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_audio_track(
     player: *mut NuraPlayer,
@@ -421,6 +586,21 @@ pub unsafe extern "C" fn nura_player_select_subtitle_track_async(
     async_command_result(
         player,
         AsyncCommand::SubtitleTrack((track_id >= 0).then_some(track_id)),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_select_video_track_async(
+    player: *mut NuraPlayer,
+    track_id: i64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(
+        player,
+        AsyncCommand::VideoTrack((track_id >= 0).then_some(track_id)),
     )
 }
 

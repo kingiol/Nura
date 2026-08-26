@@ -8,6 +8,16 @@ private func nura_player_create(_ directory: UnsafePointer<CChar>?) -> NuraHandl
 private func nura_player_destroy(_ player: NuraHandle?)
 @_silgen_name("nura_player_open_async")
 private func nura_player_open_async(_ player: NuraHandle?, _ path: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_open_url_async")
+private func nura_player_open_url_async(_ player: NuraHandle?, _ url: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_enqueue_async")
+private func nura_player_enqueue_async(_ player: NuraHandle?, _ locator: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_play_index_async")
+private func nura_player_play_index_async(_ player: NuraHandle?, _ index: Int) -> Int32
+@_silgen_name("nura_player_next_async")
+private func nura_player_next_async(_ player: NuraHandle?) -> Int32
+@_silgen_name("nura_player_previous_async")
+private func nura_player_previous_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_play")
 private func nura_player_play(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_pause")
@@ -20,10 +30,18 @@ private func nura_player_seek_async(_ player: NuraHandle?, _ position: Double) -
 private func nura_player_set_volume_async(_ player: NuraHandle?, _ volume: Double) -> Int32
 @_silgen_name("nura_player_set_mute_async")
 private func nura_player_set_mute_async(_ player: NuraHandle?, _ muted: Int32) -> Int32
+@_silgen_name("nura_player_set_speed_async")
+private func nura_player_set_speed_async(_ player: NuraHandle?, _ speed: Double) -> Int32
+@_silgen_name("nura_player_screenshot_async")
+private func nura_player_screenshot_async(_ player: NuraHandle?) -> Int32
+@_silgen_name("nura_player_set_loop_async")
+private func nura_player_set_loop_async(_ player: NuraHandle?, _ enabled: Int32) -> Int32
 @_silgen_name("nura_player_select_audio_track_async")
 private func nura_player_select_audio_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
 @_silgen_name("nura_player_select_subtitle_track_async")
 private func nura_player_select_subtitle_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
+@_silgen_name("nura_player_select_video_track_async")
+private func nura_player_select_video_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
 @_silgen_name("nura_player_attach_opengl_context")
 private func nura_player_attach_opengl_context(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_render_opengl")
@@ -44,20 +62,62 @@ struct Track: Decodable {
     let selected: Bool
 }
 
-struct MediaItem: Decodable { let path: String; let title: String }
+enum MediaSource: Decodable {
+    case localFile(String)
+    case publicURL(String)
+
+    private enum CodingKeys: String, CodingKey { case kind, value }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(String.self, forKey: .kind) {
+        case "local_file": self = .localFile(try container.decode(String.self, forKey: .value))
+        case "public_url": self = .publicURL(try container.decode(String.self, forKey: .value))
+        default: throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown media source")
+        }
+    }
+}
+
+struct MediaItem: Decodable {
+    let source: MediaSource
+    let title: String
+}
+
+struct Chapter: Decodable, Identifiable {
+    let id: Int64
+    let title: String
+    let startSeconds: Double
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, startSeconds = "start_seconds"
+    }
+}
+
 struct PlaybackSnapshot: Decodable {
     let item: MediaItem?
+    let playlist: [MediaItem]
+    let playlistIndex: Int?
+    let chapters: [Chapter]
     let status: String
     let positionSeconds: Double
     let durationSeconds: Double?
+    let speed: Double
+    let audioDelaySeconds: Double
+    let subtitleDelaySeconds: Double
+    let bufferingPercent: Double?
     let volume: Double
     let muted: Bool
+    let videoTracks: [Track]
     let audioTracks: [Track]
     let subtitleTracks: [Track]
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case item, status, positionSeconds = "position_seconds", durationSeconds = "duration_seconds", volume, muted
+        case item, playlist, playlistIndex = "playlist_index", chapters, status
+        case positionSeconds = "position_seconds", durationSeconds = "duration_seconds"
+        case speed, audioDelaySeconds = "audio_delay_seconds", subtitleDelaySeconds = "subtitle_delay_seconds"
+        case bufferingPercent = "buffering_percent", volume, muted
+        case videoTracks = "video_tracks"
         case audioTracks = "audio_tracks", subtitleTracks = "subtitle_tracks", error
     }
 }
@@ -103,13 +163,37 @@ final class PlayerBridge {
 
     deinit { nura_player_destroy(handle) }
 
-    func open(_ url: URL) throws { try command { url.path.withCString { nura_player_open_async(handle, $0) } } }
+    func open(_ url: URL) throws {
+        if url.isFileURL {
+            try command { url.path.withCString { nura_player_open_async(handle, $0) } }
+        } else {
+            try command { url.absoluteString.withCString { nura_player_open_url_async(handle, $0) } }
+        }
+    }
+
+    func openURL(_ value: String) throws {
+        try command { value.withCString { nura_player_open_url_async(handle, $0) } }
+    }
+    func enqueue(_ url: URL) throws {
+        let value = url.isFileURL ? url.path : url.absoluteString
+        try command { value.withCString { nura_player_enqueue_async(handle, $0) } }
+    }
+    func enqueueURL(_ value: String) throws {
+        try command { value.withCString { nura_player_enqueue_async(handle, $0) } }
+    }
+    func playPlaylistIndex(_ index: Int) throws { try command { nura_player_play_index_async(handle, index) } }
+    func next() throws { try command { nura_player_next_async(handle) } }
+    func previous() throws { try command { nura_player_previous_async(handle) } }
     func toggle() throws { try command { nura_player_toggle_async(handle) } }
     func seek(_ position: Double) throws { try command { nura_player_seek_async(handle, position) } }
     func setVolume(_ volume: Double) throws { try command { nura_player_set_volume_async(handle, volume) } }
     func setMuted(_ muted: Bool) throws { try command { nura_player_set_mute_async(handle, muted ? 1 : 0) } }
+    func setSpeed(_ speed: Double) throws { try command { nura_player_set_speed_async(handle, speed) } }
+    func screenshot() throws { try command { nura_player_screenshot_async(handle) } }
+    func setLoop(_ enabled: Bool) throws { try command { nura_player_set_loop_async(handle, enabled ? 1 : 0) } }
     func selectAudioTrack(_ id: Int64) throws { try command { nura_player_select_audio_track_async(handle, id) } }
     func selectSubtitleTrack(_ id: Int64) throws { try command { nura_player_select_subtitle_track_async(handle, id) } }
+    func selectVideoTrack(_ id: Int64) throws { try command { nura_player_select_video_track_async(handle, id) } }
     func attachOpenGLContext() throws { try command { nura_player_attach_opengl_context(handle) } }
 
     func render(fbo: Int32, width: Int32, height: Int32) throws {

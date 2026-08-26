@@ -17,4 +17,9 @@ xcodebuild \
 APP="$ROOT/build/Nura.app"
 rm -rf "$APP"
 cp -R "$DERIVED_DATA/Build/Products/Release/Nura.app" "$APP"
+
+YTDL_PATH="$($ROOT/scripts/check-ytdlp.sh --standalone)"
+mkdir -p "$APP/Contents/Resources/bin"
+cp "$YTDL_PATH" "$APP/Contents/Resources/bin/yt-dlp"
+chmod 755 "$APP/Contents/Resources/bin/yt-dlp"
 printf '%s\n' "$APP"

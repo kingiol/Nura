@@ -126,18 +126,44 @@ pub struct MpvEngine {
     render_context: *mut MpvRenderContext,
     pending_start: f64,
     last_position: f64,
+    last_buffering: Option<f64>,
+    last_speed: f64,
 }
 
 unsafe impl Send for MpvEngine {}
 
 impl MpvEngine {
+    fn ytdl_path() -> Option<String> {
+        let mut candidates = Vec::new();
+        if let Ok(path) = std::env::var("NURA_YTDL_PATH") {
+            candidates.push(path);
+        }
+        if let Ok(executable) = std::env::current_exe() {
+            if let Some(resources) = executable.parent().and_then(|path| path.parent()) {
+                candidates.push(
+                    resources
+                        .join("Resources/bin/yt-dlp")
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+        candidates.extend([
+            "/opt/homebrew/bin/yt-dlp".to_owned(),
+            "/usr/local/bin/yt-dlp".to_owned(),
+        ]);
+        candidates
+            .into_iter()
+            .find(|path| Path::new(path).is_file())
+    }
+
     pub fn new() -> Result<Self, MpvError> {
         let api = MpvApi::load()?;
         let handle = unsafe { (api.create)() };
         if handle.is_null() {
             return Err(MpvError::Create);
         }
-        for (key, value) in [
+        let mut options = vec![
             ("vo", "libmpv"),
             // The initial OpenGL render path does not provide hardware-decoder
             // interop resources, so keep decoded frames in a software surface.
@@ -150,7 +176,17 @@ impl MpvEngine {
             // Keep libmpv's metadata-driven autorotation enabled. `no` would
             // suppress rotation metadata from phone/camera videos.
             ("video-rotate", "0"),
-        ] {
+            // Keep online media enabled; the bundled ytdl hook resolves public
+            // YouTube/Bilibili URLs before mpv opens the resulting streams.
+            ("ytdl", "yes"),
+            ("ytdl-format", "bestvideo+bestaudio/best"),
+        ];
+        if let Some(path) = Self::ytdl_path() {
+            let value: &'static str =
+                Box::leak(format!("ytdl_hook-ytdl_path={path}").into_boxed_str());
+            options.push(("script-opts", value));
+        }
+        for (key, value) in options {
             let key = CString::new(key).unwrap();
             let value = CString::new(value).unwrap();
             let result = unsafe { (api.set_option_string)(handle, key.as_ptr(), value.as_ptr()) };
@@ -170,6 +206,8 @@ impl MpvEngine {
             render_context: ptr::null_mut(),
             pending_start: 0.0,
             last_position: 0.0,
+            last_buffering: None,
+            last_speed: 1.0,
         })
     }
 
@@ -224,6 +262,7 @@ impl MpvEngine {
                 let prefix = format!("track-list/{index}");
                 let kind = match self.property_string(&format!("{prefix}/type"))?.as_str() {
                     "audio" => TrackKind::Audio,
+                    "video" => TrackKind::Video,
                     "sub" => TrackKind::Subtitle,
                     _ => return None,
                 };
@@ -244,6 +283,30 @@ impl MpvEngine {
                         .property_string(&format!("{prefix}/selected"))
                         .as_deref()
                         == Some("yes"),
+                })
+            })
+            .collect()
+    }
+
+    fn chapters(&self) -> Vec<nura_domain::Chapter> {
+        let count = self
+            .property_string("chapter-list/count")
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(0);
+        (0..count)
+            .filter_map(|index| {
+                let prefix = format!("chapter-list/{index}");
+                let start_seconds = self
+                    .property_string(&format!("{prefix}/time"))
+                    .and_then(|value| value.parse::<f64>().ok())?;
+                let title = self
+                    .property_string(&format!("{prefix}/title"))
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| format!("Chapter {}", index + 1));
+                Some(nura_domain::Chapter {
+                    id: index,
+                    title,
+                    start_seconds,
                 })
             })
             .collect()
@@ -342,7 +405,7 @@ impl Drop for MpvEngine {
 impl PlaybackEngine for MpvEngine {
     fn load(&mut self, item: &MediaItem, start_position_seconds: f64) -> Result<(), EngineError> {
         self.pending_start = start_position_seconds;
-        self.command(&["loadfile", &item.path.to_string_lossy(), "replace"])
+        self.command(&["loadfile", &item.locator(), "replace"])
     }
     fn play(&mut self) -> Result<(), EngineError> {
         self.command(&["set", "pause", "no"])
@@ -359,11 +422,20 @@ impl PlaybackEngine for MpvEngine {
     fn set_mute(&mut self, muted: bool) -> Result<(), EngineError> {
         self.command(&["set", "mute", if muted { "yes" } else { "no" }])
     }
+    fn set_speed(&mut self, speed: f64) -> Result<(), EngineError> {
+        self.command(&["set", "speed", &speed.to_string()])
+    }
+    fn set_loop(&mut self, enabled: bool) -> Result<(), EngineError> {
+        self.command(&["set", "loop-file", if enabled { "yes" } else { "no" }])
+    }
+    fn screenshot(&mut self) -> Result<(), EngineError> {
+        self.command(&["screenshot", "video"])
+    }
     fn select_track(&mut self, kind: TrackKind, track_id: Option<i64>) -> Result<(), EngineError> {
-        let property = if kind == TrackKind::Audio {
-            "aid"
-        } else {
-            "sid"
+        let property = match kind {
+            TrackKind::Video => "vid",
+            TrackKind::Audio => "aid",
+            TrackKind::Subtitle => "sid",
         };
         self.command(&[
             "set",
@@ -395,6 +467,7 @@ impl PlaybackEngine for MpvEngine {
                     events.push(EngineEvent::FileLoaded {
                         duration_seconds: self.duration(),
                         tracks: self.tracks(),
+                        chapters: self.chapters(),
                     });
                 }
                 MPV_EVENT_END_FILE => events.push(EngineEvent::Ended),
@@ -416,6 +489,22 @@ impl PlaybackEngine for MpvEngine {
         }
         if let Some(paused) = self.property_string("pause") {
             events.push(EngineEvent::Paused(paused == "yes"));
+        }
+        let buffering = self
+            .property_string("cache-buffering-state")
+            .and_then(|value| value.parse::<f64>().ok());
+        if buffering != self.last_buffering {
+            self.last_buffering = buffering;
+            events.push(EngineEvent::Buffering(buffering));
+        }
+        if let Some(speed) = self
+            .property_string("speed")
+            .and_then(|value| value.parse::<f64>().ok())
+        {
+            if (speed - self.last_speed).abs() >= 0.001 {
+                self.last_speed = speed;
+                events.push(EngineEvent::SpeedChanged(speed));
+            }
         }
         Ok(events)
     }
@@ -460,6 +549,24 @@ impl PlaybackEngine for SharedMpvEngine {
             .lock()
             .map_err(|_| EngineError::Message("player lock poisoned".into()))?
             .set_mute(muted)
+    }
+    fn set_speed(&mut self, speed: f64) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_speed(speed)
+    }
+    fn set_loop(&mut self, enabled: bool) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_loop(enabled)
+    }
+    fn screenshot(&mut self) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .screenshot()
     }
     fn select_track(&mut self, kind: TrackKind, id: Option<i64>) -> Result<(), EngineError> {
         self.0

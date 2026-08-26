@@ -6,11 +6,19 @@ import UniformTypeIdentifiers
 final class PlayerViewModel: ObservableObject {
     @Published private(set) var snapshot = PlaybackSnapshot(
         item: nil,
+        playlist: [],
+        playlistIndex: nil,
+        chapters: [],
         status: "idle",
         positionSeconds: 0,
         durationSeconds: nil,
+        speed: 1,
+        audioDelaySeconds: 0,
+        subtitleDelaySeconds: 0,
+        bufferingPercent: nil,
         volume: 100,
         muted: false,
+        videoTracks: [],
         audioTracks: [],
         subtitleTracks: [],
         error: nil
@@ -19,6 +27,8 @@ final class PlayerViewModel: ObservableObject {
     @Published private(set) var volume = 100.0
     @Published var isSeeking = false
     @Published private(set) var lastError: String?
+    @Published private(set) var alwaysOnTop = false
+    @Published private(set) var loopEnabled = false
 
     private var bridge: PlayerBridge?
     private var timer: Timer?
@@ -39,7 +49,11 @@ final class PlayerViewModel: ObservableObject {
     }
 
     var statusText: String {
-        lastError ?? snapshot.error ?? snapshot.status.capitalized
+        if let lastError { return lastError }
+        if let error = snapshot.error { return error }
+        if snapshot.status == "buffering" { return "Buffering…" }
+        if snapshot.status == "loading" { return "Loading…" }
+        return snapshot.status.capitalized
     }
 
     var hasError: Bool {
@@ -66,16 +80,74 @@ final class PlayerViewModel: ObservableObject {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [.movie, .audio]
-        if panel.runModal() == .OK, let url = panel.url {
-            open(url)
+        if panel.runModal() == .OK, !panel.urls.isEmpty {
+            open(panel.urls)
         }
     }
 
     func open(_ url: URL) {
         do {
             try bridge?.open(url)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func open(_ urls: [URL]) {
+        guard let first = urls.first else { return }
+        open(first)
+        for url in urls.dropFirst() {
+            do {
+                try bridge?.enqueue(url)
+            } catch {
+                showError(error.localizedDescription)
+                break
+            }
+        }
+    }
+
+    func openURL(_ value: String) {
+        do {
+            try bridge?.openURL(value.trimmingCharacters(in: .whitespacesAndNewlines))
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func enqueueURL(_ value: String) {
+        do {
+            try bridge?.enqueueURL(value.trimmingCharacters(in: .whitespacesAndNewlines))
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func playPlaylistIndex(_ index: Int) {
+        do {
+            try bridge?.playPlaylistIndex(index)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func next() {
+        do {
+            try bridge?.next()
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func previous() {
+        do {
+            try bridge?.previous()
             lastError = nil
         } catch {
             showError(error.localizedDescription)
@@ -94,6 +166,35 @@ final class PlayerViewModel: ObservableObject {
     func toggleMute() {
         do {
             try bridge?.setMuted(!snapshot.muted)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setSpeed(_ speed: Double) {
+        do {
+            try bridge?.setSpeed(speed)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func screenshot() {
+        do {
+            try bridge?.screenshot()
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func toggleLoop() {
+        let enabled = !loopEnabled
+        do {
+            try bridge?.setLoop(enabled)
+            loopEnabled = enabled
             lastError = nil
         } catch {
             showError(error.localizedDescription)
@@ -141,6 +242,15 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
+    func selectVideoTrack(_ id: Int64) {
+        do {
+            try bridge?.selectVideoTrack(id)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
     func attachOpenGLContext() {
         do {
             try bridge?.attachOpenGLContext()
@@ -164,6 +274,11 @@ final class PlayerViewModel: ObservableObject {
 
     func toggleFullscreen() {
         NSApp.keyWindow?.toggleFullScreen(nil)
+    }
+
+    func toggleAlwaysOnTop() {
+        alwaysOnTop.toggle()
+        NSApp.keyWindow?.level = alwaysOnTop ? .floating : .normal
     }
 
     private func configureBridge() {

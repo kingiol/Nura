@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use nura_domain::{
-    MediaItem, PlaybackSnapshot, PlaybackStatus, Track, TrackKind, is_resumable, same_name_subtitle,
+    Chapter, MediaItem, PlaybackSnapshot, PlaybackStatus, Track, TrackKind, is_resumable,
+    same_name_subtitle,
 };
 use nura_library::HistoryRepository;
 use serde::{Deserialize, Serialize};
@@ -14,6 +15,9 @@ pub trait PlaybackEngine: Send {
     fn seek(&mut self, position_seconds: f64) -> Result<(), EngineError>;
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError>;
     fn set_mute(&mut self, muted: bool) -> Result<(), EngineError>;
+    fn set_speed(&mut self, speed: f64) -> Result<(), EngineError>;
+    fn set_loop(&mut self, enabled: bool) -> Result<(), EngineError>;
+    fn screenshot(&mut self) -> Result<(), EngineError>;
     fn select_track(&mut self, kind: TrackKind, track_id: Option<i64>) -> Result<(), EngineError>;
     fn add_external_subtitle(&mut self, path: &Path) -> Result<(), EngineError>;
     fn stop(&mut self) -> Result<(), EngineError>;
@@ -25,8 +29,11 @@ pub enum EngineEvent {
     FileLoaded {
         duration_seconds: Option<f64>,
         tracks: Vec<Track>,
+        chapters: Vec<Chapter>,
     },
     PositionChanged(f64),
+    SpeedChanged(f64),
+    Buffering(Option<f64>),
     Paused(bool),
     Ended,
     Failed(String),
@@ -59,13 +66,77 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
     }
 
     pub fn open(&mut self, path: impl Into<std::path::PathBuf>) -> Result<(), PlayerError> {
-        self.persist_current_position()?;
         let item = MediaItem::from_path(path)?;
-        let resume_position = self.history.resume_position(&item)?.unwrap_or_default();
+        self.open_item(item)
+    }
+
+    pub fn open_url(&mut self, url: impl Into<String>) -> Result<(), PlayerError> {
+        let item = MediaItem::from_url(url)?;
+        self.open_item(item)
+    }
+
+    pub fn open_item(&mut self, item: MediaItem) -> Result<(), PlayerError> {
+        self.persist_current_position()?;
+        self.snapshot.playlist = vec![item.clone()];
+        self.start_item(item, 0)
+    }
+
+    pub fn enqueue_item(&mut self, item: MediaItem) -> Result<(), PlayerError> {
+        if self.snapshot.item.is_none() {
+            return self.open_item(item);
+        }
+        self.snapshot.playlist.push(item);
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn play_playlist_index(&mut self, index: usize) -> Result<(), PlayerError> {
+        let item = self.snapshot.playlist.get(index).cloned().ok_or_else(|| {
+            PlayerError::Engine(EngineError::Message(
+                "playlist index is out of range".to_owned(),
+            ))
+        })?;
+        self.persist_current_position()?;
+        self.start_item(item, index)
+    }
+
+    pub fn next(&mut self) -> Result<(), PlayerError> {
+        let Some(index) = self.snapshot.playlist_index else {
+            return Ok(());
+        };
+        if index + 1 < self.snapshot.playlist.len() {
+            self.play_playlist_index(index + 1)?;
+        }
+        Ok(())
+    }
+
+    pub fn previous(&mut self) -> Result<(), PlayerError> {
+        let Some(index) = self.snapshot.playlist_index else {
+            return Ok(());
+        };
+        if self.snapshot.position_seconds > 3.0 {
+            return self.seek(0.0);
+        }
+        if index > 0 {
+            self.play_playlist_index(index - 1)?;
+        }
+        Ok(())
+    }
+
+    fn start_item(&mut self, item: MediaItem, index: usize) -> Result<(), PlayerError> {
+        let resume_position = if item.is_local() {
+            self.history.resume_position(&item)?.unwrap_or_default()
+        } else {
+            0.0
+        };
+        let playlist = self.snapshot.playlist.clone();
         self.snapshot = PlaybackSnapshot {
             item: Some(item.clone()),
+            playlist,
+            playlist_index: Some(index),
             status: PlaybackStatus::Loading,
             position_seconds: resume_position,
+            speed: self.snapshot.speed,
             volume: self.snapshot.volume,
             muted: self.snapshot.muted,
             ..PlaybackSnapshot::default()
@@ -76,12 +147,16 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             self.fail(error.to_string());
             return Err(PlayerError::Engine(error));
         }
-        self.history.remember(&item, Some(resume_position))?;
-        if let Some(subtitle) = same_name_subtitle(&item.path) {
-            if let Err(error) = self.engine.add_external_subtitle(&subtitle) {
-                self.events.push(PlayerEvent::Error {
-                    message: format!("Could not load external subtitle: {error}"),
-                });
+        if item.is_local() {
+            self.history.remember(&item, Some(resume_position))?;
+            if let Some(path) = item.local_path() {
+                if let Some(subtitle) = same_name_subtitle(path) {
+                    if let Err(error) = self.engine.add_external_subtitle(&subtitle) {
+                        self.events.push(PlayerEvent::Error {
+                            message: format!("Could not load external subtitle: {error}"),
+                        });
+                    }
+                }
             }
         }
         Ok(())
@@ -132,6 +207,24 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
+    pub fn set_speed(&mut self, speed: f64) -> Result<(), PlayerError> {
+        let speed = speed.clamp(0.25, 4.0);
+        self.engine.set_speed(speed)?;
+        self.snapshot.speed = speed;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn screenshot(&mut self) -> Result<(), PlayerError> {
+        self.engine.screenshot()?;
+        Ok(())
+    }
+
+    pub fn set_loop(&mut self, enabled: bool) -> Result<(), PlayerError> {
+        self.engine.set_loop(enabled)?;
+        Ok(())
+    }
+
     pub fn select_track(
         &mut self,
         kind: TrackKind,
@@ -139,6 +232,7 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
     ) -> Result<(), PlayerError> {
         self.engine.select_track(kind, track_id)?;
         let tracks = match kind {
+            TrackKind::Video => &mut self.snapshot.video_tracks,
             TrackKind::Audio => &mut self.snapshot.audio_tracks,
             TrackKind::Subtitle => &mut self.snapshot.subtitle_tracks,
         };
@@ -155,8 +249,15 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                 EngineEvent::FileLoaded {
                     duration_seconds,
                     tracks,
+                    chapters,
                 } => {
                     self.snapshot.duration_seconds = duration_seconds;
+                    self.snapshot.chapters = chapters;
+                    self.snapshot.video_tracks = tracks
+                        .iter()
+                        .filter(|track| track.kind == TrackKind::Video)
+                        .cloned()
+                        .collect();
                     self.snapshot.audio_tracks = tracks
                         .iter()
                         .filter(|track| track.kind == TrackKind::Audio)
@@ -167,11 +268,25 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                         .filter(|track| track.kind == TrackKind::Subtitle)
                         .collect();
                     self.snapshot.status = PlaybackStatus::Playing;
+                    self.snapshot.buffering_percent = None;
                     self.emit_state();
                 }
                 EngineEvent::PositionChanged(position) => {
                     self.snapshot.position_seconds = position;
                     self.persist_current_position()?;
+                    self.emit_state();
+                }
+                EngineEvent::SpeedChanged(speed) => {
+                    self.snapshot.speed = speed;
+                    self.emit_state();
+                }
+                EngineEvent::Buffering(percent) => {
+                    self.snapshot.status = if percent.is_some() {
+                        PlaybackStatus::Buffering
+                    } else {
+                        PlaybackStatus::Playing
+                    };
+                    self.snapshot.buffering_percent = percent;
                     self.emit_state();
                 }
                 EngineEvent::Paused(paused) => {
@@ -186,8 +301,17 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                     if let Some(item) = &self.snapshot.item {
                         self.history.clear_resume(item)?;
                     }
-                    self.snapshot.status = PlaybackStatus::Ended;
-                    self.emit_state();
+                    let next_index = self.snapshot.playlist_index.and_then(|index| {
+                        (index + 1 < self.snapshot.playlist.len()).then_some(index + 1)
+                    });
+                    if let Some(next_index) = next_index {
+                        if let Err(error) = self.play_playlist_index(next_index) {
+                            self.fail(error.to_string());
+                        }
+                    } else {
+                        self.snapshot.status = PlaybackStatus::Ended;
+                        self.emit_state();
+                    }
                 }
                 EngineEvent::Failed(message) => self.fail(message),
             }
@@ -213,10 +337,12 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             return Ok(());
         }
         self.last_persisted_position = self.snapshot.position_seconds;
-        if is_resumable(
-            self.snapshot.duration_seconds,
-            self.snapshot.position_seconds,
-        ) {
+        if item.is_local()
+            && is_resumable(
+                self.snapshot.duration_seconds,
+                self.snapshot.position_seconds,
+            )
+        {
             self.history
                 .remember(item, Some(self.snapshot.position_seconds))?;
         } else if self.snapshot.status == PlaybackStatus::Ended {
@@ -286,6 +412,15 @@ mod tests {
         fn set_mute(&mut self, _: bool) -> Result<(), EngineError> {
             Ok(())
         }
+        fn set_speed(&mut self, _: f64) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_loop(&mut self, _: bool) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn screenshot(&mut self) -> Result<(), EngineError> {
+            Ok(())
+        }
         fn select_track(&mut self, _: TrackKind, _: Option<i64>) -> Result<(), EngineError> {
             Ok(())
         }
@@ -334,6 +469,7 @@ mod tests {
         engine.events.push_back(EngineEvent::FileLoaded {
             duration_seconds: Some(120.0),
             tracks: vec![],
+            chapters: vec![],
         });
         let mut session = PlayerSession::new(engine, MemoryHistory { resume: Some(24.0) });
 
@@ -341,6 +477,35 @@ mod tests {
         session.poll().unwrap();
         let events = session.take_events();
         assert!(events.iter().any(|event| matches!(event, PlayerEvent::State { snapshot } if snapshot.status == PlaybackStatus::Playing && snapshot.position_seconds == 24.0)));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn playlist_advances_and_previous_reloads_items() {
+        let directory =
+            std::env::temp_dir().join(format!("nura-playlist-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let first = directory.join("first.mkv");
+        let second = directory.join("second.mkv");
+        fs::write(&first, []).unwrap();
+        fs::write(&second, []).unwrap();
+        let mut engine = FakeEngine::default();
+        engine.events.push_back(EngineEvent::FileLoaded {
+            duration_seconds: Some(120.0),
+            tracks: vec![],
+            chapters: vec![],
+        });
+        let mut session = PlayerSession::new(engine, MemoryHistory { resume: None });
+        session.open(&first).unwrap();
+        session
+            .enqueue_item(MediaItem::from_path(&second).unwrap())
+            .unwrap();
+        assert_eq!(session.snapshot.playlist.len(), 2);
+        session.next().unwrap();
+        assert_eq!(session.snapshot.playlist_index, Some(1));
+        assert_eq!(session.snapshot.item.as_ref().unwrap().title, "second.mkv");
+        session.previous().unwrap();
+        assert_eq!(session.snapshot.playlist_index, Some(0));
         fs::remove_dir_all(directory).unwrap();
     }
 }
