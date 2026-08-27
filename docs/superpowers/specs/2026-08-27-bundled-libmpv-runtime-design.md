@@ -54,18 +54,29 @@ silently using an unverified local library.
 
 ## Closure and Relocation Rules
 
-The packager recursively scans each Mach-O file with `otool -L`. It copies
-only non-system dependencies into `Contents/Frameworks` and treats
-`/System/Library` and `/usr/lib` as system dependencies. Every copied dylib is
-materialized as a regular file under its unique basename; a basename collision
-between different source files fails the package.
+The packager recursively scans each Mach-O file with `otool -L`. Before
+copying, it resolves absolute dependencies directly and resolves
+`@loader_path`, `@executable_path`, and `@rpath` against the loading file and
+its `LC_RPATH` entries from `otool -l`. A dependency that cannot be resolved
+fails packaging. It copies only non-system dependencies into
+`Contents/Frameworks` and treats `/System/Library` and `/usr/lib` as system
+dependencies. Every copied dylib is materialized as a regular file under its
+unique basename; a basename collision between different source files fails the
+package.
 
 For every copied file, the packager changes its dylib identifier to
 `@rpath/<filename>` and changes references to another copied dylib to
 `@loader_path/<filename>`. It verifies the whole packaged closure afterwards
 and fails if a bundled Mach-O still references `/opt/homebrew`, `/usr/local`,
-or an unresolved loader-relative dependency. Symlinks are dereferenced before
-hashing and copying.
+or a loader-relative dependency that cannot be resolved in the bundle.
+Symlinks are dereferenced before hashing and copying.
+
+When Xcode provides `EXPANDED_CODE_SIGN_IDENTITY`, the packager signs every
+copied dylib after relocation using that identity and verifies each nested item
+with `codesign --verify --strict`. The shell build provides no identity and
+intentionally leaves the resulting app unsigned. Xcode signs the outer app
+after the build phase; release verification checks the final app with
+`codesign --verify --deep --strict`.
 
 ## Failure Behavior
 
