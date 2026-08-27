@@ -68,6 +68,7 @@ struct PlayerView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .ignoresSafeArea()
         .background(Color.black)
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .animation(.easeOut(duration: 0.18), value: sidebar)
