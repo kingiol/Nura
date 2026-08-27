@@ -37,3 +37,9 @@
 - Added 5-second seek controls, 30-second Option+Arrow shortcuts, and frame stepping with the `.` shortcut.
 - Added subtitle delay selection from -2 to +2 seconds and core clamping to the supported -30 to +30 second range.
 - Added state-machine coverage for relative seek, frame stepping, and subtitle delay; Debug and Release builds pass.
+- Added audio delay and audio-device selection, subtitle visibility/scale/position, video aspect/rotation/flip, screenshot-folder selection, and recent-media quick access.
+- Added Copy Screenshot to the render-surface context menu. Nura renders a temporary PNG through libmpv, copies it to the macOS pasteboard, then cleans up the temporary file.
+- Added a PlayerSession regression test for screenshot-to-file destination forwarding.
+- Re-ran `cargo fmt --all -- --check`, `cargo test --workspace`, the macOS Debug build, and `scripts/build-macos-app.sh`; all passed with the existing Rust unsafe-operation and FFI dead-code warnings.
+- Added Fit to Video in the compact Video menu. libmpv now reports display dimensions on file load; Nura preserves the video ratio, accounts for manual rotation, and keeps the resized window within the active screen's visible frame.
+- Re-ran workspace tests, the macOS Debug build, and Release packaging after the Fit to Video integration; all passed with the same existing warnings.

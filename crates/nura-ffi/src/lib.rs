@@ -43,6 +43,7 @@ enum Command {
     },
     SubtitleDelay(f64, Reply),
     Screenshot(Reply),
+    ScreenshotToFile(PathBuf, Reply),
     AudioTrack(Option<i64>, Reply),
     SubtitleTrack(Option<i64>, Reply),
     VideoTrack(Option<i64>, Reply),
@@ -75,6 +76,15 @@ enum AsyncCommand {
         end: Option<f64>,
     },
     SubtitleDelay(f64),
+    AudioDelay(f64),
+    AudioDevice(String),
+    SubtitleVisibility(bool),
+    SubtitleScale(f64),
+    SubtitlePosition(f64),
+    VideoAspect(String),
+    VideoRotation(i32),
+    VideoFlip(bool),
+    ScreenshotDirectory(PathBuf),
     Screenshot,
     AudioTrack(Option<i64>),
     SubtitleTrack(Option<i64>),
@@ -181,6 +191,15 @@ fn handle_async_command(
         }
         AsyncCommand::AbLoop { start, end } => session.set_ab_loop(start, end),
         AsyncCommand::SubtitleDelay(delay) => session.set_subtitle_delay(delay),
+        AsyncCommand::AudioDelay(delay) => session.set_audio_delay(delay),
+        AsyncCommand::AudioDevice(device_id) => session.set_audio_device(device_id),
+        AsyncCommand::SubtitleVisibility(visible) => session.set_subtitles_visible(visible),
+        AsyncCommand::SubtitleScale(scale) => session.set_subtitle_scale(scale),
+        AsyncCommand::SubtitlePosition(position) => session.set_subtitle_position(position),
+        AsyncCommand::VideoAspect(aspect) => session.set_video_aspect(aspect),
+        AsyncCommand::VideoRotation(degrees) => session.set_video_rotation(degrees),
+        AsyncCommand::VideoFlip(flipped) => session.set_video_flip(flipped),
+        AsyncCommand::ScreenshotDirectory(path) => session.set_screenshot_directory(path),
         AsyncCommand::Screenshot => session.screenshot(),
         AsyncCommand::AudioTrack(id) => session.select_track(TrackKind::Audio, id),
         AsyncCommand::SubtitleTrack(id) => session.select_track(TrackKind::Subtitle, id),
@@ -270,6 +289,7 @@ fn handle_command(
         Command::AbLoop { start, end, reply } => (session.set_ab_loop(start, end), reply),
         Command::SubtitleDelay(delay, reply) => (session.set_subtitle_delay(delay), reply),
         Command::Screenshot(reply) => (session.screenshot(), reply),
+        Command::ScreenshotToFile(path, reply) => (session.screenshot_to_file(path), reply),
         Command::AudioTrack(id, reply) => (session.select_track(TrackKind::Audio, id), reply),
         Command::SubtitleTrack(id, reply) => (session.select_track(TrackKind::Subtitle, id), reply),
         Command::VideoTrack(id, reply) => (session.select_track(TrackKind::Video, id), reply),
@@ -636,6 +656,23 @@ pub unsafe extern "C" fn nura_player_screenshot_async(player: *mut NuraPlayer) -
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_screenshot_to_file(
+    player: *mut NuraPlayer,
+    path: *const c_char,
+) -> c_int {
+    let path = match read_string(path) {
+        Ok(path) => path,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    command_result(player, move |reply| {
+        Command::ScreenshotToFile(PathBuf::from(path), reply)
+    })
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_loop_async(
     player: *mut NuraPlayer,
     enabled: c_int,
@@ -693,6 +730,138 @@ pub unsafe extern "C" fn nura_player_set_subtitle_delay_async(
         return -1;
     };
     async_command_result(player, AsyncCommand::SubtitleDelay(delay))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_audio_delay_async(
+    player: *mut NuraPlayer,
+    delay: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::AudioDelay(delay))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_audio_device_async(
+    player: *mut NuraPlayer,
+    device_id: *const c_char,
+) -> c_int {
+    let device_id = match read_string(device_id) {
+        Ok(value) => value,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::AudioDevice(device_id))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_subtitle_visibility_async(
+    player: *mut NuraPlayer,
+    visible: c_int,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::SubtitleVisibility(visible != 0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_subtitle_scale_async(
+    player: *mut NuraPlayer,
+    scale: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::SubtitleScale(scale))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_subtitle_position_async(
+    player: *mut NuraPlayer,
+    position: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::SubtitlePosition(position))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_video_aspect_async(
+    player: *mut NuraPlayer,
+    aspect: *const c_char,
+) -> c_int {
+    let aspect = match read_string(aspect) {
+        Ok(value) => value,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::VideoAspect(aspect))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_video_rotation_async(
+    player: *mut NuraPlayer,
+    degrees: c_int,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::VideoRotation(degrees))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_video_flip_async(
+    player: *mut NuraPlayer,
+    flipped: c_int,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::VideoFlip(flipped != 0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_screenshot_directory_async(
+    player: *mut NuraPlayer,
+    directory: *const c_char,
+) -> c_int {
+    let directory = match read_string(directory) {
+        Ok(value) => value,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(
+        player,
+        AsyncCommand::ScreenshotDirectory(PathBuf::from(directory)),
+    )
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_audio_track(

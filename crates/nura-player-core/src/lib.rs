@@ -2,8 +2,8 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use nura_domain::{
-    Chapter, MediaItem, PlaybackSnapshot, PlaybackStatus, Track, TrackKind, is_resumable,
-    same_name_subtitle,
+    AudioDevice, Chapter, MediaItem, PlaybackSnapshot, PlaybackStatus, Track, TrackKind,
+    is_resumable, same_name_subtitle,
 };
 use nura_library::HistoryRepository;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,17 @@ pub trait PlaybackEngine: Send {
     fn set_loop(&mut self, enabled: bool) -> Result<(), EngineError>;
     fn set_ab_loop(&mut self, start: Option<f64>, end: Option<f64>) -> Result<(), EngineError>;
     fn set_subtitle_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError>;
+    fn set_audio_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError>;
+    fn set_audio_device(&mut self, device_id: &str) -> Result<(), EngineError>;
+    fn set_subtitles_visible(&mut self, visible: bool) -> Result<(), EngineError>;
+    fn set_subtitle_scale(&mut self, scale: f64) -> Result<(), EngineError>;
+    fn set_subtitle_position(&mut self, position: f64) -> Result<(), EngineError>;
+    fn set_video_aspect(&mut self, aspect: &str) -> Result<(), EngineError>;
+    fn set_video_rotation(&mut self, degrees: i32) -> Result<(), EngineError>;
+    fn set_video_flip(&mut self, flipped: bool) -> Result<(), EngineError>;
+    fn set_screenshot_directory(&mut self, path: &Path) -> Result<(), EngineError>;
     fn screenshot(&mut self) -> Result<(), EngineError>;
+    fn screenshot_to_file(&mut self, path: &Path) -> Result<(), EngineError>;
     fn select_track(&mut self, kind: TrackKind, track_id: Option<i64>) -> Result<(), EngineError>;
     fn add_external_subtitle(&mut self, path: &Path) -> Result<(), EngineError>;
     fn stop(&mut self) -> Result<(), EngineError>;
@@ -33,10 +43,13 @@ pub trait PlaybackEngine: Send {
 pub enum EngineEvent {
     FileLoaded {
         duration_seconds: Option<f64>,
+        video_width: Option<u32>,
+        video_height: Option<u32>,
         tracks: Vec<Track>,
         chapters: Vec<Chapter>,
     },
     TracksChanged(Vec<Track>),
+    AudioDevicesChanged(Vec<AudioDevice>),
     PositionChanged(f64),
     SpeedChanged(f64),
     Buffering(Option<f64>),
@@ -62,13 +75,16 @@ pub struct PlayerSession<E, H> {
 
 impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
     pub fn new(engine: E, history: H) -> Self {
-        Self {
+        let mut session = Self {
             engine,
             history,
             snapshot: PlaybackSnapshot::default(),
             events: Vec::new(),
             last_persisted_position: 0.0,
-        }
+        };
+        let _ = session.refresh_recent_items();
+        session.emit_state();
+        session
     }
 
     pub fn open(&mut self, path: impl Into<std::path::PathBuf>) -> Result<(), PlayerError> {
@@ -214,9 +230,18 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             item: Some(item.clone()),
             playlist,
             playlist_index: Some(index),
+            playlist_loop: self.snapshot.playlist_loop,
             status: PlaybackStatus::Loading,
             position_seconds: resume_position,
             speed: self.snapshot.speed,
+            audio_delay_seconds: self.snapshot.audio_delay_seconds,
+            subtitle_delay_seconds: self.snapshot.subtitle_delay_seconds,
+            subtitles_visible: self.snapshot.subtitles_visible,
+            subtitle_scale: self.snapshot.subtitle_scale,
+            subtitle_position: self.snapshot.subtitle_position,
+            video_aspect: self.snapshot.video_aspect.clone(),
+            video_rotation_degrees: self.snapshot.video_rotation_degrees,
+            video_flipped: self.snapshot.video_flipped,
             volume: self.snapshot.volume,
             muted: self.snapshot.muted,
             ..PlaybackSnapshot::default()
@@ -227,8 +252,10 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             self.fail(error.to_string());
             return Err(PlayerError::Engine(error));
         }
+        self.history
+            .remember(&item, item.is_local().then_some(resume_position))?;
+        self.refresh_recent_items()?;
         if item.is_local() {
-            self.history.remember(&item, Some(resume_position))?;
             if let Some(path) = item.local_path() {
                 if let Some(subtitle) = same_name_subtitle(path) {
                     if let Err(error) = self.engine.add_external_subtitle(&subtitle) {
@@ -315,8 +342,85 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
+    pub fn set_audio_delay(&mut self, delay_seconds: f64) -> Result<(), PlayerError> {
+        let delay_seconds = delay_seconds.clamp(-30.0, 30.0);
+        self.engine.set_audio_delay(delay_seconds)?;
+        self.snapshot.audio_delay_seconds = delay_seconds;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_audio_device(&mut self, device_id: impl AsRef<str>) -> Result<(), PlayerError> {
+        self.engine.set_audio_device(device_id.as_ref())?;
+        for device in &mut self.snapshot.audio_devices {
+            device.selected = device.id == device_id.as_ref();
+        }
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_subtitles_visible(&mut self, visible: bool) -> Result<(), PlayerError> {
+        self.engine.set_subtitles_visible(visible)?;
+        self.snapshot.subtitles_visible = visible;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_subtitle_scale(&mut self, scale: f64) -> Result<(), PlayerError> {
+        let scale = scale.clamp(0.5, 3.0);
+        self.engine.set_subtitle_scale(scale)?;
+        self.snapshot.subtitle_scale = scale;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_subtitle_position(&mut self, position: f64) -> Result<(), PlayerError> {
+        let position = position.clamp(0.0, 100.0);
+        self.engine.set_subtitle_position(position)?;
+        self.snapshot.subtitle_position = position;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_video_aspect(&mut self, aspect: impl AsRef<str>) -> Result<(), PlayerError> {
+        let aspect = aspect.as_ref();
+        self.engine.set_video_aspect(aspect)?;
+        self.snapshot.video_aspect = if aspect == "no" {
+            "Auto".to_owned()
+        } else {
+            aspect.to_owned()
+        };
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_video_rotation(&mut self, degrees: i32) -> Result<(), PlayerError> {
+        let degrees = degrees.rem_euclid(360);
+        self.engine.set_video_rotation(degrees)?;
+        self.snapshot.video_rotation_degrees = degrees;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_video_flip(&mut self, flipped: bool) -> Result<(), PlayerError> {
+        self.engine.set_video_flip(flipped)?;
+        self.snapshot.video_flipped = flipped;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn set_screenshot_directory(&mut self, path: impl AsRef<Path>) -> Result<(), PlayerError> {
+        self.engine.set_screenshot_directory(path.as_ref())?;
+        Ok(())
+    }
+
     pub fn screenshot(&mut self) -> Result<(), PlayerError> {
         self.engine.screenshot()?;
+        Ok(())
+    }
+
+    pub fn screenshot_to_file(&mut self, path: impl AsRef<Path>) -> Result<(), PlayerError> {
+        self.engine.screenshot_to_file(path.as_ref())?;
         Ok(())
     }
 
@@ -392,10 +496,14 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             match event {
                 EngineEvent::FileLoaded {
                     duration_seconds,
+                    video_width,
+                    video_height,
                     tracks,
                     chapters,
                 } => {
                     self.snapshot.duration_seconds = duration_seconds;
+                    self.snapshot.video_width = video_width;
+                    self.snapshot.video_height = video_height;
                     self.snapshot.chapters = chapters;
                     self.snapshot.video_tracks = tracks
                         .iter()
@@ -430,6 +538,10 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                         .into_iter()
                         .filter(|track| track.kind == TrackKind::Subtitle)
                         .collect();
+                    self.emit_state();
+                }
+                EngineEvent::AudioDevicesChanged(devices) => {
+                    self.snapshot.audio_devices = devices;
                     self.emit_state();
                 }
                 EngineEvent::PositionChanged(position) => {
@@ -516,6 +628,11 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
+    fn refresh_recent_items(&mut self) -> Result<(), PlayerError> {
+        self.snapshot.recent_items = self.history.recent_items(12)?;
+        Ok(())
+    }
+
     fn emit_state(&mut self) {
         self.events.push(PlayerEvent::State {
             snapshot: self.snapshot.clone(),
@@ -560,6 +677,7 @@ mod tests {
         relative_seek: f64,
         frame_steps: usize,
         subtitle_delay: f64,
+        screenshot_path: Option<std::path::PathBuf>,
     }
     impl PlaybackEngine for FakeEngine {
         fn load(&mut self, _: &MediaItem, position: f64) -> Result<(), EngineError> {
@@ -603,7 +721,38 @@ mod tests {
             self.subtitle_delay = delay;
             Ok(())
         }
+        fn set_audio_delay(&mut self, _: f64) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_audio_device(&mut self, _: &str) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_subtitles_visible(&mut self, _: bool) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_subtitle_scale(&mut self, _: f64) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_subtitle_position(&mut self, _: f64) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_video_aspect(&mut self, _: &str) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_video_rotation(&mut self, _: i32) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_video_flip(&mut self, _: bool) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_screenshot_directory(&mut self, _: &Path) -> Result<(), EngineError> {
+            Ok(())
+        }
         fn screenshot(&mut self) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn screenshot_to_file(&mut self, path: &Path) -> Result<(), EngineError> {
+            self.screenshot_path = Some(path.to_path_buf());
             Ok(())
         }
         fn select_track(&mut self, _: TrackKind, _: Option<i64>) -> Result<(), EngineError> {
@@ -642,6 +791,9 @@ mod tests {
             self.resume = None;
             Ok(())
         }
+        fn recent_items(&mut self, _: usize) -> Result<Vec<MediaItem>, nura_library::HistoryError> {
+            Ok(vec![])
+        }
     }
 
     #[test]
@@ -653,6 +805,8 @@ mod tests {
         let mut engine = FakeEngine::default();
         engine.events.push_back(EngineEvent::FileLoaded {
             duration_seconds: Some(120.0),
+            video_width: Some(1920),
+            video_height: Some(1080),
             tracks: vec![],
             chapters: vec![],
         });
@@ -662,6 +816,8 @@ mod tests {
         session.poll().unwrap();
         let events = session.take_events();
         assert!(events.iter().any(|event| matches!(event, PlayerEvent::State { snapshot } if snapshot.status == PlaybackStatus::Playing && snapshot.position_seconds == 24.0)));
+        assert_eq!(session.snapshot.video_width, Some(1920));
+        assert_eq!(session.snapshot.video_height, Some(1080));
         fs::remove_dir_all(directory).unwrap();
     }
 
@@ -677,6 +833,8 @@ mod tests {
         let mut engine = FakeEngine::default();
         engine.events.push_back(EngineEvent::FileLoaded {
             duration_seconds: Some(120.0),
+            video_width: Some(1920),
+            video_height: Some(1080),
             tracks: vec![],
             chapters: vec![],
         });
@@ -708,6 +866,8 @@ mod tests {
         let mut engine = FakeEngine::default();
         engine.events.push_back(EngineEvent::FileLoaded {
             duration_seconds: Some(120.0),
+            video_width: Some(1920),
+            video_height: Some(1080),
             tracks: vec![],
             chapters: vec![],
         });
@@ -776,5 +936,18 @@ mod tests {
         session.set_subtitle_delay(0.5).unwrap();
         assert_eq!(session.snapshot.subtitle_delay_seconds, 0.5);
         assert_eq!(session.engine.subtitle_delay, 0.5);
+    }
+
+    #[test]
+    fn screenshot_to_file_forwards_the_destination_to_the_engine() {
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        let path = std::env::temp_dir().join("nura-screenshot.png");
+
+        session.screenshot_to_file(&path).unwrap();
+
+        assert_eq!(
+            session.engine.screenshot_path.as_deref(),
+            Some(path.as_path())
+        );
     }
 }

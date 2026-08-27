@@ -42,6 +42,8 @@ private func nura_player_set_mute_async(_ player: NuraHandle?, _ muted: Int32) -
 private func nura_player_set_speed_async(_ player: NuraHandle?, _ speed: Double) -> Int32
 @_silgen_name("nura_player_screenshot_async")
 private func nura_player_screenshot_async(_ player: NuraHandle?) -> Int32
+@_silgen_name("nura_player_screenshot_to_file")
+private func nura_player_screenshot_to_file(_ player: NuraHandle?, _ path: UnsafePointer<CChar>?) -> Int32
 @_silgen_name("nura_player_set_loop_async")
 private func nura_player_set_loop_async(_ player: NuraHandle?, _ enabled: Int32) -> Int32
 @_silgen_name("nura_player_set_playlist_loop_async")
@@ -52,6 +54,24 @@ private func nura_player_shuffle_async(_ player: NuraHandle?) -> Int32
 private func nura_player_set_ab_loop_async(_ player: NuraHandle?, _ start: Double, _ end: Double) -> Int32
 @_silgen_name("nura_player_set_subtitle_delay_async")
 private func nura_player_set_subtitle_delay_async(_ player: NuraHandle?, _ delay: Double) -> Int32
+@_silgen_name("nura_player_set_audio_delay_async")
+private func nura_player_set_audio_delay_async(_ player: NuraHandle?, _ delay: Double) -> Int32
+@_silgen_name("nura_player_set_audio_device_async")
+private func nura_player_set_audio_device_async(_ player: NuraHandle?, _ deviceID: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_set_subtitle_visibility_async")
+private func nura_player_set_subtitle_visibility_async(_ player: NuraHandle?, _ visible: Int32) -> Int32
+@_silgen_name("nura_player_set_subtitle_scale_async")
+private func nura_player_set_subtitle_scale_async(_ player: NuraHandle?, _ scale: Double) -> Int32
+@_silgen_name("nura_player_set_subtitle_position_async")
+private func nura_player_set_subtitle_position_async(_ player: NuraHandle?, _ position: Double) -> Int32
+@_silgen_name("nura_player_set_video_aspect_async")
+private func nura_player_set_video_aspect_async(_ player: NuraHandle?, _ aspect: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_set_video_rotation_async")
+private func nura_player_set_video_rotation_async(_ player: NuraHandle?, _ degrees: Int32) -> Int32
+@_silgen_name("nura_player_set_video_flip_async")
+private func nura_player_set_video_flip_async(_ player: NuraHandle?, _ flipped: Int32) -> Int32
+@_silgen_name("nura_player_set_screenshot_directory_async")
+private func nura_player_set_screenshot_directory_async(_ player: NuraHandle?, _ directory: UnsafePointer<CChar>?) -> Int32
 @_silgen_name("nura_player_select_audio_track_async")
 private func nura_player_select_audio_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
 @_silgen_name("nura_player_select_subtitle_track_async")
@@ -77,6 +97,12 @@ struct Track: Decodable {
     let title: String?
     let language: String?
     let external: Bool
+    let selected: Bool
+}
+
+struct AudioDevice: Decodable, Identifiable {
+    let id: String
+    let name: String
     let selected: Bool
 }
 
@@ -114,6 +140,7 @@ struct Chapter: Decodable, Identifiable {
 struct PlaybackSnapshot: Decodable {
     let item: MediaItem?
     let playlist: [MediaItem]
+    let recentItems: [MediaItem]
     let playlistIndex: Int?
     let chapters: [Chapter]
     let playlistLoop: Bool
@@ -122,27 +149,39 @@ struct PlaybackSnapshot: Decodable {
     let status: String
     let positionSeconds: Double
     let durationSeconds: Double?
+    let videoWidth: Int?
+    let videoHeight: Int?
     let speed: Double
     let audioDelaySeconds: Double
     let subtitleDelaySeconds: Double
+    let subtitlesVisible: Bool
+    let subtitleScale: Double
+    let subtitlePosition: Double
+    let videoAspect: String
+    let videoRotationDegrees: Int
+    let videoFlipped: Bool
     let bufferingPercent: Double?
     let volume: Double
     let muted: Bool
     let videoTracks: [Track]
     let audioTracks: [Track]
+    let audioDevices: [AudioDevice]
     let subtitleTracks: [Track]
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case item, playlist, playlistIndex = "playlist_index", chapters
+        case item, playlist, recentItems = "recent_items", playlistIndex = "playlist_index", chapters
         case playlistLoop = "playlist_loop"
         case abLoopStartSeconds = "ab_loop_start_seconds", abLoopEndSeconds = "ab_loop_end_seconds"
         case status
         case positionSeconds = "position_seconds", durationSeconds = "duration_seconds"
+        case videoWidth = "video_width", videoHeight = "video_height"
         case speed, audioDelaySeconds = "audio_delay_seconds", subtitleDelaySeconds = "subtitle_delay_seconds"
+        case subtitlesVisible = "subtitles_visible", subtitleScale = "subtitle_scale", subtitlePosition = "subtitle_position"
+        case videoAspect = "video_aspect", videoRotationDegrees = "video_rotation_degrees", videoFlipped = "video_flipped"
         case bufferingPercent = "buffering_percent", volume, muted
         case videoTracks = "video_tracks"
-        case audioTracks = "audio_tracks", subtitleTracks = "subtitle_tracks", error
+        case audioTracks = "audio_tracks", audioDevices = "audio_devices", subtitleTracks = "subtitle_tracks", error
     }
 }
 
@@ -218,6 +257,9 @@ final class PlayerBridge {
     func setMuted(_ muted: Bool) throws { try command { nura_player_set_mute_async(handle, muted ? 1 : 0) } }
     func setSpeed(_ speed: Double) throws { try command { nura_player_set_speed_async(handle, speed) } }
     func screenshot() throws { try command { nura_player_screenshot_async(handle) } }
+    func screenshotToFile(_ url: URL) throws {
+        try command { url.path.withCString { nura_player_screenshot_to_file(handle, $0) } }
+    }
     func setLoop(_ enabled: Bool) throws { try command { nura_player_set_loop_async(handle, enabled ? 1 : 0) } }
     func setPlaylistLoop(_ enabled: Bool) throws { try command { nura_player_set_playlist_loop_async(handle, enabled ? 1 : 0) } }
     func shuffle() throws { try command { nura_player_shuffle_async(handle) } }
@@ -225,6 +267,15 @@ final class PlayerBridge {
         try command { nura_player_set_ab_loop_async(handle, start ?? .nan, end ?? .nan) }
     }
     func setSubtitleDelay(_ delay: Double) throws { try command { nura_player_set_subtitle_delay_async(handle, delay) } }
+    func setAudioDelay(_ delay: Double) throws { try command { nura_player_set_audio_delay_async(handle, delay) } }
+    func setAudioDevice(_ deviceID: String) throws { try command { deviceID.withCString { nura_player_set_audio_device_async(handle, $0) } } }
+    func setSubtitlesVisible(_ visible: Bool) throws { try command { nura_player_set_subtitle_visibility_async(handle, visible ? 1 : 0) } }
+    func setSubtitleScale(_ scale: Double) throws { try command { nura_player_set_subtitle_scale_async(handle, scale) } }
+    func setSubtitlePosition(_ position: Double) throws { try command { nura_player_set_subtitle_position_async(handle, position) } }
+    func setVideoAspect(_ aspect: String) throws { try command { aspect.withCString { nura_player_set_video_aspect_async(handle, $0) } } }
+    func setVideoRotation(_ degrees: Int) throws { try command { nura_player_set_video_rotation_async(handle, Int32(degrees)) } }
+    func setVideoFlipped(_ flipped: Bool) throws { try command { nura_player_set_video_flip_async(handle, flipped ? 1 : 0) } }
+    func setScreenshotDirectory(_ url: URL) throws { try command { url.path.withCString { nura_player_set_screenshot_directory_async(handle, $0) } } }
     func selectAudioTrack(_ id: Int64) throws { try command { nura_player_select_audio_track_async(handle, id) } }
     func selectSubtitleTrack(_ id: Int64) throws { try command { nura_player_select_subtitle_track_async(handle, id) } }
     func selectVideoTrack(_ id: Int64) throws { try command { nura_player_select_video_track_async(handle, id) } }

@@ -4,7 +4,7 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 use libloading::Library;
-use nura_domain::{MediaItem, Track, TrackKind};
+use nura_domain::{AudioDevice, MediaItem, Track, TrackKind};
 use nura_player_core::{EngineError, EngineEvent, PlaybackEngine};
 use thiserror::Error;
 
@@ -129,6 +129,7 @@ pub struct MpvEngine {
     last_buffering: Option<f64>,
     last_speed: f64,
     last_tracks: Vec<Track>,
+    last_audio_devices: Vec<AudioDevice>,
 }
 
 unsafe impl Send for MpvEngine {}
@@ -210,6 +211,7 @@ impl MpvEngine {
             last_buffering: None,
             last_speed: 1.0,
             last_tracks: Vec::new(),
+            last_audio_devices: Vec::new(),
         })
     }
 
@@ -252,6 +254,19 @@ impl MpvEngine {
             )
         };
         (result >= 0).then_some(value)
+    }
+
+    fn video_display_size(&self) -> (Option<u32>, Option<u32>) {
+        let dimension = |name: &str| {
+            self.property_string(name)
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0 && *value <= u32::MAX as f64)
+                .map(|value| value.round() as u32)
+        };
+        (
+            dimension("video-out-params/dw"),
+            dimension("video-out-params/dh"),
+        )
     }
 
     fn tracks(&self) -> Vec<Track> {
@@ -309,6 +324,29 @@ impl MpvEngine {
                     id: index,
                     title,
                     start_seconds,
+                })
+            })
+            .collect()
+    }
+
+    fn audio_devices(&self) -> Vec<AudioDevice> {
+        let selected_id = self.property_string("audio-device");
+        let count = self
+            .property_string("audio-device-list/count")
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(0);
+        (0..count)
+            .filter_map(|index| {
+                let prefix = format!("audio-device-list/{index}");
+                let id = self.property_string(&format!("{prefix}/name"))?;
+                let name = self
+                    .property_string(&format!("{prefix}/description"))
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(|| id.clone());
+                Some(AudioDevice {
+                    selected: selected_id.as_deref() == Some(id.as_str()),
+                    id,
+                    name,
                 })
             })
             .collect()
@@ -454,8 +492,38 @@ impl PlaybackEngine for MpvEngine {
     fn set_subtitle_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError> {
         self.command(&["set", "sub-delay", &delay_seconds.to_string()])
     }
+    fn set_audio_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError> {
+        self.command(&["set", "audio-delay", &delay_seconds.to_string()])
+    }
+    fn set_audio_device(&mut self, device_id: &str) -> Result<(), EngineError> {
+        self.command(&["set", "audio-device", device_id])
+    }
+    fn set_subtitles_visible(&mut self, visible: bool) -> Result<(), EngineError> {
+        self.command(&["set", "sub-visibility", if visible { "yes" } else { "no" }])
+    }
+    fn set_subtitle_scale(&mut self, scale: f64) -> Result<(), EngineError> {
+        self.command(&["set", "sub-scale", &scale.to_string()])
+    }
+    fn set_subtitle_position(&mut self, position: f64) -> Result<(), EngineError> {
+        self.command(&["set", "sub-pos", &position.to_string()])
+    }
+    fn set_video_aspect(&mut self, aspect: &str) -> Result<(), EngineError> {
+        self.command(&["set", "video-aspect-override", aspect])
+    }
+    fn set_video_rotation(&mut self, degrees: i32) -> Result<(), EngineError> {
+        self.command(&["set", "video-rotate", &degrees.to_string()])
+    }
+    fn set_video_flip(&mut self, flipped: bool) -> Result<(), EngineError> {
+        self.command(&["set", "video-flip", if flipped { "yes" } else { "no" }])
+    }
+    fn set_screenshot_directory(&mut self, path: &Path) -> Result<(), EngineError> {
+        self.command(&["set", "screenshot-directory", &path.to_string_lossy()])
+    }
     fn screenshot(&mut self) -> Result<(), EngineError> {
         self.command(&["screenshot", "video"])
+    }
+    fn screenshot_to_file(&mut self, path: &Path) -> Result<(), EngineError> {
+        self.command(&["screenshot-to-file", &path.to_string_lossy(), "video"])
     }
     fn select_track(&mut self, kind: TrackKind, track_id: Option<i64>) -> Result<(), EngineError> {
         let property = match kind {
@@ -492,8 +560,11 @@ impl PlaybackEngine for MpvEngine {
                     }
                     let tracks = self.tracks();
                     self.last_tracks = tracks.clone();
+                    let (video_width, video_height) = self.video_display_size();
                     events.push(EngineEvent::FileLoaded {
                         duration_seconds: self.duration(),
+                        video_width,
+                        video_height,
                         tracks,
                         chapters: self.chapters(),
                     });
@@ -538,6 +609,11 @@ impl PlaybackEngine for MpvEngine {
         if tracks != self.last_tracks {
             self.last_tracks = tracks.clone();
             events.push(EngineEvent::TracksChanged(tracks));
+        }
+        let audio_devices = self.audio_devices();
+        if audio_devices != self.last_audio_devices {
+            self.last_audio_devices = audio_devices.clone();
+            events.push(EngineEvent::AudioDevicesChanged(audio_devices));
         }
         Ok(events)
     }
@@ -619,11 +695,71 @@ impl PlaybackEngine for SharedMpvEngine {
             .map_err(|_| EngineError::Message("player lock poisoned".into()))?
             .set_subtitle_delay(delay_seconds)
     }
+    fn set_audio_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_audio_delay(delay_seconds)
+    }
+    fn set_audio_device(&mut self, device_id: &str) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_audio_device(device_id)
+    }
+    fn set_subtitles_visible(&mut self, visible: bool) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_subtitles_visible(visible)
+    }
+    fn set_subtitle_scale(&mut self, scale: f64) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_subtitle_scale(scale)
+    }
+    fn set_subtitle_position(&mut self, position: f64) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_subtitle_position(position)
+    }
+    fn set_video_aspect(&mut self, aspect: &str) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_video_aspect(aspect)
+    }
+    fn set_video_rotation(&mut self, degrees: i32) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_video_rotation(degrees)
+    }
+    fn set_video_flip(&mut self, flipped: bool) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_video_flip(flipped)
+    }
+    fn set_screenshot_directory(&mut self, path: &Path) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_screenshot_directory(path)
+    }
     fn screenshot(&mut self) -> Result<(), EngineError> {
         self.0
             .lock()
             .map_err(|_| EngineError::Message("player lock poisoned".into()))?
             .screenshot()
+    }
+    fn screenshot_to_file(&mut self, path: &Path) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .screenshot_to_file(path)
     }
     fn select_track(&mut self, kind: TrackKind, id: Option<i64>) -> Result<(), EngineError> {
         self.0

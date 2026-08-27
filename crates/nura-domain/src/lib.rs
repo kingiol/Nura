@@ -136,10 +136,18 @@ pub struct Chapter {
     pub start_seconds: f64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioDevice {
+    pub id: String,
+    pub name: String,
+    pub selected: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackSnapshot {
     pub item: Option<MediaItem>,
     pub playlist: Vec<MediaItem>,
+    pub recent_items: Vec<MediaItem>,
     pub playlist_index: Option<usize>,
     pub chapters: Vec<Chapter>,
     pub playlist_loop: bool,
@@ -148,14 +156,23 @@ pub struct PlaybackSnapshot {
     pub status: PlaybackStatus,
     pub position_seconds: f64,
     pub duration_seconds: Option<f64>,
+    pub video_width: Option<u32>,
+    pub video_height: Option<u32>,
     pub speed: f64,
     pub audio_delay_seconds: f64,
     pub subtitle_delay_seconds: f64,
+    pub subtitles_visible: bool,
+    pub subtitle_scale: f64,
+    pub subtitle_position: f64,
+    pub video_aspect: String,
+    pub video_rotation_degrees: i32,
+    pub video_flipped: bool,
     pub buffering_percent: Option<f64>,
     pub volume: f64,
     pub muted: bool,
     pub video_tracks: Vec<Track>,
     pub audio_tracks: Vec<Track>,
+    pub audio_devices: Vec<AudioDevice>,
     pub subtitle_tracks: Vec<Track>,
     pub error: Option<String>,
 }
@@ -165,6 +182,7 @@ impl Default for PlaybackSnapshot {
         Self {
             item: None,
             playlist: Vec::new(),
+            recent_items: Vec::new(),
             playlist_index: None,
             chapters: Vec::new(),
             playlist_loop: false,
@@ -173,14 +191,23 @@ impl Default for PlaybackSnapshot {
             status: PlaybackStatus::Empty,
             position_seconds: 0.0,
             duration_seconds: None,
+            video_width: None,
+            video_height: None,
             speed: 1.0,
             audio_delay_seconds: 0.0,
             subtitle_delay_seconds: 0.0,
+            subtitles_visible: true,
+            subtitle_scale: 1.0,
+            subtitle_position: 100.0,
+            video_aspect: "Auto".to_owned(),
+            video_rotation_degrees: 0,
+            video_flipped: false,
             buffering_percent: None,
             volume: 100.0,
             muted: false,
             video_tracks: Vec::new(),
             audio_tracks: Vec::new(),
+            audio_devices: Vec::new(),
             subtitle_tracks: Vec::new(),
             error: None,
         }

@@ -34,6 +34,8 @@ struct PlayerView: View {
                     Divider()
                     Button("Load External Subtitle", action: model.openExternalSubtitle)
                     Button("Take Screenshot", action: model.screenshot)
+                    Button("Copy Screenshot", action: model.copyScreenshot)
+                    Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
                     Button("Toggle Fullscreen", action: model.toggleFullscreen)
                 }
 
@@ -92,6 +94,20 @@ struct PlayerView: View {
                 .buttonStyle(.borderless)
                 .help("Open URL")
                 .keyboardShortcut("l", modifiers: [.command])
+
+            Menu {
+                if model.snapshot.recentItems.isEmpty {
+                    Text("No recent media")
+                } else {
+                    ForEach(Array(model.snapshot.recentItems.enumerated()), id: \.offset) { _, item in
+                        Button(item.title) { model.openRecent(item) }
+                    }
+                }
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+            }
+            .menuStyle(.borderlessButton)
+            .help("Recent media")
 
             Text(model.title)
                 .font(.headline)
@@ -195,9 +211,37 @@ struct PlayerView: View {
 
                 Spacer(minLength: 8)
 
-                TrackMenu(title: "Audio", tracks: model.snapshot.audioTracks, selection: model.selectedAudioTrack, includeOff: false, onSelect: model.selectAudioTrack)
-                TrackMenu(title: "Subtitles", tracks: model.snapshot.subtitleTracks, selection: model.selectedSubtitleTrack, includeOff: true, onSelect: model.selectSubtitleTrack)
-                SubtitleDelayMenu(delay: model.snapshot.subtitleDelaySeconds, onSelect: model.setSubtitleDelay)
+                AudioMenu(
+                    tracks: model.snapshot.audioTracks,
+                    selectedTrack: model.selectedAudioTrack,
+                    devices: model.snapshot.audioDevices,
+                    delay: model.snapshot.audioDelaySeconds,
+                    onSelectTrack: model.selectAudioTrack,
+                    onSelectDevice: model.setAudioDevice,
+                    onSetDelay: model.setAudioDelay
+                )
+                SubtitleMenu(
+                    tracks: model.snapshot.subtitleTracks,
+                    selectedTrack: model.selectedSubtitleTrack,
+                    visible: model.snapshot.subtitlesVisible,
+                    delay: model.snapshot.subtitleDelaySeconds,
+                    scale: model.snapshot.subtitleScale,
+                    position: model.snapshot.subtitlePosition,
+                    onSelectTrack: model.selectSubtitleTrack,
+                    onSetVisible: model.setSubtitlesVisible,
+                    onSetDelay: model.setSubtitleDelay,
+                    onSetScale: model.setSubtitleScale,
+                    onSetPosition: model.setSubtitlePosition
+                )
+                VideoMenu(
+                    aspect: model.snapshot.videoAspect,
+                    rotation: model.snapshot.videoRotationDegrees,
+                    flipped: model.snapshot.videoFlipped,
+                    onSetAspect: model.setVideoAspect,
+                    onFitToVideo: model.fitWindowToVideo,
+                    onRotate: model.rotateVideo,
+                    onToggleFlip: model.toggleVideoFlip
+                )
                 SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
 
                 Button(action: model.toggleLoop) {
@@ -580,6 +624,146 @@ private struct TrackMenu: View {
     private func trackLabel(_ track: Track) -> String {
         let label = track.title ?? track.language ?? "Track \(track.id)"
         return track.external ? "\(label) (external)" : label
+    }
+}
+
+private struct AudioMenu: View {
+    let tracks: [Track]
+    let selectedTrack: Int64
+    let devices: [AudioDevice]
+    let delay: Double
+    let onSelectTrack: (Int64) -> Void
+    let onSelectDevice: (String) -> Void
+    let onSetDelay: (Double) -> Void
+
+    var body: some View {
+        Menu {
+            Section("Track") {
+                if tracks.isEmpty {
+                    Text("Unavailable")
+                } else {
+                    ForEach(tracks, id: \.id) { track in
+                        Button { onSelectTrack(track.id) } label: {
+                            checkedLabel(track.title ?? track.language ?? "Track \(track.id)", selected: track.id == selectedTrack)
+                        }
+                    }
+                }
+            }
+            Section("Output") {
+                if devices.isEmpty {
+                    Text("Default Output")
+                } else {
+                    ForEach(devices) { device in
+                        Button { onSelectDevice(device.id) } label: {
+                            checkedLabel(device.name, selected: device.selected)
+                        }
+                    }
+                }
+            }
+            Section("Delay") {
+                delayButtons(current: delay, onSelect: onSetDelay, prefix: "Audio")
+            }
+        } label: {
+            Label("Audio", systemImage: "waveform")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+}
+
+private struct SubtitleMenu: View {
+    let tracks: [Track]
+    let selectedTrack: Int64
+    let visible: Bool
+    let delay: Double
+    let scale: Double
+    let position: Double
+    let onSelectTrack: (Int64) -> Void
+    let onSetVisible: (Bool) -> Void
+    let onSetDelay: (Double) -> Void
+    let onSetScale: (Double) -> Void
+    let onSetPosition: (Double) -> Void
+
+    var body: some View {
+        Menu {
+            Button(visible ? "Hide Subtitles" : "Show Subtitles") { onSetVisible(!visible) }
+            Section("Track") {
+                Button { onSelectTrack(-1) } label: { checkedLabel("Off", selected: selectedTrack < 0) }
+                ForEach(tracks, id: \.id) { track in
+                    Button { onSelectTrack(track.id) } label: {
+                        checkedLabel(track.title ?? track.language ?? "Track \(track.id)", selected: track.id == selectedTrack)
+                    }
+                }
+            }
+            Section("Delay") {
+                delayButtons(current: delay, onSelect: onSetDelay, prefix: "Subtitle")
+            }
+            Section("Size") {
+                settingButtons(values: [0.8, 1.0, 1.2, 1.4, 1.6], current: scale, onSelect: onSetScale, label: { "\($0)x" })
+            }
+            Section("Position") {
+                settingButtons(values: [70.0, 80.0, 90.0, 100.0], current: position, onSelect: onSetPosition, label: { "\(Int($0))%" })
+            }
+        } label: {
+            Label("Subtitles", systemImage: "captions.bubble")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+}
+
+private struct VideoMenu: View {
+    let aspect: String
+    let rotation: Int
+    let flipped: Bool
+    let onSetAspect: (String) -> Void
+    let onFitToVideo: () -> Void
+    let onRotate: () -> Void
+    let onToggleFlip: () -> Void
+
+    private let aspects = ["Auto", "16:9", "4:3", "1.85:1", "2.35:1"]
+
+    var body: some View {
+        Menu {
+            Section("Aspect Ratio") {
+                ForEach(aspects, id: \.self) { value in
+                    Button { onSetAspect(value) } label: { checkedLabel(value, selected: value == aspect) }
+                }
+            }
+            Button("Fit to Video", action: onFitToVideo)
+            Button("Rotate 90°") { onRotate() }
+            Button(flipped ? "Unflip Video" : "Flip Video") { onToggleFlip() }
+            Text("Rotation: \(rotation)°")
+        } label: {
+            Label("Video", systemImage: "rectangle.on.rectangle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+}
+
+@MainActor
+@ViewBuilder
+private func checkedLabel(_ title: String, selected: Bool) -> some View {
+    HStack {
+        Text(title)
+        if selected { Image(systemName: "checkmark") }
+    }
+}
+
+@MainActor
+@ViewBuilder
+private func delayButtons(current: Double, onSelect: @escaping (Double) -> Void, prefix: String) -> some View {
+    settingButtons(values: [-1.0, -0.5, 0.0, 0.5, 1.0], current: current, onSelect: onSelect, label: { value in
+        value == 0 ? "\(prefix) 0s" : value > 0 ? "\(prefix) +\(value)s" : "\(prefix) \(value)s"
+    })
+}
+
+@MainActor
+@ViewBuilder
+private func settingButtons(values: [Double], current: Double, onSelect: @escaping (Double) -> Void, label: @escaping (Double) -> String) -> some View {
+    ForEach(values, id: \.self) { value in
+        Button { onSelect(value) } label: { checkedLabel(label(value), selected: abs(current - value) < 0.001) }
     }
 }
 

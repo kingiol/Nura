@@ -7,6 +7,7 @@ final class PlayerViewModel: ObservableObject {
     @Published private(set) var snapshot = PlaybackSnapshot(
         item: nil,
         playlist: [],
+        recentItems: [],
         playlistIndex: nil,
         chapters: [],
         playlistLoop: false,
@@ -15,14 +16,23 @@ final class PlayerViewModel: ObservableObject {
         status: "idle",
         positionSeconds: 0,
         durationSeconds: nil,
+        videoWidth: nil,
+        videoHeight: nil,
         speed: 1,
         audioDelaySeconds: 0,
         subtitleDelaySeconds: 0,
+        subtitlesVisible: true,
+        subtitleScale: 1,
+        subtitlePosition: 100,
+        videoAspect: "Auto",
+        videoRotationDegrees: 0,
+        videoFlipped: false,
         bufferingPercent: nil,
         volume: 100,
         muted: false,
         videoTracks: [],
         audioTracks: [],
+        audioDevices: [],
         subtitleTracks: [],
         error: nil
     )
@@ -37,9 +47,11 @@ final class PlayerViewModel: ObservableObject {
     private var timer: Timer?
     private var renderErrorReported = false
     private var pendingVolume: Double?
+    private let screenshotDirectoryKey = "screenshotDirectory"
 
     init() {
         configureBridge()
+        configureScreenshotDirectory()
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.pollEvents()
@@ -121,6 +133,13 @@ final class PlayerViewModel: ObservableObject {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    func openRecent(_ item: MediaItem) {
+        switch item.source {
+        case .localFile(let path): open(URL(fileURLWithPath: path))
+        case .publicURL(let value): openURL(value)
         }
     }
 
@@ -231,6 +250,49 @@ final class PlayerViewModel: ObservableObject {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    func copyScreenshot() {
+        guard snapshot.item != nil else {
+            showError("Open media before copying a screenshot")
+            return
+        }
+        guard let bridge else {
+            showError("Player is unavailable")
+            return
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Nura", isDirectory: true)
+            .appendingPathComponent("Screenshots", isDirectory: true)
+        let url = directory.appendingPathComponent("screenshot-\(UUID().uuidString).png")
+
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try bridge.screenshotToFile(url)
+            guard let image = NSImage(contentsOf: url) else {
+                throw PlayerBridgeError.command("Unable to copy the screenshot")
+            }
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.writeObjects([image]) else {
+                throw PlayerBridgeError.command("Unable to write the screenshot to the clipboard")
+            }
+            try? FileManager.default.removeItem(at: url)
+            lastError = nil
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            showError(error.localizedDescription)
+        }
+    }
+
+    func chooseScreenshotDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            setScreenshotDirectory(url)
         }
     }
 
@@ -360,6 +422,79 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
+    func setAudioDelay(_ delay: Double) {
+        do {
+            try bridge?.setAudioDelay(delay)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setAudioDevice(_ deviceID: String) {
+        do {
+            try bridge?.setAudioDevice(deviceID)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setSubtitlesVisible(_ visible: Bool) {
+        do {
+            try bridge?.setSubtitlesVisible(visible)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setSubtitleScale(_ scale: Double) {
+        do {
+            try bridge?.setSubtitleScale(scale)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setSubtitlePosition(_ position: Double) {
+        do {
+            try bridge?.setSubtitlePosition(position)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setVideoAspect(_ aspect: String) {
+        do {
+            try bridge?.setVideoAspect(aspect == "Auto" ? "no" : aspect)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func rotateVideo() {
+        let degrees = (snapshot.videoRotationDegrees + 90) % 360
+        do {
+            try bridge?.setVideoRotation(degrees)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func toggleVideoFlip() {
+        do {
+            try bridge?.setVideoFlipped(!snapshot.videoFlipped)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
     func selectVideoTrack(_ id: Int64) {
         do {
             try bridge?.selectVideoTrack(id)
@@ -394,6 +529,51 @@ final class PlayerViewModel: ObservableObject {
         NSApp.keyWindow?.toggleFullScreen(nil)
     }
 
+    func fitWindowToVideo() {
+        guard let width = snapshot.videoWidth, let height = snapshot.videoHeight, width > 0, height > 0 else {
+            showError("Video dimensions are not available yet")
+            return
+        }
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else {
+            showError("Player window is unavailable")
+            return
+        }
+        guard let screen = window.screen ?? NSScreen.main else {
+            showError("Display information is unavailable")
+            return
+        }
+
+        let rotated = snapshot.videoRotationDegrees % 180 != 0
+        let sourceSize = NSSize(
+            width: CGFloat(rotated ? height : width),
+            height: CGFloat(rotated ? width : height)
+        )
+        let visibleFrame = screen.visibleFrame
+        let chromeHeight = max(0, window.frame.height - (window.contentView?.frame.height ?? window.frame.height))
+        let maximumSize = NSSize(
+            width: visibleFrame.width * 0.9,
+            height: max(1, visibleFrame.height - chromeHeight) * 0.9
+        )
+        let maximumScale = min(maximumSize.width / sourceSize.width, maximumSize.height / sourceSize.height)
+        guard maximumScale > 0 else {
+            showError("Unable to fit the video on this display")
+            return
+        }
+
+        let minimumScale = max(720 / sourceSize.width, 460 / sourceSize.height)
+        let scale = min(maximumScale, max(minimumScale, min(1, maximumScale)))
+        let contentSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize))
+        frame.origin = NSPoint(
+            x: window.frame.midX - frame.width / 2,
+            y: window.frame.midY - frame.height / 2
+        )
+        frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))
+        frame.origin.y = max(visibleFrame.minY, min(frame.origin.y, visibleFrame.maxY - frame.height))
+        window.setFrame(frame, display: true, animate: true)
+        lastError = nil
+    }
+
     func toggleAlwaysOnTop() {
         alwaysOnTop.toggle()
         NSApp.keyWindow?.level = alwaysOnTop ? .floating : .normal
@@ -402,6 +582,23 @@ final class PlayerViewModel: ObservableObject {
     private func configureBridge() {
         do {
             bridge = try PlayerBridge()
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    private func configureScreenshotDirectory() {
+        let defaultDirectory = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let directory = UserDefaults.standard.string(forKey: screenshotDirectoryKey).map(URL.init(fileURLWithPath:)) ?? defaultDirectory
+        setScreenshotDirectory(directory)
+    }
+
+    private func setScreenshotDirectory(_ url: URL) {
+        do {
+            try bridge?.setScreenshotDirectory(url)
+            UserDefaults.standard.set(url.path, forKey: screenshotDirectoryKey)
+            lastError = nil
         } catch {
             showError(error.localizedDescription)
         }
