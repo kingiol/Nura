@@ -22,7 +22,15 @@ struct PlayerView: View {
                     Divider()
                     Button("Previous", action: model.previous)
                     Button("Next", action: model.next)
+                    Button("Back 5 Seconds") { model.seekRelative(-5) }
+                    Button("Forward 5 Seconds") { model.seekRelative(5) }
+                    Button("Back 30 Seconds") { model.seekRelative(-30) }
+                    Button("Forward 30 Seconds") { model.seekRelative(30) }
+                    Button("Next Frame", action: model.frameStep)
                     Button(model.loopEnabled ? "Disable Loop" : "Loop Current Item", action: model.toggleLoop)
+                    Button(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", action: model.togglePlaylistLoop)
+                    Button("Shuffle Playlist", action: model.shufflePlaylist)
+                    Button(model.abLoopLabel, action: model.advanceABLoop)
                     Divider()
                     Button("Load External Subtitle", action: model.openExternalSubtitle)
                     Button("Take Screenshot", action: model.screenshot)
@@ -143,11 +151,42 @@ struct PlayerView: View {
                 .buttonStyle(.borderless)
                 .help("Previous")
 
+                Button { model.seekRelative(-5) } label: {
+                    Image(systemName: "gobackward.5")
+                }
+                .buttonStyle(.borderless)
+                .help("Back 5 seconds")
+                .keyboardShortcut(.leftArrow, modifiers: [])
+
+                Button { model.seekRelative(5) } label: {
+                    Image(systemName: "goforward.5")
+                }
+                .buttonStyle(.borderless)
+                .help("Forward 5 seconds")
+                .keyboardShortcut(.rightArrow, modifiers: [])
+
                 Button(action: model.next) {
                     Image(systemName: "forward.end.fill")
                 }
                 .buttonStyle(.borderless)
                 .help("Next")
+
+                Button(action: model.frameStep) {
+                    Image(systemName: "forward.frame")
+                }
+                .buttonStyle(.borderless)
+                .help("Next frame")
+                .keyboardShortcut(".", modifiers: [])
+
+                Button { model.seekRelative(-30) } label: { EmptyView() }
+                    .keyboardShortcut(.leftArrow, modifiers: [.option])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+
+                Button { model.seekRelative(30) } label: { EmptyView() }
+                    .keyboardShortcut(.rightArrow, modifiers: [.option])
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
 
                 Text(timeText)
                     .font(.caption.monospacedDigit())
@@ -158,6 +197,7 @@ struct PlayerView: View {
 
                 TrackMenu(title: "Audio", tracks: model.snapshot.audioTracks, selection: model.selectedAudioTrack, includeOff: false, onSelect: model.selectAudioTrack)
                 TrackMenu(title: "Subtitles", tracks: model.snapshot.subtitleTracks, selection: model.selectedSubtitleTrack, includeOff: true, onSelect: model.selectSubtitleTrack)
+                SubtitleDelayMenu(delay: model.snapshot.subtitleDelaySeconds, onSelect: model.setSubtitleDelay)
                 SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
 
                 Button(action: model.toggleLoop) {
@@ -165,6 +205,24 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(model.loopEnabled ? "Disable loop" : "Loop current item")
+
+                Button(action: model.togglePlaylistLoop) {
+                    Image(systemName: model.snapshot.playlistLoop ? "repeat.circle.fill" : "repeat.circle")
+                }
+                .buttonStyle(.borderless)
+                .help(model.snapshot.playlistLoop ? "Disable playlist loop" : "Loop playlist")
+
+                Button(action: model.shufflePlaylist) {
+                    Image(systemName: "shuffle")
+                }
+                .buttonStyle(.borderless)
+                .help("Shuffle playlist")
+
+                Button(action: model.advanceABLoop) {
+                    Image(systemName: model.abLoopSymbol)
+                }
+                .buttonStyle(.borderless)
+                .help(model.abLoopLabel)
 
                 Button(action: model.toggleMute) {
                     Image(systemName: model.snapshot.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -554,5 +612,38 @@ private struct SpeedMenu: View {
 
     private func label(for value: Double) -> String {
         value == 1.0 ? "1x" : "\(value)x"
+    }
+}
+
+private struct SubtitleDelayMenu: View {
+    let delay: Double
+    let onSelect: (Double) -> Void
+
+    private let values = [-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0]
+
+    var body: some View {
+        Menu {
+            ForEach(values, id: \.self) { value in
+                Button {
+                    onSelect(value)
+                } label: {
+                    HStack {
+                        Text(label(for: value))
+                        if abs(delay - value) < 0.001 {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(label(for: delay), systemImage: "captions.bubble")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private func label(for value: Double) -> String {
+        if abs(value) < 0.001 { return "Sub 0s" }
+        return value > 0 ? "Sub +\(value)s" : "Sub \(value)s"
     }
 }

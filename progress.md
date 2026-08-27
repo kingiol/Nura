@@ -30,3 +30,10 @@
 - Added manual external subtitle loading and mpv track-list refresh events.
 - Added render-surface context menu plus Cmd+O, Cmd+L, Space, and Cmd+F shortcuts.
 - Added playlist mutation state-machine coverage; Rust tests, formatting, and Xcode Debug build pass.
+- Added playlist-loop state that restarts at the first item after the queue ends.
+- Added one-tap shuffle that keeps the current item playing and randomizes the remaining queue.
+- Added A-B loop controls backed by mpv's `ab-loop-a` and `ab-loop-b` properties.
+- Re-ran Rust tests, Xcode Debug build, and Release packaging successfully.
+- Added 5-second seek controls, 30-second Option+Arrow shortcuts, and frame stepping with the `.` shortcut.
+- Added subtitle delay selection from -2 to +2 seconds and core clamping to the supported -30 to +30 second range.
+- Added state-machine coverage for relative seek, frame stepping, and subtitle delay; Debug and Release builds pass.

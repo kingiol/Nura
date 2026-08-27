@@ -19,6 +19,10 @@ Implement the confirmed Nura first release: local and public online playback wit
 - Added external subtitle loading with track-list refresh events.
 - Added basic context-menu actions and keyboard shortcuts for common playback commands.
 - Added state-machine coverage for playlist move/remove behavior.
+- Added playlist loop, one-tap playlist shuffle, and A-B loop controls through the full Rust/Swift stack.
+- Added state-machine coverage for looping the queue and validating A-B loop ranges.
+- Added relative seek, frame step, and subtitle-delay commands across the playback stack.
+- Added keyboard/context-menu entry points while keeping the visible control bar compact.
 
 ## Final Verification
 

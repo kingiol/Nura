@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use nura_domain::{
     Chapter, MediaItem, PlaybackSnapshot, PlaybackStatus, Track, TrackKind, is_resumable,
@@ -13,10 +14,14 @@ pub trait PlaybackEngine: Send {
     fn play(&mut self) -> Result<(), EngineError>;
     fn pause(&mut self) -> Result<(), EngineError>;
     fn seek(&mut self, position_seconds: f64) -> Result<(), EngineError>;
+    fn seek_relative(&mut self, offset_seconds: f64) -> Result<(), EngineError>;
+    fn frame_step(&mut self) -> Result<(), EngineError>;
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError>;
     fn set_mute(&mut self, muted: bool) -> Result<(), EngineError>;
     fn set_speed(&mut self, speed: f64) -> Result<(), EngineError>;
     fn set_loop(&mut self, enabled: bool) -> Result<(), EngineError>;
+    fn set_ab_loop(&mut self, start: Option<f64>, end: Option<f64>) -> Result<(), EngineError>;
+    fn set_subtitle_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError>;
     fn screenshot(&mut self) -> Result<(), EngineError>;
     fn select_track(&mut self, kind: TrackKind, track_id: Option<i64>) -> Result<(), EngineError>;
     fn add_external_subtitle(&mut self, path: &Path) -> Result<(), EngineError>;
@@ -267,6 +272,18 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
+    pub fn seek_relative(&mut self, offset_seconds: f64) -> Result<(), PlayerError> {
+        self.engine.seek_relative(offset_seconds)?;
+        self.snapshot.position_seconds = (self.snapshot.position_seconds + offset_seconds).max(0.0);
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn frame_step(&mut self) -> Result<(), PlayerError> {
+        self.engine.frame_step()?;
+        Ok(())
+    }
+
     pub fn set_volume(&mut self, volume: f64) -> Result<(), PlayerError> {
         let volume = volume.clamp(0.0, 100.0);
         self.engine.set_volume(volume)?;
@@ -290,6 +307,14 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
+    pub fn set_subtitle_delay(&mut self, delay_seconds: f64) -> Result<(), PlayerError> {
+        let delay_seconds = delay_seconds.clamp(-30.0, 30.0);
+        self.engine.set_subtitle_delay(delay_seconds)?;
+        self.snapshot.subtitle_delay_seconds = delay_seconds;
+        self.emit_state();
+        Ok(())
+    }
+
     pub fn screenshot(&mut self) -> Result<(), PlayerError> {
         self.engine.screenshot()?;
         Ok(())
@@ -297,6 +322,50 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
 
     pub fn set_loop(&mut self, enabled: bool) -> Result<(), PlayerError> {
         self.engine.set_loop(enabled)?;
+        Ok(())
+    }
+
+    pub fn set_playlist_loop(&mut self, enabled: bool) {
+        self.snapshot.playlist_loop = enabled;
+        self.emit_state();
+    }
+
+    pub fn shuffle_playlist(&mut self) {
+        let Some(current_index) = self.snapshot.playlist_index else {
+            return;
+        };
+        if current_index >= self.snapshot.playlist.len() {
+            return;
+        }
+        let mut items = self.snapshot.playlist.clone();
+        let current_item = items.remove(current_index);
+        let mut seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos() as u64)
+            .unwrap_or(0x9e37_79b9);
+        for index in (1..items.len()).rev() {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let swap_index = (seed as usize) % (index + 1);
+            items.swap(index, swap_index);
+        }
+        items.insert(0, current_item);
+        self.snapshot.playlist = items;
+        self.snapshot.playlist_index = Some(0);
+        self.emit_state();
+    }
+
+    pub fn set_ab_loop(&mut self, start: Option<f64>, end: Option<f64>) -> Result<(), PlayerError> {
+        let start = start.map(|value| value.max(0.0));
+        let end = end.map(|value| value.max(0.0));
+        if matches!((start, end), (Some(start), Some(end)) if end <= start) {
+            return Err(PlayerError::Engine(EngineError::Message(
+                "A-B loop end must be after its start".to_owned(),
+            )));
+        }
+        self.engine.set_ab_loop(start, end)?;
+        self.snapshot.ab_loop_start_seconds = start;
+        self.snapshot.ab_loop_end_seconds = end;
+        self.emit_state();
         Ok(())
     }
 
@@ -400,6 +469,10 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                         if let Err(error) = self.play_playlist_index(next_index) {
                             self.fail(error.to_string());
                         }
+                    } else if self.snapshot.playlist_loop && !self.snapshot.playlist.is_empty() {
+                        if let Err(error) = self.play_playlist_index(0) {
+                            self.fail(error.to_string());
+                        }
                     } else {
                         self.snapshot.status = PlaybackStatus::Ended;
                         self.emit_state();
@@ -483,6 +556,10 @@ mod tests {
     struct FakeEngine {
         events: VecDeque<EngineEvent>,
         loaded_at: f64,
+        ab_loop: (Option<f64>, Option<f64>),
+        relative_seek: f64,
+        frame_steps: usize,
+        subtitle_delay: f64,
     }
     impl PlaybackEngine for FakeEngine {
         fn load(&mut self, _: &MediaItem, position: f64) -> Result<(), EngineError> {
@@ -498,6 +575,14 @@ mod tests {
         fn seek(&mut self, _: f64) -> Result<(), EngineError> {
             Ok(())
         }
+        fn seek_relative(&mut self, offset: f64) -> Result<(), EngineError> {
+            self.relative_seek = offset;
+            Ok(())
+        }
+        fn frame_step(&mut self) -> Result<(), EngineError> {
+            self.frame_steps += 1;
+            Ok(())
+        }
         fn set_volume(&mut self, _: f64) -> Result<(), EngineError> {
             Ok(())
         }
@@ -508,6 +593,14 @@ mod tests {
             Ok(())
         }
         fn set_loop(&mut self, _: bool) -> Result<(), EngineError> {
+            Ok(())
+        }
+        fn set_ab_loop(&mut self, start: Option<f64>, end: Option<f64>) -> Result<(), EngineError> {
+            self.ab_loop = (start, end);
+            Ok(())
+        }
+        fn set_subtitle_delay(&mut self, delay: f64) -> Result<(), EngineError> {
+            self.subtitle_delay = delay;
             Ok(())
         }
         fn screenshot(&mut self) -> Result<(), EngineError> {
@@ -634,5 +727,54 @@ mod tests {
         assert_eq!(session.snapshot.item.as_ref().unwrap().title, "second.mkv");
         assert_eq!(session.snapshot.playlist.len(), 2);
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn playlist_loop_restarts_from_the_first_item_after_the_last_item_ends() {
+        let directory =
+            std::env::temp_dir().join(format!("nura-playlist-loop-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let first = directory.join("first.mkv");
+        let second = directory.join("second.mkv");
+        fs::write(&first, []).unwrap();
+        fs::write(&second, []).unwrap();
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        session.open(&first).unwrap();
+        session
+            .enqueue_item(MediaItem::from_path(&second).unwrap())
+            .unwrap();
+        session.play_playlist_index(1).unwrap();
+        session.set_playlist_loop(true);
+        session.engine.events.push_back(EngineEvent::Ended);
+        session.poll().unwrap();
+        assert_eq!(session.snapshot.playlist_index, Some(0));
+        assert_eq!(session.snapshot.item.as_ref().unwrap().title, "first.mkv");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn ab_loop_updates_snapshot_and_rejects_an_invalid_range() {
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        session.set_ab_loop(Some(12.0), Some(24.0)).unwrap();
+        assert_eq!(session.snapshot.ab_loop_start_seconds, Some(12.0));
+        assert_eq!(session.snapshot.ab_loop_end_seconds, Some(24.0));
+        assert_eq!(session.engine.ab_loop, (Some(12.0), Some(24.0)));
+        assert!(session.set_ab_loop(Some(24.0), Some(12.0)).is_err());
+        session.set_ab_loop(None, None).unwrap();
+        assert_eq!(session.engine.ab_loop, (None, None));
+    }
+
+    #[test]
+    fn relative_seek_frame_step_and_subtitle_delay_update_the_session() {
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        session.snapshot.position_seconds = 20.0;
+        session.seek_relative(-5.0).unwrap();
+        assert_eq!(session.snapshot.position_seconds, 15.0);
+        assert_eq!(session.engine.relative_seek, -5.0);
+        session.frame_step().unwrap();
+        assert_eq!(session.engine.frame_steps, 1);
+        session.set_subtitle_delay(0.5).unwrap();
+        assert_eq!(session.snapshot.subtitle_delay_seconds, 0.5);
+        assert_eq!(session.engine.subtitle_delay, 0.5);
     }
 }

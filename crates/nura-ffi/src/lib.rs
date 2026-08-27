@@ -28,10 +28,20 @@ enum Command {
     Pause(Reply),
     Toggle(Reply),
     Seek(f64, Reply),
+    SeekRelative(f64, Reply),
+    FrameStep(Reply),
     Volume(f64, Reply),
     Mute(bool, Reply),
     Speed(f64, Reply),
     Loop(bool, Reply),
+    PlaylistLoop(bool, Reply),
+    Shuffle(Reply),
+    AbLoop {
+        start: Option<f64>,
+        end: Option<f64>,
+        reply: Reply,
+    },
+    SubtitleDelay(f64, Reply),
     Screenshot(Reply),
     AudioTrack(Option<i64>, Reply),
     SubtitleTrack(Option<i64>, Reply),
@@ -44,15 +54,27 @@ enum AsyncCommand {
     Open(PathBuf),
     Enqueue(PathBuf),
     RemoveIndex(usize),
-    MoveIndex { from: usize, to: usize },
+    MoveIndex {
+        from: usize,
+        to: usize,
+    },
     PlayIndex(usize),
     Next,
     Previous,
     Toggle,
     Seek(f64),
+    SeekRelative(f64),
+    FrameStep,
     Mute(bool),
     Speed(f64),
     Loop(bool),
+    PlaylistLoop(bool),
+    Shuffle,
+    AbLoop {
+        start: Option<f64>,
+        end: Option<f64>,
+    },
+    SubtitleDelay(f64),
     Screenshot,
     AudioTrack(Option<i64>),
     SubtitleTrack(Option<i64>),
@@ -144,9 +166,21 @@ fn handle_async_command(
         AsyncCommand::Previous => session.previous(),
         AsyncCommand::Toggle => session.toggle_playback(),
         AsyncCommand::Seek(position) => session.seek(position),
+        AsyncCommand::SeekRelative(offset) => session.seek_relative(offset),
+        AsyncCommand::FrameStep => session.frame_step(),
         AsyncCommand::Mute(muted) => session.set_mute(muted),
         AsyncCommand::Speed(speed) => session.set_speed(speed),
         AsyncCommand::Loop(enabled) => session.set_loop(enabled),
+        AsyncCommand::PlaylistLoop(enabled) => {
+            session.set_playlist_loop(enabled);
+            Ok(())
+        }
+        AsyncCommand::Shuffle => {
+            session.shuffle_playlist();
+            Ok(())
+        }
+        AsyncCommand::AbLoop { start, end } => session.set_ab_loop(start, end),
+        AsyncCommand::SubtitleDelay(delay) => session.set_subtitle_delay(delay),
         AsyncCommand::Screenshot => session.screenshot(),
         AsyncCommand::AudioTrack(id) => session.select_track(TrackKind::Audio, id),
         AsyncCommand::SubtitleTrack(id) => session.select_track(TrackKind::Subtitle, id),
@@ -219,10 +253,22 @@ fn handle_command(
             return false;
         }
         Command::Seek(position, reply) => (session.seek(position), reply),
+        Command::SeekRelative(offset, reply) => (session.seek_relative(offset), reply),
+        Command::FrameStep(reply) => (session.frame_step(), reply),
         Command::Volume(volume, reply) => (session.set_volume(volume), reply),
         Command::Mute(muted, reply) => (session.set_mute(muted), reply),
         Command::Speed(speed, reply) => (session.set_speed(speed), reply),
         Command::Loop(enabled, reply) => (session.set_loop(enabled), reply),
+        Command::PlaylistLoop(enabled, reply) => {
+            session.set_playlist_loop(enabled);
+            (Ok(()), reply)
+        }
+        Command::Shuffle(reply) => {
+            session.shuffle_playlist();
+            (Ok(()), reply)
+        }
+        Command::AbLoop { start, end, reply } => (session.set_ab_loop(start, end), reply),
+        Command::SubtitleDelay(delay, reply) => (session.set_subtitle_delay(delay), reply),
         Command::Screenshot(reply) => (session.screenshot(), reply),
         Command::AudioTrack(id, reply) => (session.select_track(TrackKind::Audio, id), reply),
         Command::SubtitleTrack(id, reply) => (session.select_track(TrackKind::Subtitle, id), reply),
@@ -516,6 +562,25 @@ pub unsafe extern "C" fn nura_player_seek_async(player: *mut NuraPlayer, positio
     async_command_result(player, AsyncCommand::Seek(position))
 }
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_seek_relative_async(
+    player: *mut NuraPlayer,
+    offset: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::SeekRelative(offset))
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_frame_step_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::FrameStep)
+}
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_volume(player: *mut NuraPlayer, volume: f64) -> c_int {
     command_result(player, |reply| Command::Volume(volume, reply))
 }
@@ -580,6 +645,54 @@ pub unsafe extern "C" fn nura_player_set_loop_async(
         return -1;
     };
     async_command_result(player, AsyncCommand::Loop(enabled != 0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_playlist_loop_async(
+    player: *mut NuraPlayer,
+    enabled: c_int,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::PlaylistLoop(enabled != 0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_shuffle_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::Shuffle)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_ab_loop_async(
+    player: *mut NuraPlayer,
+    start: f64,
+    end: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    let start = start.is_finite().then_some(start);
+    let end = end.is_finite().then_some(end);
+    async_command_result(player, AsyncCommand::AbLoop { start, end })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_set_subtitle_delay_async(
+    player: *mut NuraPlayer,
+    delay: f64,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::SubtitleDelay(delay))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_audio_track(

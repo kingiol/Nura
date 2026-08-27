@@ -418,6 +418,12 @@ impl PlaybackEngine for MpvEngine {
     fn seek(&mut self, position_seconds: f64) -> Result<(), EngineError> {
         self.command(&["seek", &position_seconds.to_string(), "absolute", "exact"])
     }
+    fn seek_relative(&mut self, offset_seconds: f64) -> Result<(), EngineError> {
+        self.command(&["seek", &offset_seconds.to_string(), "relative", "exact"])
+    }
+    fn frame_step(&mut self) -> Result<(), EngineError> {
+        self.command(&["frame-step"])
+    }
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError> {
         self.command(&["set", "volume", &volume.to_string()])
     }
@@ -429,6 +435,24 @@ impl PlaybackEngine for MpvEngine {
     }
     fn set_loop(&mut self, enabled: bool) -> Result<(), EngineError> {
         self.command(&["set", "loop-file", if enabled { "yes" } else { "no" }])
+    }
+    fn set_ab_loop(&mut self, start: Option<f64>, end: Option<f64>) -> Result<(), EngineError> {
+        self.command(&[
+            "set",
+            "ab-loop-a",
+            &start
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "no".to_owned()),
+        ])?;
+        self.command(&[
+            "set",
+            "ab-loop-b",
+            &end.map(|value| value.to_string())
+                .unwrap_or_else(|| "no".to_owned()),
+        ])
+    }
+    fn set_subtitle_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError> {
+        self.command(&["set", "sub-delay", &delay_seconds.to_string()])
     }
     fn screenshot(&mut self) -> Result<(), EngineError> {
         self.command(&["screenshot", "video"])
@@ -547,6 +571,18 @@ impl PlaybackEngine for SharedMpvEngine {
             .map_err(|_| EngineError::Message("player lock poisoned".into()))?
             .seek(position)
     }
+    fn seek_relative(&mut self, offset: f64) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .seek_relative(offset)
+    }
+    fn frame_step(&mut self) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .frame_step()
+    }
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError> {
         self.0
             .lock()
@@ -570,6 +606,18 @@ impl PlaybackEngine for SharedMpvEngine {
             .lock()
             .map_err(|_| EngineError::Message("player lock poisoned".into()))?
             .set_loop(enabled)
+    }
+    fn set_ab_loop(&mut self, start: Option<f64>, end: Option<f64>) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_ab_loop(start, end)
+    }
+    fn set_subtitle_delay(&mut self, delay_seconds: f64) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .set_subtitle_delay(delay_seconds)
     }
     fn screenshot(&mut self) -> Result<(), EngineError> {
         self.0

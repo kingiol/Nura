@@ -30,6 +30,10 @@ private func nura_player_pause(_ player: NuraHandle?) -> Int32
 private func nura_player_toggle_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_seek_async")
 private func nura_player_seek_async(_ player: NuraHandle?, _ position: Double) -> Int32
+@_silgen_name("nura_player_seek_relative_async")
+private func nura_player_seek_relative_async(_ player: NuraHandle?, _ offset: Double) -> Int32
+@_silgen_name("nura_player_frame_step_async")
+private func nura_player_frame_step_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_set_volume_async")
 private func nura_player_set_volume_async(_ player: NuraHandle?, _ volume: Double) -> Int32
 @_silgen_name("nura_player_set_mute_async")
@@ -40,6 +44,14 @@ private func nura_player_set_speed_async(_ player: NuraHandle?, _ speed: Double)
 private func nura_player_screenshot_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_set_loop_async")
 private func nura_player_set_loop_async(_ player: NuraHandle?, _ enabled: Int32) -> Int32
+@_silgen_name("nura_player_set_playlist_loop_async")
+private func nura_player_set_playlist_loop_async(_ player: NuraHandle?, _ enabled: Int32) -> Int32
+@_silgen_name("nura_player_shuffle_async")
+private func nura_player_shuffle_async(_ player: NuraHandle?) -> Int32
+@_silgen_name("nura_player_set_ab_loop_async")
+private func nura_player_set_ab_loop_async(_ player: NuraHandle?, _ start: Double, _ end: Double) -> Int32
+@_silgen_name("nura_player_set_subtitle_delay_async")
+private func nura_player_set_subtitle_delay_async(_ player: NuraHandle?, _ delay: Double) -> Int32
 @_silgen_name("nura_player_select_audio_track_async")
 private func nura_player_select_audio_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
 @_silgen_name("nura_player_select_subtitle_track_async")
@@ -104,6 +116,9 @@ struct PlaybackSnapshot: Decodable {
     let playlist: [MediaItem]
     let playlistIndex: Int?
     let chapters: [Chapter]
+    let playlistLoop: Bool
+    let abLoopStartSeconds: Double?
+    let abLoopEndSeconds: Double?
     let status: String
     let positionSeconds: Double
     let durationSeconds: Double?
@@ -119,7 +134,10 @@ struct PlaybackSnapshot: Decodable {
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case item, playlist, playlistIndex = "playlist_index", chapters, status
+        case item, playlist, playlistIndex = "playlist_index", chapters
+        case playlistLoop = "playlist_loop"
+        case abLoopStartSeconds = "ab_loop_start_seconds", abLoopEndSeconds = "ab_loop_end_seconds"
+        case status
         case positionSeconds = "position_seconds", durationSeconds = "duration_seconds"
         case speed, audioDelaySeconds = "audio_delay_seconds", subtitleDelaySeconds = "subtitle_delay_seconds"
         case bufferingPercent = "buffering_percent", volume, muted
@@ -194,11 +212,19 @@ final class PlayerBridge {
     func previous() throws { try command { nura_player_previous_async(handle) } }
     func toggle() throws { try command { nura_player_toggle_async(handle) } }
     func seek(_ position: Double) throws { try command { nura_player_seek_async(handle, position) } }
+    func seekRelative(_ offset: Double) throws { try command { nura_player_seek_relative_async(handle, offset) } }
+    func frameStep() throws { try command { nura_player_frame_step_async(handle) } }
     func setVolume(_ volume: Double) throws { try command { nura_player_set_volume_async(handle, volume) } }
     func setMuted(_ muted: Bool) throws { try command { nura_player_set_mute_async(handle, muted ? 1 : 0) } }
     func setSpeed(_ speed: Double) throws { try command { nura_player_set_speed_async(handle, speed) } }
     func screenshot() throws { try command { nura_player_screenshot_async(handle) } }
     func setLoop(_ enabled: Bool) throws { try command { nura_player_set_loop_async(handle, enabled ? 1 : 0) } }
+    func setPlaylistLoop(_ enabled: Bool) throws { try command { nura_player_set_playlist_loop_async(handle, enabled ? 1 : 0) } }
+    func shuffle() throws { try command { nura_player_shuffle_async(handle) } }
+    func setABLoop(start: Double?, end: Double?) throws {
+        try command { nura_player_set_ab_loop_async(handle, start ?? .nan, end ?? .nan) }
+    }
+    func setSubtitleDelay(_ delay: Double) throws { try command { nura_player_set_subtitle_delay_async(handle, delay) } }
     func selectAudioTrack(_ id: Int64) throws { try command { nura_player_select_audio_track_async(handle, id) } }
     func selectSubtitleTrack(_ id: Int64) throws { try command { nura_player_select_subtitle_track_async(handle, id) } }
     func selectVideoTrack(_ id: Int64) throws { try command { nura_player_select_video_track_async(handle, id) } }

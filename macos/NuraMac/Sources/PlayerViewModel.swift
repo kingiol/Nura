@@ -9,6 +9,9 @@ final class PlayerViewModel: ObservableObject {
         playlist: [],
         playlistIndex: nil,
         chapters: [],
+        playlistLoop: false,
+        abLoopStartSeconds: nil,
+        abLoopEndSeconds: nil,
         status: "idle",
         positionSeconds: 0,
         durationSeconds: nil,
@@ -242,6 +245,53 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
+    func togglePlaylistLoop() {
+        let enabled = !snapshot.playlistLoop
+        do {
+            try bridge?.setPlaylistLoop(enabled)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func shufflePlaylist() {
+        do {
+            try bridge?.shuffle()
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func advanceABLoop() {
+        let position = max(0, snapshot.positionSeconds)
+        do {
+            if snapshot.abLoopStartSeconds == nil {
+                try bridge?.setABLoop(start: position, end: nil)
+            } else if snapshot.abLoopEndSeconds == nil {
+                try bridge?.setABLoop(start: snapshot.abLoopStartSeconds, end: position)
+            } else {
+                try bridge?.setABLoop(start: nil, end: nil)
+            }
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    var abLoopLabel: String {
+        if snapshot.abLoopStartSeconds == nil { return "Set A-B loop start" }
+        if snapshot.abLoopEndSeconds == nil { return "Set A-B loop end" }
+        return "Clear A-B loop"
+    }
+
+    var abLoopSymbol: String {
+        if snapshot.abLoopStartSeconds == nil { return "a.circle" }
+        if snapshot.abLoopEndSeconds == nil { return "b.circle" }
+        return "a.circle.fill"
+    }
+
     func seekEditingChanged(_ editing: Bool) {
         isSeeking = editing
         if !editing {
@@ -251,6 +301,24 @@ final class PlayerViewModel: ObservableObject {
             } catch {
                 showError(error.localizedDescription)
             }
+        }
+    }
+
+    func seekRelative(_ seconds: Double) {
+        do {
+            try bridge?.seekRelative(seconds)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func frameStep() {
+        do {
+            try bridge?.frameStep()
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
         }
     }
 
@@ -277,6 +345,15 @@ final class PlayerViewModel: ObservableObject {
     func selectSubtitleTrack(_ id: Int64) {
         do {
             try bridge?.selectSubtitleTrack(id)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func setSubtitleDelay(_ delay: Double) {
+        do {
+            try bridge?.setSubtitleDelay(delay)
             lastError = nil
         } catch {
             showError(error.localizedDescription)
