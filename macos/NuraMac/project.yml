@@ -55,6 +55,13 @@ targets:
           else
             cargo build -p nura-ffi
           fi
+    postBuildScripts:
+      - name: Bundle Verified libmpv Runtime
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$CONFIGURATION" = "Release" ]; then
+            "$SRCROOT/../../scripts/package-libmpv-runtime.sh" "$TARGET_BUILD_DIR/$WRAPPER_NAME"
+          fi
     scheme:
       gatherCoverageData: false
       testTargets: []

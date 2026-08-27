@@ -8,7 +8,9 @@ From the repository root, open the native Xcode project:
 open -a Xcode macos/NuraMac/NuraMac.xcodeproj
 ```
 
-Select the `NuraMac` scheme and choose `Product > Run`. The Xcode project runs a Rust build phase automatically and links `target/debug/libnura_ffi.a` in Debug. Homebrew's `/opt/homebrew/lib/libmpv.2.dylib` is discovered automatically. For a custom libmpv path, add `NURA_MPV_LIBRARY` to the scheme's Run environment.
+Select the `NuraMac` scheme and choose `Product > Run`. The Xcode project runs a Rust build phase automatically and links `target/debug/libnura_ffi.a` in Debug. Debug builds discover Homebrew's `libmpv` automatically; for a custom development library, add `NURA_MPV_LIBRARY` to the scheme's Run environment.
+
+Release builds and Archives run the `Bundle Verified libmpv Runtime` build phase. It copies the lock-verified `libmpv` dependency closure into `Nura.app/Contents/Frameworks`, so the resulting app does not require Homebrew on the user's Mac. Run `../../scripts/test-libmpv-runtime.sh` from this directory to verify the runtime independently.
 
 Version settings are in the target's `General` tab (`Version` and `Build`), and the app icon is editable in `Assets.xcassets/AppIcon`.
 

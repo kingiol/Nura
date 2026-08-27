@@ -47,10 +47,11 @@ packaging phase before Xcode signs nested code and the outer app.
 ## Runtime Loading
 
 The Rust player loads in this order: explicit `NURA_MPV_LIBRARY`, bundled
-`Contents/Frameworks/libmpv.2.dylib` when running in an app bundle, then
-Homebrew paths only for non-bundle development workflows. A bundled app never
-falls back to Homebrew, so an incomplete package fails clearly instead of
-silently using an unverified local library.
+`Contents/Frameworks/libmpv.2.dylib` for a Release executable in an app
+bundle, then Homebrew paths only for Debug development workflows. Debug builds
+launched from Xcode are app bundles too, so they retain Homebrew fallback. A
+Release bundle never falls back to Homebrew, so an incomplete package fails
+clearly instead of silently using an unverified local library.
 
 ## Closure and Relocation Rules
 
@@ -105,3 +106,8 @@ mpv, FFmpeg, and transitive runtime before signing or uploading the app.
   media file. This is the acceptance test for the independent runtime.
 - For signed distribution, verify the final archive with `codesign` and
   `spctl` after signing/notarization is configured.
+
+The release owner must additionally launch the signed Release app from Finder
+on a macOS installation without Homebrew and play a local H.264/AAC file.
+Record this result with the release artifact; it is not complete until it runs
+on that environment.

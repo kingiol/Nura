@@ -1,5 +1,5 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
@@ -70,6 +70,43 @@ struct MpvApi {
     render_free: unsafe extern "C" fn(*mut MpvRenderContext),
 }
 
+fn bundled_mpv_library(executable: &Path) -> Option<PathBuf> {
+    let macos = executable.parent()?;
+    let contents = macos.parent()?;
+    let app = contents.parent()?;
+
+    (macos.file_name()?.to_str() == Some("MacOS")
+        && contents.file_name()?.to_str() == Some("Contents")
+        && app.extension()?.to_str() == Some("app"))
+    .then(|| contents.join("Frameworks/libmpv.2.dylib"))
+}
+
+fn mpv_library_candidates(
+    override_path: Option<&Path>,
+    executable: Option<&Path>,
+    release_build: bool,
+) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Some(path) = override_path {
+        candidates.push(path.to_owned());
+    }
+
+    if let Some(bundled) = executable.and_then(bundled_mpv_library) {
+        candidates.push(bundled);
+        if release_build {
+            return candidates;
+        }
+    }
+
+    candidates.extend([
+        PathBuf::from("/opt/homebrew/lib/libmpv.2.dylib"),
+        PathBuf::from("/usr/local/lib/libmpv.2.dylib"),
+        PathBuf::from("libmpv.2.dylib"),
+    ]);
+    candidates
+}
+
 impl MpvApi {
     unsafe fn load_symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T, MpvError> {
         Ok(*library.get::<T>(name).map_err(|error| MpvError::Symbol {
@@ -81,17 +118,18 @@ impl MpvApi {
     }
 
     fn load() -> Result<Self, MpvError> {
-        let candidates = [
-            std::env::var("NURA_MPV_LIBRARY").unwrap_or_default(),
-            "/opt/homebrew/lib/libmpv.2.dylib".to_owned(),
-            "/usr/local/lib/libmpv.2.dylib".to_owned(),
-            "libmpv.2.dylib".to_owned(),
-        ];
+        let override_path = std::env::var_os("NURA_MPV_LIBRARY").map(PathBuf::from);
+        let executable = std::env::current_exe().ok();
+        let candidates = mpv_library_candidates(
+            override_path.as_deref(),
+            executable.as_deref(),
+            !cfg!(debug_assertions),
+        );
         let mut last_error = String::from("no candidate path could be loaded");
-        for candidate in candidates.into_iter().filter(|value| !value.is_empty()) {
+        for candidate in candidates {
             let library = unsafe { Library::new(&candidate) };
             let Ok(library) = library else {
-                last_error = format!("could not load {candidate}");
+                last_error = format!("could not load {}", candidate.display());
                 continue;
             };
             let loaded: Result<Self, MpvError> = unsafe {
@@ -114,7 +152,7 @@ impl MpvApi {
             if let Ok(api) = loaded {
                 return Ok(api);
             }
-            last_error = format!("{candidate} is missing required libmpv symbols");
+            last_error = format!("{} is missing required libmpv symbols", candidate.display());
         }
         Err(MpvError::Unavailable(last_error))
     }
@@ -808,4 +846,41 @@ pub enum MpvError {
     Call(c_int),
     #[error("missing libmpv symbol {name}: {error}")]
     Symbol { name: String, error: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_app_uses_override_then_bundled_library() {
+        let candidates = mpv_library_candidates(
+            Some(Path::new("/tmp/custom/libmpv.2.dylib")),
+            Some(Path::new("/Applications/Nura.app/Contents/MacOS/Nura")),
+            true,
+        );
+
+        assert_eq!(
+            candidates,
+            vec![
+                PathBuf::from("/tmp/custom/libmpv.2.dylib"),
+                PathBuf::from("/Applications/Nura.app/Contents/Frameworks/libmpv.2.dylib"),
+            ]
+        );
+    }
+
+    #[test]
+    fn debug_app_keeps_homebrew_fallbacks() {
+        let candidates = mpv_library_candidates(
+            None,
+            Some(Path::new("/tmp/Nura.app/Contents/MacOS/Nura")),
+            false,
+        );
+
+        assert!(
+            candidates
+                .iter()
+                .any(|path| path == Path::new("/opt/homebrew/lib/libmpv.2.dylib"))
+        );
+    }
 }

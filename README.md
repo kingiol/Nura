@@ -14,12 +14,14 @@ Nura is a native macOS local-media player for playing audio and video files.
 ## Requirements
 
 - macOS
-- Homebrew
-- mpv `0.41.0`
+- Homebrew and mpv for development only
+
+Release builds bundle the lock-verified `libmpv` runtime into `Nura.app`; end
+users do not need Homebrew or mpv installed.
 
 ## Run
 
-Install the media runtime and launch Nura from the repository root:
+Install the development media runtime and launch Nura from the repository root:
 
 ```sh
 brew bundle --file=Brewfile
@@ -30,6 +32,12 @@ To build the app without launching it:
 
 ```sh
 ./scripts/build-macos-app.sh
+```
+
+Validate the bundled Release runtime after changing Homebrew dependencies:
+
+```sh
+./scripts/test-libmpv-runtime.sh
 ```
 
 ## License

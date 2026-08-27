@@ -1,3 +1,3 @@
-# Development-only media runtime. Release builds will eventually bundle a pinned artifact.
+# Development-only media runtime. Release builds bundle the lock-verified runtime.
 brew "mpv"
 brew "yt-dlp"

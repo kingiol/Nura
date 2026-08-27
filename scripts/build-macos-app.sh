@@ -18,6 +18,9 @@ APP="$ROOT/build/Nura.app"
 rm -rf "$APP"
 cp -R "$DERIVED_DATA/Build/Products/Release/Nura.app" "$APP"
 
+test -f "$APP/Contents/Frameworks/libmpv.2.dylib"
+test -f "$APP/Contents/Resources/libmpv-runtime-manifest.tsv"
+
 YTDL_PATH="$($ROOT/scripts/check-ytdlp.sh --standalone)"
 mkdir -p "$APP/Contents/Resources/bin"
 cp "$YTDL_PATH" "$APP/Contents/Resources/bin/yt-dlp"

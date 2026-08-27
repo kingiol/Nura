@@ -68,6 +68,7 @@
 				5145749704910AFC0D5C2138 /* Build Rust Player Core */,
 				44A5A0999C1A5E700D81B75F /* Sources */,
 				C3F38A9F68D5BCB549B2CE22 /* Resources */,
+				D5EED79E0F8E4B3E9C79C211 /* Bundle Verified libmpv Runtime */,
 			);
 			buildRules = (
 			);
@@ -143,6 +144,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "export PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:$PATH\"\ncd \"$SRCROOT/../..\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  cargo build -p nura-ffi --release\nelse\n  cargo build -p nura-ffi\nfi\n";
+		};
+		D5EED79E0F8E4B3E9C79C211 /* Bundle Verified libmpv Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Verified libmpv Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  \"$SRCROOT/../../scripts/package-libmpv-runtime.sh\" \"$TARGET_BUILD_DIR/$WRAPPER_NAME\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
