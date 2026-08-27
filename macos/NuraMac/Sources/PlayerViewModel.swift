@@ -528,15 +528,20 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    func render(fbo: Int32, width: Int32, height: Int32) {
+    func render(fbo: Int32, width: Int32, height: Int32) -> Bool {
+        guard let bridge else { return false }
         do {
-            try bridge?.render(fbo: fbo, width: width, height: height)
-            renderErrorReported = false
+            let rendered = try bridge.render(fbo: fbo, width: width, height: height)
+            if rendered {
+                renderErrorReported = false
+            }
+            return rendered
         } catch {
             if !renderErrorReported {
                 renderErrorReported = true
                 showError(error.localizedDescription)
             }
+            return false
         }
     }
 

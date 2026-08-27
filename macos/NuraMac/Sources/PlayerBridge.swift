@@ -1,6 +1,7 @@
 import Foundation
 
 private typealias NuraHandle = OpaquePointer
+private let nuraRenderSkipped: Int32 = 1
 
 @_silgen_name("nura_player_create")
 private func nura_player_create(_ directory: UnsafePointer<CChar>?) -> NuraHandle?
@@ -284,8 +285,15 @@ final class PlayerBridge {
     }
     func attachOpenGLContext() throws { try command { nura_player_attach_opengl_context(handle) } }
 
-    func render(fbo: Int32, width: Int32, height: Int32) throws {
-        try command { nura_player_render_opengl(handle, fbo, width, height) }
+    func render(fbo: Int32, width: Int32, height: Int32) throws -> Bool {
+        switch nura_player_render_opengl(handle, fbo, width, height) {
+        case 0:
+            return true
+        case nuraRenderSkipped:
+            return false
+        default:
+            throw PlayerBridgeError.command(Self.lastError())
+        }
     }
 
     func events() -> [PlayerEvent] {

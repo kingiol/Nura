@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -11,6 +11,9 @@ use nura_mpv::{MpvEngine, SharedMpvEngine};
 use nura_player_core::{PlayerEvent, PlayerSession};
 
 type Reply = mpsc::SyncSender<Result<(), String>>;
+
+// A busy engine is a normal dropped video frame, not a render failure.
+const NURA_RENDER_SKIPPED: c_int = 1;
 
 enum Command {
     Open(PathBuf, Reply),
@@ -358,6 +361,14 @@ fn enqueue_async(
     command: AsyncCommand,
 ) -> Result<(), String> {
     enqueue_command(commands, Command::Async(command))
+}
+
+fn try_lock_for_render<T>(mutex: &Mutex<T>) -> Result<Option<MutexGuard<'_, T>>, String> {
+    match mutex.try_lock() {
+        Ok(value) => Ok(Some(value)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Poisoned(_)) => Err("player lock poisoned".to_owned()),
+    }
 }
 
 unsafe fn read_string(value: *const c_char) -> Result<String, String> {
@@ -977,19 +988,17 @@ pub unsafe extern "C" fn nura_player_render_opengl(
     let Some(player) = player.as_ref() else {
         return -1;
     };
-    match player
-        .engine
-        .0
-        .lock()
-        .map_err(|_| "player lock poisoned".to_owned())
-        .and_then(|mut engine| {
-            engine
-                .render_opengl(fbo, width, height)
-                .map_err(|error| error.to_string())
-        }) {
-        Ok(()) => 0,
+    match try_lock_for_render(&player.engine.0) {
+        Ok(Some(mut engine)) => match engine.render_opengl(fbo, width, height) {
+            Ok(()) => 0,
+            Err(error) => {
+                set_last_error(error.to_string());
+                -1
+            }
+        },
+        Ok(None) => NURA_RENDER_SKIPPED,
         Err(error) => {
-            set_last_error(error.to_string());
+            set_last_error(error);
             -1
         }
     }
@@ -1111,5 +1120,25 @@ mod tests {
 
         assert_eq!(take_pending_volume(&pending_volume), Some(80.0));
         assert_eq!(take_pending_volume(&pending_volume), None);
+    }
+
+    #[test]
+    fn render_lock_skips_busy_worker_instead_of_waiting() {
+        let engine = Mutex::new(());
+        let worker_guard = engine.lock().expect("worker should acquire the lock");
+
+        assert!(
+            try_lock_for_render(&engine)
+                .expect("busy lock is not an error")
+                .is_none()
+        );
+
+        drop(worker_guard);
+
+        assert!(
+            try_lock_for_render(&engine)
+                .expect("available lock should succeed")
+                .is_some()
+        );
     }
 }

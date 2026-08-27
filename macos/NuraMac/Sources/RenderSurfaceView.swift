@@ -9,7 +9,7 @@ struct RenderSurfaceView: NSViewRepresentable {
             model?.attachOpenGLContext()
         }
         surface.renderFrame = { [weak model] fbo, width, height in
-            model?.render(fbo: fbo, width: width, height: height)
+            model?.render(fbo: fbo, width: width, height: height) ?? false
         }
         return surface
     }
