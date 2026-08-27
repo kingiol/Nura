@@ -3,6 +3,8 @@
 macos/NuraMac/.build/
 macos/NuraMac/.swiftpm/
 *.xcuserstate
+
+# Local planning artifacts
 /task_plan.md
 /findings.md
 /progress.md
