@@ -2,6 +2,20 @@ import AppKit
 import Combine
 import UniformTypeIdentifiers
 
+private struct VideoGeometry: Equatable {
+    let width: CGFloat
+    let height: CGFloat
+
+    var size: NSSize {
+        NSSize(width: width, height: height)
+    }
+
+    var minimumSize: NSSize {
+        let scale = 600 / max(width, height)
+        return NSSize(width: width * scale, height: height * scale)
+    }
+}
+
 @MainActor
 final class PlayerViewModel: ObservableObject {
     @Published private(set) var snapshot = PlaybackSnapshot(
@@ -47,6 +61,7 @@ final class PlayerViewModel: ObservableObject {
     private var timer: Timer?
     private var renderErrorReported = false
     private var pendingVolume: Double?
+    private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
 
     init() {
@@ -530,7 +545,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func fitWindowToVideo() {
-        guard let width = snapshot.videoWidth, let height = snapshot.videoHeight, width > 0, height > 0 else {
+        guard let geometry = currentVideoGeometry else {
             showError("Video dimensions are not available yet")
             return
         }
@@ -543,34 +558,8 @@ final class PlayerViewModel: ObservableObject {
             return
         }
 
-        let rotated = snapshot.videoRotationDegrees % 180 != 0
-        let sourceSize = NSSize(
-            width: CGFloat(rotated ? height : width),
-            height: CGFloat(rotated ? width : height)
-        )
-        let visibleFrame = screen.visibleFrame
-        let chromeHeight = max(0, window.frame.height - (window.contentView?.frame.height ?? window.frame.height))
-        let maximumSize = NSSize(
-            width: visibleFrame.width * 0.9,
-            height: max(1, visibleFrame.height - chromeHeight) * 0.9
-        )
-        let maximumScale = min(maximumSize.width / sourceSize.width, maximumSize.height / sourceSize.height)
-        guard maximumScale > 0 else {
-            showError("Unable to fit the video on this display")
-            return
-        }
-
-        let minimumScale = max(720 / sourceSize.width, 460 / sourceSize.height)
-        let scale = min(maximumScale, max(minimumScale, min(1, maximumScale)))
-        let contentSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
-        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize))
-        frame.origin = NSPoint(
-            x: window.frame.midX - frame.width / 2,
-            y: window.frame.midY - frame.height / 2
-        )
-        frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))
-        frame.origin.y = max(visibleFrame.minY, min(frame.origin.y, visibleFrame.maxY - frame.height))
-        window.setFrame(frame, display: true, animate: true)
+        configure(window, for: geometry, on: screen, resizeToFit: true)
+        windowVideoGeometry = geometry
         lastError = nil
     }
 
@@ -617,6 +606,7 @@ final class PlayerViewModel: ObservableObject {
 
     private func apply(_ snapshot: PlaybackSnapshot) {
         self.snapshot = snapshot
+        updateWindowVideoGeometryIfNeeded()
         if let pendingVolume {
             if abs(snapshot.volume - pendingVolume) < 0.001 {
                 self.pendingVolume = nil
@@ -628,6 +618,62 @@ final class PlayerViewModel: ObservableObject {
         if !isSeeking {
             seekPosition = min(snapshot.positionSeconds, duration)
         }
+    }
+
+    private var currentVideoGeometry: VideoGeometry? {
+        guard let width = snapshot.videoWidth, let height = snapshot.videoHeight, width > 0, height > 0 else {
+            return nil
+        }
+        let rotated = snapshot.videoRotationDegrees % 180 != 0
+        return VideoGeometry(
+            width: CGFloat(rotated ? height : width),
+            height: CGFloat(rotated ? width : height)
+        )
+    }
+
+    private func updateWindowVideoGeometryIfNeeded() {
+        guard let geometry = currentVideoGeometry else {
+            guard windowVideoGeometry != nil else { return }
+            unlockPlayerWindow()
+            windowVideoGeometry = nil
+            return
+        }
+        guard geometry != windowVideoGeometry,
+              let window = NSApp.keyWindow ?? NSApp.mainWindow,
+              let screen = window.screen ?? NSScreen.main else {
+            return
+        }
+        configure(window, for: geometry, on: screen, resizeToFit: true)
+        windowVideoGeometry = geometry
+    }
+
+    private func configure(_ window: NSWindow, for geometry: VideoGeometry, on screen: NSScreen, resizeToFit: Bool) {
+        let contentSize = geometry.size
+        window.contentAspectRatio = contentSize
+        window.contentMinSize = geometry.minimumSize
+        guard resizeToFit else { return }
+
+        let visibleFrame = screen.visibleFrame
+        let maximumSize = NSSize(width: visibleFrame.width * 0.9, height: visibleFrame.height * 0.9)
+        let maximumScale = min(maximumSize.width / contentSize.width, maximumSize.height / contentSize.height)
+        guard maximumScale > 0 else {
+            showError("Unable to fit the video on this display")
+            return
+        }
+
+        let scale = min(maximumScale, 1)
+        let fittedContentSize = NSSize(width: contentSize.width * scale, height: contentSize.height * scale)
+        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: fittedContentSize))
+        frame.origin = NSPoint(x: window.frame.midX - frame.width / 2, y: window.frame.midY - frame.height / 2)
+        frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))
+        frame.origin.y = max(visibleFrame.minY, min(frame.origin.y, visibleFrame.maxY - frame.height))
+        window.setFrame(frame, display: true, animate: true)
+    }
+
+    private func unlockPlayerWindow() {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        window.contentAspectRatio = .zero
+        window.contentMinSize = NSSize(width: 720, height: 460)
     }
 
     private func showError(_ message: String) {

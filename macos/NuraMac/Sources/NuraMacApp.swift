@@ -7,5 +7,6 @@ struct NuraMacApp: App {
             PlayerView()
         }
         .defaultSize(width: 1080, height: 680)
+        .windowStyle(.hiddenTitleBar)
     }
 }

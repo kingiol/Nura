@@ -68,7 +68,6 @@ struct PlayerView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .frame(minWidth: 720, minHeight: 460)
         .background(Color.black)
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .animation(.easeOut(duration: 0.18), value: sidebar)
@@ -141,9 +140,12 @@ struct PlayerView: View {
             .buttonStyle(.borderless)
             .help("Picture in Picture")
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 82)
+        .padding(.trailing, 14)
         .padding(.vertical, 9)
-        .background(.ultraThinMaterial.opacity(0.72))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
     }
 
     private var controlBar: some View {
@@ -307,10 +309,10 @@ struct PlayerView: View {
                 .help("Screenshot")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 14)
-        .background(.ultraThinMaterial.opacity(0.82))
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
     }
 
     private var timeText: String {
