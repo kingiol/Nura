@@ -48,6 +48,10 @@ pub enum EngineEvent {
         tracks: Vec<Track>,
         chapters: Vec<Chapter>,
     },
+    VideoSizeChanged {
+        video_width: Option<u32>,
+        video_height: Option<u32>,
+    },
     TracksChanged(Vec<Track>),
     AudioDevicesChanged(Vec<AudioDevice>),
     PositionChanged(f64),
@@ -523,6 +527,14 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                     self.snapshot.buffering_percent = None;
                     self.emit_state();
                 }
+                EngineEvent::VideoSizeChanged {
+                    video_width,
+                    video_height,
+                } => {
+                    self.snapshot.video_width = video_width;
+                    self.snapshot.video_height = video_height;
+                    self.emit_state();
+                }
                 EngineEvent::TracksChanged(tracks) => {
                     self.snapshot.video_tracks = tracks
                         .iter()
@@ -819,6 +831,31 @@ mod tests {
         assert_eq!(session.snapshot.video_width, Some(1920));
         assert_eq!(session.snapshot.video_height, Some(1080));
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn late_video_dimensions_update_the_playback_snapshot() {
+        let mut engine = FakeEngine::default();
+        engine.events.push_back(EngineEvent::FileLoaded {
+            duration_seconds: Some(120.0),
+            video_width: None,
+            video_height: None,
+            tracks: vec![],
+            chapters: vec![],
+        });
+        engine.events.push_back(EngineEvent::VideoSizeChanged {
+            video_width: Some(1280),
+            video_height: Some(720),
+        });
+        let mut session = PlayerSession::new(engine, MemoryHistory { resume: None });
+
+        session.poll().unwrap();
+
+        assert_eq!(session.snapshot.video_width, Some(1280));
+        assert_eq!(session.snapshot.video_height, Some(720));
+        assert!(session.take_events().iter().any(
+            |event| matches!(event, PlayerEvent::State { snapshot } if snapshot.video_width == Some(1280) && snapshot.video_height == Some(720))
+        ));
     }
 
     #[test]

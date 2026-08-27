@@ -44,10 +44,12 @@ struct PlayerView: View {
             }
 
             VStack(spacing: 0) {
-                titlebar
-                Spacer()
                 if controlsVisible {
+                    titlebar
+                    Spacer()
                     controlBar.transition(.opacity)
+                } else {
+                    Spacer()
                 }
             }
 

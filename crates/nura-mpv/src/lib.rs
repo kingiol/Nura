@@ -127,6 +127,7 @@ pub struct MpvEngine {
     pending_start: f64,
     last_position: f64,
     last_buffering: Option<f64>,
+    last_video_size: (Option<u32>, Option<u32>),
     last_speed: f64,
     last_tracks: Vec<Track>,
     last_audio_devices: Vec<AudioDevice>,
@@ -209,6 +210,7 @@ impl MpvEngine {
             pending_start: 0.0,
             last_position: 0.0,
             last_buffering: None,
+            last_video_size: (None, None),
             last_speed: 1.0,
             last_tracks: Vec::new(),
             last_audio_devices: Vec::new(),
@@ -561,6 +563,7 @@ impl PlaybackEngine for MpvEngine {
                     let tracks = self.tracks();
                     self.last_tracks = tracks.clone();
                     let (video_width, video_height) = self.video_display_size();
+                    self.last_video_size = (video_width, video_height);
                     events.push(EngineEvent::FileLoaded {
                         duration_seconds: self.duration(),
                         video_width,
@@ -595,6 +598,14 @@ impl PlaybackEngine for MpvEngine {
         if buffering != self.last_buffering {
             self.last_buffering = buffering;
             events.push(EngineEvent::Buffering(buffering));
+        }
+        let video_size = self.video_display_size();
+        if video_size != self.last_video_size {
+            self.last_video_size = video_size;
+            events.push(EngineEvent::VideoSizeChanged {
+                video_width: video_size.0,
+                video_height: video_size.1,
+            });
         }
         if let Some(speed) = self
             .property_string("speed")
