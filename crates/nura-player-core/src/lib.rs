@@ -31,6 +31,7 @@ pub enum EngineEvent {
         tracks: Vec<Track>,
         chapters: Vec<Chapter>,
     },
+    TracksChanged(Vec<Track>),
     PositionChanged(f64),
     SpeedChanged(f64),
     Buffering(Option<f64>),
@@ -87,6 +88,80 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         }
         self.snapshot.playlist.push(item);
         self.emit_state();
+        Ok(())
+    }
+
+    pub fn remove_playlist_index(&mut self, index: usize) -> Result<(), PlayerError> {
+        if index >= self.snapshot.playlist.len() {
+            return Err(PlayerError::Engine(EngineError::Message(
+                "playlist index is out of range".to_owned(),
+            )));
+        }
+        self.snapshot.playlist.remove(index);
+        let Some(current_index) = self.snapshot.playlist_index else {
+            self.emit_state();
+            return Ok(());
+        };
+        if self.snapshot.playlist.is_empty() {
+            self.engine.stop()?;
+            self.snapshot = PlaybackSnapshot {
+                status: PlaybackStatus::Empty,
+                speed: self.snapshot.speed,
+                volume: self.snapshot.volume,
+                muted: self.snapshot.muted,
+                ..PlaybackSnapshot::default()
+            };
+            self.emit_state();
+            return Ok(());
+        }
+        if index == current_index {
+            let next_index = current_index.min(self.snapshot.playlist.len() - 1);
+            let item = self.snapshot.playlist[next_index].clone();
+            self.persist_current_position()?;
+            self.start_item(item, next_index)
+        } else {
+            if index < current_index {
+                self.snapshot.playlist_index = Some(current_index - 1);
+            }
+            self.emit_state();
+            Ok(())
+        }
+    }
+
+    pub fn move_playlist_item(&mut self, from: usize, to: usize) -> Result<(), PlayerError> {
+        let len = self.snapshot.playlist.len();
+        if from >= len || to >= len {
+            return Err(PlayerError::Engine(EngineError::Message(
+                "playlist index is out of range".to_owned(),
+            )));
+        }
+        if from == to {
+            return Ok(());
+        }
+        let current_key = self.snapshot.item.as_ref().map(MediaItem::path_key);
+        let item = self.snapshot.playlist.remove(from);
+        self.snapshot.playlist.insert(to, item);
+        self.snapshot.playlist_index = current_key.and_then(|key| {
+            self.snapshot
+                .playlist
+                .iter()
+                .position(|item| item.path_key() == key)
+        });
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn add_external_subtitle(
+        &mut self,
+        path: impl Into<std::path::PathBuf>,
+    ) -> Result<(), PlayerError> {
+        let path = path.into();
+        if !path.is_file() {
+            return Err(PlayerError::Domain(nura_domain::DomainError::MissingFile(
+                path,
+            )));
+        }
+        self.engine.add_external_subtitle(&path)?;
         Ok(())
     }
 
@@ -269,6 +344,23 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
                         .collect();
                     self.snapshot.status = PlaybackStatus::Playing;
                     self.snapshot.buffering_percent = None;
+                    self.emit_state();
+                }
+                EngineEvent::TracksChanged(tracks) => {
+                    self.snapshot.video_tracks = tracks
+                        .iter()
+                        .filter(|track| track.kind == TrackKind::Video)
+                        .cloned()
+                        .collect();
+                    self.snapshot.audio_tracks = tracks
+                        .iter()
+                        .filter(|track| track.kind == TrackKind::Audio)
+                        .cloned()
+                        .collect();
+                    self.snapshot.subtitle_tracks = tracks
+                        .into_iter()
+                        .filter(|track| track.kind == TrackKind::Subtitle)
+                        .collect();
                     self.emit_state();
                 }
                 EngineEvent::PositionChanged(position) => {
@@ -506,6 +598,41 @@ mod tests {
         assert_eq!(session.snapshot.item.as_ref().unwrap().title, "second.mkv");
         session.previous().unwrap();
         assert_eq!(session.snapshot.playlist_index, Some(0));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn playlist_items_can_move_and_remove_without_losing_current_item() {
+        let directory =
+            std::env::temp_dir().join(format!("nura-playlist-edit-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let first = directory.join("first.mkv");
+        let second = directory.join("second.mkv");
+        let third = directory.join("third.mkv");
+        for path in [&first, &second, &third] {
+            fs::write(path, []).unwrap();
+        }
+        let mut engine = FakeEngine::default();
+        engine.events.push_back(EngineEvent::FileLoaded {
+            duration_seconds: Some(120.0),
+            tracks: vec![],
+            chapters: vec![],
+        });
+        let mut session = PlayerSession::new(engine, MemoryHistory { resume: None });
+        session.open(&first).unwrap();
+        session
+            .enqueue_item(MediaItem::from_path(&second).unwrap())
+            .unwrap();
+        session
+            .enqueue_item(MediaItem::from_path(&third).unwrap())
+            .unwrap();
+        session.move_playlist_item(2, 0).unwrap();
+        assert_eq!(session.snapshot.playlist[0].title, "third.mkv");
+        assert_eq!(session.snapshot.item.as_ref().unwrap().title, "first.mkv");
+        assert_eq!(session.snapshot.playlist_index, Some(1));
+        session.remove_playlist_index(1).unwrap();
+        assert_eq!(session.snapshot.item.as_ref().unwrap().title, "second.mkv");
+        assert_eq!(session.snapshot.playlist.len(), 2);
         fs::remove_dir_all(directory).unwrap();
     }
 }

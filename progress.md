@@ -25,3 +25,8 @@
 - Launched the packaged app successfully; no startup crash or process log error was observed.
 - Final residual risk: interactive playback smoke tests for libmpv rendering, PiP context sharing, and public YouTube/Bilibili URLs still need a real desktop session.
 - Fixed sidebar layout alignment so the IINA-style panel is explicitly pinned to the trailing edge; Debug build passed again.
+- Added folder import and local M3U/M3U8 playlist expansion with stable path de-duplication.
+- Added playlist remove/move operations and sidebar row actions.
+- Added manual external subtitle loading and mpv track-list refresh events.
+- Added render-surface context menu plus Cmd+O, Cmd+L, Space, and Cmd+F shortcuts.
+- Added playlist mutation state-machine coverage; Rust tests, formatting, and Xcode Debug build pass.

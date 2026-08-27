@@ -15,6 +15,12 @@ type Reply = mpsc::SyncSender<Result<(), String>>;
 enum Command {
     Open(PathBuf, Reply),
     Enqueue(PathBuf, Reply),
+    RemoveIndex(usize, Reply),
+    MoveIndex {
+        from: usize,
+        to: usize,
+        reply: Reply,
+    },
     PlayIndex(usize, Reply),
     Next(Reply),
     Previous(Reply),
@@ -37,6 +43,8 @@ enum Command {
 enum AsyncCommand {
     Open(PathBuf),
     Enqueue(PathBuf),
+    RemoveIndex(usize),
+    MoveIndex { from: usize, to: usize },
     PlayIndex(usize),
     Next,
     Previous,
@@ -49,6 +57,7 @@ enum AsyncCommand {
     AudioTrack(Option<i64>),
     SubtitleTrack(Option<i64>),
     VideoTrack(Option<i64>),
+    ExternalSubtitle(PathBuf),
 }
 
 pub struct NuraPlayer {
@@ -128,6 +137,8 @@ fn handle_async_command(
                     .and_then(|item| session.enqueue_item(item))
             }
         }
+        AsyncCommand::RemoveIndex(index) => session.remove_playlist_index(index),
+        AsyncCommand::MoveIndex { from, to } => session.move_playlist_item(from, to),
         AsyncCommand::PlayIndex(index) => session.play_playlist_index(index),
         AsyncCommand::Next => session.next(),
         AsyncCommand::Previous => session.previous(),
@@ -140,6 +151,7 @@ fn handle_async_command(
         AsyncCommand::AudioTrack(id) => session.select_track(TrackKind::Audio, id),
         AsyncCommand::SubtitleTrack(id) => session.select_track(TrackKind::Subtitle, id),
         AsyncCommand::VideoTrack(id) => session.select_track(TrackKind::Video, id),
+        AsyncCommand::ExternalSubtitle(path) => session.add_external_subtitle(path),
     };
     if let Err(error) = result {
         push_error(events, error.to_string());
@@ -194,6 +206,8 @@ fn handle_command(
             };
             (result, reply)
         }
+        Command::RemoveIndex(index, reply) => (session.remove_playlist_index(index), reply),
+        Command::MoveIndex { from, to, reply } => (session.move_playlist_item(from, to), reply),
         Command::PlayIndex(index, reply) => (session.play_playlist_index(index), reply),
         Command::Next(reply) => (session.next(), reply),
         Command::Previous(reply) => (session.previous(), reply),
@@ -415,6 +429,31 @@ pub unsafe extern "C" fn nura_player_enqueue_async(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_remove_index_async(
+    player: *mut NuraPlayer,
+    index: usize,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::RemoveIndex(index))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_move_index_async(
+    player: *mut NuraPlayer,
+    from: usize,
+    to: usize,
+) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::MoveIndex { from, to })
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_play_index_async(
     player: *mut NuraPlayer,
     index: usize,
@@ -602,6 +641,25 @@ pub unsafe extern "C" fn nura_player_select_video_track_async(
         player,
         AsyncCommand::VideoTrack((track_id >= 0).then_some(track_id)),
     )
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_add_external_subtitle_async(
+    player: *mut NuraPlayer,
+    path: *const c_char,
+) -> c_int {
+    let path = match read_string(path) {
+        Ok(path) => path,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::ExternalSubtitle(PathBuf::from(path)))
 }
 
 #[unsafe(no_mangle)]

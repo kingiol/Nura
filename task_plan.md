@@ -12,6 +12,14 @@ Implement the confirmed Nura first release: local and public online playback wit
 - [complete] 4. Add packaging/diagnostics for bundled yt-dlp and run macOS build checks.
 - [complete] 5. Run focused tests and update implementation documentation.
 
+## Follow-up Completion
+
+- Added folder and local M3U/M3U8 expansion in the macOS open panel.
+- Added playlist remove and move commands across Rust, FFI, and Swift.
+- Added external subtitle loading with track-list refresh events.
+- Added basic context-menu actions and keyboard shortcuts for common playback commands.
+- Added state-machine coverage for playlist move/remove behavior.
+
 ## Final Verification
 
 - Release packaging passed with `scripts/build-macos-app.sh`.

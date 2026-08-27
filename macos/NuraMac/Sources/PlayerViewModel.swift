@@ -79,9 +79,8 @@ final class PlayerViewModel: ObservableObject {
     func openPanel() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [.movie, .audio]
         if panel.runModal() == .OK, !panel.urls.isEmpty {
             open(panel.urls)
         }
@@ -97,9 +96,13 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func open(_ urls: [URL]) {
-        guard let first = urls.first else { return }
+        let expanded = expandMediaURLs(urls)
+        guard let first = expanded.first else {
+            showError("No supported media files were found")
+            return
+        }
         open(first)
-        for url in urls.dropFirst() {
+        for url in expanded.dropFirst() {
             do {
                 try bridge?.enqueue(url)
             } catch {
@@ -124,6 +127,44 @@ final class PlayerViewModel: ObservableObject {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    func removePlaylistIndex(_ index: Int) {
+        do {
+            try bridge?.removePlaylistIndex(index)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func movePlaylistItem(from: Int, to: Int) {
+        do {
+            try bridge?.movePlaylistItem(from: from, to: to)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func openExternalSubtitle() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            let supported = ["srt", "ass", "ssa", "vtt", "sup"].contains(url.pathExtension.lowercased())
+            guard supported else {
+                showError("Unsupported subtitle format")
+                return
+            }
+            do {
+                try bridge?.addExternalSubtitle(url)
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
         }
     }
 
@@ -317,5 +358,56 @@ final class PlayerViewModel: ObservableObject {
 
     private func showError(_ message: String) {
         lastError = message
+    }
+
+    private func expandMediaURLs(_ urls: [URL]) -> [URL] {
+        var result: [URL] = []
+        var seen = Set<String>()
+        for url in urls {
+            for candidate in expandMediaURL(url) {
+                let key = candidate.standardizedFileURL.path
+                if seen.insert(key).inserted {
+                    result.append(candidate)
+                }
+            }
+        }
+        return result
+    }
+
+    private func expandMediaURL(_ url: URL) -> [URL] {
+        if url.hasDirectoryPath {
+            let keys: Set<String> = ["mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg"]
+            guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return [] }
+            return enumerator.compactMap { item in
+                guard let candidate = item as? URL,
+                      (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                      keys.contains(candidate.pathExtension.lowercased()) else { return nil }
+                return candidate
+            }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+        }
+
+        switch url.pathExtension.lowercased() {
+        case "m3u", "m3u8":
+            return parsePlaylist(url)
+        case "mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg":
+            return [url]
+        default:
+            return []
+        }
+    }
+
+    private func parsePlaylist(_ url: URL) -> [URL] {
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        return content.split(whereSeparator: \.isNewline).compactMap { rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+            if let remote = URL(string: line), let scheme = remote.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                return nil
+            }
+            let candidate = line.hasPrefix("/")
+                ? URL(fileURLWithPath: line)
+                : URL(fileURLWithPath: line, relativeTo: url.deletingLastPathComponent()).standardizedFileURL
+            return candidate.isFileURL && FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+        }
     }
 }

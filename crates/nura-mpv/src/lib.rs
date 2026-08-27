@@ -128,6 +128,7 @@ pub struct MpvEngine {
     last_position: f64,
     last_buffering: Option<f64>,
     last_speed: f64,
+    last_tracks: Vec<Track>,
 }
 
 unsafe impl Send for MpvEngine {}
@@ -208,6 +209,7 @@ impl MpvEngine {
             last_position: 0.0,
             last_buffering: None,
             last_speed: 1.0,
+            last_tracks: Vec::new(),
         })
     }
 
@@ -464,9 +466,11 @@ impl PlaybackEngine for MpvEngine {
                         let position = self.pending_start;
                         self.command(&["seek", &position.to_string(), "absolute", "exact"])?;
                     }
+                    let tracks = self.tracks();
+                    self.last_tracks = tracks.clone();
                     events.push(EngineEvent::FileLoaded {
                         duration_seconds: self.duration(),
-                        tracks: self.tracks(),
+                        tracks,
                         chapters: self.chapters(),
                     });
                 }
@@ -505,6 +509,11 @@ impl PlaybackEngine for MpvEngine {
                 self.last_speed = speed;
                 events.push(EngineEvent::SpeedChanged(speed));
             }
+        }
+        let tracks = self.tracks();
+        if tracks != self.last_tracks {
+            self.last_tracks = tracks.clone();
+            events.push(EngineEvent::TracksChanged(tracks));
         }
         Ok(events)
     }

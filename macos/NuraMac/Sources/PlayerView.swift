@@ -17,6 +17,17 @@ struct PlayerView: View {
                 .background(Color.black)
                 .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
                 .onTapGesture { revealControls() }
+                .contextMenu {
+                    Button(model.isPlaying ? "Pause" : "Play", action: model.togglePlayback)
+                    Divider()
+                    Button("Previous", action: model.previous)
+                    Button("Next", action: model.next)
+                    Button(model.loopEnabled ? "Disable Loop" : "Loop Current Item", action: model.toggleLoop)
+                    Divider()
+                    Button("Load External Subtitle", action: model.openExternalSubtitle)
+                    Button("Take Screenshot", action: model.screenshot)
+                    Button("Toggle Fullscreen", action: model.toggleFullscreen)
+                }
 
             if model.snapshot.item == nil {
                 EmptyPlayerView(isDropTargeted: isDropTargeted)
@@ -36,8 +47,11 @@ struct PlayerView: View {
                     snapshot: model.snapshot,
                     onClose: { self.sidebar = nil },
                     onPlayIndex: model.playPlaylistIndex,
+                    onRemovePlaylistIndex: model.removePlaylistIndex,
+                    onMovePlaylistItem: model.movePlaylistItem,
                     onSeek: { position in model.seekPosition = position; model.seekEditingChanged(false) },
-                    onSelectVideoTrack: model.selectVideoTrack
+                    onSelectVideoTrack: model.selectVideoTrack,
+                    onAddExternalSubtitle: model.openExternalSubtitle
                 )
                     .frame(width: 300)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -64,10 +78,12 @@ struct PlayerView: View {
             Button(action: model.openPanel) { Image(systemName: "folder") }
                 .buttonStyle(.borderless)
                 .help("Open media")
+                .keyboardShortcut("o", modifiers: [.command])
 
             Button(action: openURLPanel) { Image(systemName: "link") }
                 .buttonStyle(.borderless)
                 .help("Open URL")
+                .keyboardShortcut("l", modifiers: [.command])
 
             Text(model.title)
                 .font(.headline)
@@ -119,6 +135,7 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(model.isPlaying ? "Pause" : "Play")
+                .keyboardShortcut(.space, modifiers: [])
 
                 Button(action: model.previous) {
                     Image(systemName: "backward.end.fill")
@@ -173,6 +190,13 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Enter fullscreen")
+                .keyboardShortcut("f", modifiers: [.command])
+
+                Button(action: model.openExternalSubtitle) {
+                    Image(systemName: "text.badge.plus")
+                }
+                .buttonStyle(.borderless)
+                .help("Load external subtitle")
 
                 Button(action: model.screenshot) {
                     Image(systemName: "camera")
@@ -335,8 +359,11 @@ private struct SidebarView: View {
     let snapshot: PlaybackSnapshot
     let onClose: () -> Void
     let onPlayIndex: (Int) -> Void
+    let onRemovePlaylistIndex: (Int) -> Void
+    let onMovePlaylistItem: (Int, Int) -> Void
     let onSeek: (Double) -> Void
     let onSelectVideoTrack: (Int64) -> Void
+    let onAddExternalSubtitle: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -358,18 +385,31 @@ private struct SidebarView: View {
                             Text("No items in playlist").foregroundStyle(.secondary)
                         } else {
                             ForEach(Array(snapshot.playlist.enumerated()), id: \.offset) { index, item in
-                                Button {
-                                    onPlayIndex(index)
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: index == snapshot.playlistIndex ? "play.fill" : "film")
-                                            .frame(width: 16)
-                                        Text(item.title)
-                                            .lineLimit(1)
-                                        Spacer(minLength: 0)
+                                HStack(spacing: 6) {
+                                    Button { onPlayIndex(index) } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: index == snapshot.playlistIndex ? "play.fill" : "film")
+                                                .frame(width: 16)
+                                            Text(item.title).lineLimit(1)
+                                            Spacer(minLength: 0)
+                                        }
                                     }
+                                    .buttonStyle(.borderless)
+                                    Menu {
+                                        if index > 0 {
+                                            Button("Move Up") { onMovePlaylistItem(index, index - 1) }
+                                        }
+                                        if index + 1 < snapshot.playlist.count {
+                                            Button("Move Down") { onMovePlaylistItem(index, index + 1) }
+                                        }
+                                        Divider()
+                                        Button("Remove", role: .destructive) { onRemovePlaylistIndex(index) }
+                                    } label: {
+                                        Image(systemName: "ellipsis.circle")
+                                    }
+                                    .menuStyle(.borderlessButton)
+                                    .fixedSize()
                                 }
-                                .buttonStyle(.borderless)
                             }
                         }
                     case .chapters:
@@ -394,6 +434,8 @@ private struct SidebarView: View {
                     case .audio:
                         trackList(snapshot.audioTracks)
                     case .subtitles:
+                        Button("Load External Subtitle", action: onAddExternalSubtitle)
+                            .buttonStyle(.borderless)
                         trackList(snapshot.subtitleTracks)
                     }
                 }

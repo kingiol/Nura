@@ -12,6 +12,10 @@ private func nura_player_open_async(_ player: NuraHandle?, _ path: UnsafePointer
 private func nura_player_open_url_async(_ player: NuraHandle?, _ url: UnsafePointer<CChar>?) -> Int32
 @_silgen_name("nura_player_enqueue_async")
 private func nura_player_enqueue_async(_ player: NuraHandle?, _ locator: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_remove_index_async")
+private func nura_player_remove_index_async(_ player: NuraHandle?, _ index: Int) -> Int32
+@_silgen_name("nura_player_move_index_async")
+private func nura_player_move_index_async(_ player: NuraHandle?, _ from: Int, _ to: Int) -> Int32
 @_silgen_name("nura_player_play_index_async")
 private func nura_player_play_index_async(_ player: NuraHandle?, _ index: Int) -> Int32
 @_silgen_name("nura_player_next_async")
@@ -42,6 +46,8 @@ private func nura_player_select_audio_track_async(_ player: NuraHandle?, _ track
 private func nura_player_select_subtitle_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
 @_silgen_name("nura_player_select_video_track_async")
 private func nura_player_select_video_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
+@_silgen_name("nura_player_add_external_subtitle_async")
+private func nura_player_add_external_subtitle_async(_ player: NuraHandle?, _ path: UnsafePointer<CChar>?) -> Int32
 @_silgen_name("nura_player_attach_opengl_context")
 private func nura_player_attach_opengl_context(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_render_opengl")
@@ -181,6 +187,8 @@ final class PlayerBridge {
     func enqueueURL(_ value: String) throws {
         try command { value.withCString { nura_player_enqueue_async(handle, $0) } }
     }
+    func removePlaylistIndex(_ index: Int) throws { try command { nura_player_remove_index_async(handle, index) } }
+    func movePlaylistItem(from: Int, to: Int) throws { try command { nura_player_move_index_async(handle, from, to) } }
     func playPlaylistIndex(_ index: Int) throws { try command { nura_player_play_index_async(handle, index) } }
     func next() throws { try command { nura_player_next_async(handle) } }
     func previous() throws { try command { nura_player_previous_async(handle) } }
@@ -194,6 +202,9 @@ final class PlayerBridge {
     func selectAudioTrack(_ id: Int64) throws { try command { nura_player_select_audio_track_async(handle, id) } }
     func selectSubtitleTrack(_ id: Int64) throws { try command { nura_player_select_subtitle_track_async(handle, id) } }
     func selectVideoTrack(_ id: Int64) throws { try command { nura_player_select_video_track_async(handle, id) } }
+    func addExternalSubtitle(_ url: URL) throws {
+        try command { url.path.withCString { nura_player_add_external_subtitle_async(handle, $0) } }
+    }
     func attachOpenGLContext() throws { try command { nura_player_attach_opengl_context(handle) } }
 
     func render(fbo: Int32, width: Int32, height: Int32) throws {
