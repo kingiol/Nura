@@ -3,3 +3,6 @@
 macos/NuraMac/.build/
 macos/NuraMac/.swiftpm/
 *.xcuserstate
+/task_plan.md
+/findings.md
+/progress.md
