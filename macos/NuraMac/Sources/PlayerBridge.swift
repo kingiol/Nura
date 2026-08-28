@@ -216,8 +216,8 @@ final class PlayerBridge {
     private var handle: NuraHandle?
     private let decoder = JSONDecoder()
 
-    init() throws {
-        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    init(stateDirectory: URL? = nil) throws {
+        let directory = stateDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Nura", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let created = directory.path.withCString { nura_player_create($0) }

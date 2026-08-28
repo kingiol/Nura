@@ -16,4 +16,25 @@ Version settings are in the target's `General` tab (`Version` and `Build`), and 
 
 `project.yml` is the XcodeGen source for the project. If you regenerate the project, keep version changes synchronized there as well.
 
+## UI end-to-end tests
+
+The E2E suite launches the real macOS app with the tracked fixture at
+`../../test-fixtures/media/oceans.mp4` and requires the Debug `libmpv` runtime.
+
+From this directory, run:
+
+```sh
+../../scripts/test-macos-e2e.sh
+```
+
+Use another local file with:
+
+```sh
+NURA_E2E_MEDIA_PATH=/absolute/path/to/media.mp4 ../../scripts/test-macos-e2e.sh
+```
+
+After changing `project.yml`, install XcodeGen with `brew install xcodegen`,
+run `xcodegen generate --spec project.yml`, and commit the generated project
+and shared scheme.
+
 Release packaging overrides the library path with `NURA_RUST_LIB_DIR=target/release`; use `scripts/build-macos-app.sh` for that flow.

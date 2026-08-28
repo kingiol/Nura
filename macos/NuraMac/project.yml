@@ -64,8 +64,21 @@ targets:
           fi
     scheme:
       gatherCoverageData: false
-      testTargets: []
+      testTargets:
+        - NuraMacUITests
       run:
         config: Debug
       archive:
         config: Release
+  NuraMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: NuraMac
+    settings:
+      base:
+        PRODUCT_NAME: NuraMacUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.nura.player.uitests
+        TEST_TARGET_NAME: NuraMac

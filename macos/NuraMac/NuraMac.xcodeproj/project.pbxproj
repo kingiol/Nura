@@ -9,21 +9,36 @@
 /* Begin PBXBuildFile section */
 		024B7BA0DB49D518847C569F /* NuraMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */; };
 		05F4E35A0210D7A243031717 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D5FA583A78B02F836AA677 /* PlayerView.swift */; };
+		1A9520FBB1D1088D370268AF /* PlayerLaunchConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */; };
 		21132ABCF28D052736AEEB74 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FE2A47AE5ADF946B23611A0 /* Assets.xcassets */; };
 		43D4883C9BC9C43E71ABFDB3 /* RenderSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A5BC1F00095D48321E4DE1 /* RenderSurface.swift */; };
 		4E85D6467D81430C5A33424F /* RenderSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24F0E5F48DB3AC6919307B8 /* RenderSurfaceView.swift */; };
+		55F81B2CAE3EE8D4F4990057 /* NuraMacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */; };
 		5DD48FABB6B4A013C60E53E3 /* PlayerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0CC00722A2F2EDCA7630766 /* PlayerViewModel.swift */; };
 		7C98667F3F1365B0EBE3F613 /* PlayerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FA942E24C35E04BDA160156 /* PlayerBridge.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A5DB0F66BA1C81488649046F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0125037004C97888BA8EC23F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D3CF495F4F2F50F2E00528B8;
+			remoteInfo = NuraMac;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		4A6B25D0CE1245CFAFE4A390 /* Nura.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nura.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacUITests.swift; sourceTree = "<group>"; };
+		4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NuraMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacApp.swift; sourceTree = "<group>"; };
 		63A5BC1F00095D48321E4DE1 /* RenderSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderSurface.swift; sourceTree = "<group>"; };
+		6A9CD6C77A742F3A33A77F12 /* NuraMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NuraMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6FE2A47AE5ADF946B23611A0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9FA942E24C35E04BDA160156 /* PlayerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerBridge.swift; sourceTree = "<group>"; };
 		A24F0E5F48DB3AC6919307B8 /* RenderSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderSurfaceView.swift; sourceTree = "<group>"; };
 		B0CC00722A2F2EDCA7630766 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
+		C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerLaunchConfiguration.swift; sourceTree = "<group>"; };
 		D6D5FA583A78B02F836AA677 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -33,6 +48,7 @@
 			children = (
 				5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */,
 				9FA942E24C35E04BDA160156 /* PlayerBridge.swift */,
+				C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */,
 				D6D5FA583A78B02F836AA677 /* PlayerView.swift */,
 				B0CC00722A2F2EDCA7630766 /* PlayerViewModel.swift */,
 				63A5BC1F00095D48321E4DE1 /* RenderSurface.swift */,
@@ -41,10 +57,19 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		4EB4A60FBE02C040923E6601 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
 		8489C3E8D2D8D2449EE65E81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4A6B25D0CE1245CFAFE4A390 /* Nura.app */,
+				4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */,
+				6A9CD6C77A742F3A33A77F12 /* NuraMacUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -53,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				486DAAF646F4471D3D8B01C2 /* Sources */,
+				4EB4A60FBE02C040923E6601 /* UITests */,
 				6FE2A47AE5ADF946B23611A0 /* Assets.xcassets */,
 				8489C3E8D2D8D2449EE65E81 /* Products */,
 			);
@@ -61,6 +87,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		ADA3BBC7A9933CFC675656AD /* NuraMacUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 43CE72E375AAB73FBE3953EC /* Build configuration list for PBXNativeTarget "NuraMacUITests" */;
+			buildPhases = (
+				E3ECB03A8D5E507D8ADEC124 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2543F5C3B690AE3FFF47BB88 /* PBXTargetDependency */,
+			);
+			name = NuraMacUITests;
+			packageProductDependencies = (
+			);
+			productName = NuraMacUITests;
+			productReference = 6A9CD6C77A742F3A33A77F12 /* NuraMacUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		D3CF495F4F2F50F2E00528B8 /* NuraMac */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C1380EEEEBCBCB94F8DD8005 /* Build configuration list for PBXNativeTarget "NuraMac" */;
@@ -68,7 +112,7 @@
 				5145749704910AFC0D5C2138 /* Build Rust Player Core */,
 				44A5A0999C1A5E700D81B75F /* Sources */,
 				C3F38A9F68D5BCB549B2CE22 /* Resources */,
-				D5EED79E0F8E4B3E9C79C211 /* Bundle Verified libmpv Runtime */,
+				64BCF5F2CC5FE2616C0DF27B /* Bundle Verified libmpv Runtime */,
 			);
 			buildRules = (
 			);
@@ -78,7 +122,7 @@
 			packageProductDependencies = (
 			);
 			productName = NuraMac;
-			productReference = 4A6B25D0CE1245CFAFE4A390 /* Nura.app */;
+			productReference = 4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -90,6 +134,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					ADA3BBC7A9933CFC675656AD = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = D3CF495F4F2F50F2E00528B8;
+					};
 					D3CF495F4F2F50F2E00528B8 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -110,6 +158,7 @@
 			projectRoot = "";
 			targets = (
 				D3CF495F4F2F50F2E00528B8 /* NuraMac */,
+				ADA3BBC7A9933CFC675656AD /* NuraMacUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -145,7 +194,7 @@
 			shellPath = /bin/sh;
 			shellScript = "export PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:$PATH\"\ncd \"$SRCROOT/../..\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  cargo build -p nura-ffi --release\nelse\n  cargo build -p nura-ffi\nfi\n";
 		};
-		D5EED79E0F8E4B3E9C79C211 /* Bundle Verified libmpv Runtime */ = {
+		64BCF5F2CC5FE2616C0DF27B /* Bundle Verified libmpv Runtime */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -173,6 +222,7 @@
 			files = (
 				024B7BA0DB49D518847C569F /* NuraMacApp.swift in Sources */,
 				7C98667F3F1365B0EBE3F613 /* PlayerBridge.swift in Sources */,
+				1A9520FBB1D1088D370268AF /* PlayerLaunchConfiguration.swift in Sources */,
 				05F4E35A0210D7A243031717 /* PlayerView.swift in Sources */,
 				5DD48FABB6B4A013C60E53E3 /* PlayerViewModel.swift in Sources */,
 				43D4883C9BC9C43E71ABFDB3 /* RenderSurface.swift in Sources */,
@@ -180,21 +230,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E3ECB03A8D5E507D8ADEC124 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55F81B2CAE3EE8D4F4990057 /* NuraMacUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2543F5C3B690AE3FFF47BB88 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D3CF495F4F2F50F2E00528B8 /* NuraMac */;
+			targetProxy = A5DB0F66BA1C81488649046F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		1239692F548BA9FA18A47E6D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Nura;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = "$(NURA_RUST_LIB_DIR)";
+				LIBRARY_SEARCH_PATHS = (
+					"$(NURA_RUST_LIB_DIR)",
+				);
 				OTHER_LDFLAGS = (
 					"-lnura_ffi",
 					"-framework",
@@ -284,14 +351,15 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Nura;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = "$(NURA_RUST_LIB_DIR)";
+				LIBRARY_SEARCH_PATHS = (
+					"$(NURA_RUST_LIB_DIR)",
+				);
 				OTHER_LDFLAGS = (
 					"-lnura_ffi",
 					"-framework",
@@ -370,6 +438,40 @@
 			};
 			name = Release;
 		};
+		BA12E1EB2560536AEF5B8A80 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.nura.player.uitests;
+				PRODUCT_NAME = NuraMacUITests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = NuraMac;
+			};
+			name = Release;
+		};
+		EE4E35289DDE0167C61EFEC8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.nura.player.uitests;
+				PRODUCT_NAME = NuraMacUITests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = NuraMac;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -378,6 +480,15 @@
 			buildConfigurations = (
 				4529B6CAAFA227E5DDAEE47B /* Debug */,
 				914FC1C27FD2489F8F5FCB92 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		43CE72E375AAB73FBE3953EC /* Build configuration list for PBXNativeTarget "NuraMacUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EE4E35289DDE0167C61EFEC8 /* Debug */,
+				BA12E1EB2560536AEF5B8A80 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

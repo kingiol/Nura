@@ -3,12 +3,18 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct PlayerView: View {
-    @StateObject private var model = PlayerViewModel()
+    @StateObject private var model: PlayerViewModel
+    private let keepControlsVisible: Bool
     @State private var isDropTargeted = false
     @State private var controlsVisible = true
     @State private var sidebar: SidebarTab?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var pipPanel: NSPanel?
+
+    init(launchConfiguration: PlayerLaunchConfiguration = .current) {
+        _model = StateObject(wrappedValue: PlayerViewModel(launchConfiguration: launchConfiguration))
+        keepControlsVisible = launchConfiguration.keepControlsVisible
+    }
 
     var body: some View {
         ZStack {
@@ -115,6 +121,8 @@ struct PlayerView: View {
                 .font(.headline)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .accessibilityIdentifier("player.title")
+                .accessibilityLabel(model.title)
 
             Spacer(minLength: 8)
 
@@ -123,6 +131,8 @@ struct PlayerView: View {
                 .foregroundStyle(model.hasError ? .red : .secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .accessibilityIdentifier("player.status")
+                .accessibilityValue(model.statusText)
 
             Button {
                 sidebar = sidebar == .playlist ? nil : .playlist
@@ -130,6 +140,8 @@ struct PlayerView: View {
             } label: { Image(systemName: "sidebar.right") }
                 .buttonStyle(.borderless)
                 .help("Show sidebar")
+                .accessibilityIdentifier("player.sidebar-toggle")
+                .accessibilityValue(sidebar == nil ? "closed" : "open")
 
             Button(action: model.toggleAlwaysOnTop) {
                 Image(systemName: model.alwaysOnTop ? "pin.fill" : "pin")
@@ -159,11 +171,14 @@ struct PlayerView: View {
                 .controlSize(.small)
 
             HStack(spacing: 12) {
-                Button(action: model.togglePlayback) {
+                Button(action: { model.togglePlayback() }) {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                 }
                 .buttonStyle(.borderless)
                 .help(model.isPlaying ? "Pause" : "Play")
+                .accessibilityIdentifier("player.playback-toggle")
+                .accessibilityLabel("Playback")
+                .accessibilityValue(model.isPlaying ? "playing" : "paused")
                 .keyboardShortcut(.space, modifiers: [])
 
                 Button(action: model.previous) {
@@ -273,11 +288,14 @@ struct PlayerView: View {
                 .buttonStyle(.borderless)
                 .help(model.abLoopLabel)
 
-                Button(action: model.toggleMute) {
-                    Image(systemName: model.snapshot.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                Button(action: { model.toggleMute() }) {
+                    Image(systemName: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 }
                 .buttonStyle(.borderless)
-                .help(model.snapshot.muted ? "Unmute" : "Mute")
+                .help(model.isMuted ? "Unmute" : "Mute")
+                .accessibilityIdentifier("player.mute-toggle")
+                .accessibilityLabel("Mute")
+                .accessibilityValue(model.isMuted ? "muted" : "unmuted")
 
                 Slider(value: Binding(get: { model.volume }, set: { value in
                     model.setVolume(value)
@@ -325,6 +343,7 @@ struct PlayerView: View {
     private func revealControls() {
         controlsVisible = true
         hideControlsTask?.cancel()
+        guard !keepControlsVisible else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
@@ -481,6 +500,8 @@ private struct SidebarView: View {
                 Button(action: onClose) { Image(systemName: "xmark") }
                     .buttonStyle(.borderless)
                     .help("Close sidebar")
+                    .accessibilityLabel("Close sidebar")
+                    .accessibilityIdentifier("player.sidebar-close")
             }
             .padding(12)
             Divider()

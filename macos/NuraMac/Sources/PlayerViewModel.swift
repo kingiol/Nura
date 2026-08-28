@@ -56,6 +56,8 @@ final class PlayerViewModel: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var alwaysOnTop = false
     @Published private(set) var loopEnabled = false
+    @Published private var pendingPlaybackState: Bool?
+    @Published private var pendingMutedState: Bool?
 
     private var bridge: PlayerBridge?
     private var timer: Timer?
@@ -63,13 +65,22 @@ final class PlayerViewModel: ObservableObject {
     private var pendingVolume: Double?
     private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
+    private let defaults: UserDefaults
+    private let disableWindowResize: Bool
 
-    init() {
-        configureBridge()
+    init(launchConfiguration: PlayerLaunchConfiguration = .current) {
+        defaults = launchConfiguration.defaults
+        disableWindowResize = launchConfiguration.disableWindowResize
+        configureBridge(stateDirectory: launchConfiguration.stateDirectory)
         configureScreenshotDirectory()
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.pollEvents()
+            }
+        }
+        if let mediaURL = launchConfiguration.mediaURL, bridge != nil {
+            DispatchQueue.main.async { [weak self] in
+                self?.open(mediaURL)
             }
         }
     }
@@ -95,7 +106,11 @@ final class PlayerViewModel: ObservableObject {
     }
 
     var isPlaying: Bool {
-        snapshot.status == "playing"
+        pendingPlaybackState ?? (snapshot.status == "playing")
+    }
+
+    var isMuted: Bool {
+        pendingMutedState ?? snapshot.muted
     }
 
     var selectedAudioTrack: Int64 {
@@ -233,19 +248,27 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func togglePlayback() {
+        let target = !isPlaying
+        pendingPlaybackState = target
+        objectWillChange.send()
         do {
             try bridge?.toggle()
             lastError = nil
         } catch {
+            pendingPlaybackState = nil
             showError(error.localizedDescription)
         }
     }
 
     func toggleMute() {
+        let target = !isMuted
+        pendingMutedState = target
+        objectWillChange.send()
         do {
-            try bridge?.setMuted(!snapshot.muted)
+            try bridge?.setMuted(target)
             lastError = nil
         } catch {
+            pendingMutedState = nil
             showError(error.localizedDescription)
         }
     }
@@ -573,9 +596,9 @@ final class PlayerViewModel: ObservableObject {
         NSApp.keyWindow?.level = alwaysOnTop ? .floating : .normal
     }
 
-    private func configureBridge() {
+    private func configureBridge(stateDirectory: URL?) {
         do {
-            bridge = try PlayerBridge()
+            bridge = try PlayerBridge(stateDirectory: stateDirectory)
         } catch {
             showError(error.localizedDescription)
         }
@@ -584,14 +607,14 @@ final class PlayerViewModel: ObservableObject {
     private func configureScreenshotDirectory() {
         let defaultDirectory = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
-        let directory = UserDefaults.standard.string(forKey: screenshotDirectoryKey).map(URL.init(fileURLWithPath:)) ?? defaultDirectory
+        let directory = defaults.string(forKey: screenshotDirectoryKey).map(URL.init(fileURLWithPath:)) ?? defaultDirectory
         setScreenshotDirectory(directory)
     }
 
     private func setScreenshotDirectory(_ url: URL) {
         do {
             try bridge?.setScreenshotDirectory(url)
-            UserDefaults.standard.set(url.path, forKey: screenshotDirectoryKey)
+            defaults.set(url.path, forKey: screenshotDirectoryKey)
             lastError = nil
         } catch {
             showError(error.localizedDescription)
@@ -611,6 +634,14 @@ final class PlayerViewModel: ObservableObject {
 
     private func apply(_ snapshot: PlaybackSnapshot) {
         self.snapshot = snapshot
+        if let pendingPlaybackState,
+           snapshot.status == "playing" || snapshot.status == "paused",
+           pendingPlaybackState == (snapshot.status == "playing") {
+            self.pendingPlaybackState = nil
+        }
+        if let pendingMutedState, pendingMutedState == snapshot.muted {
+            self.pendingMutedState = nil
+        }
         updateWindowVideoGeometryIfNeeded()
         if let pendingVolume {
             if abs(snapshot.volume - pendingVolume) < 0.001 {
@@ -637,6 +668,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private func updateWindowVideoGeometryIfNeeded() {
+        guard !disableWindowResize else { return }
         guard let geometry = currentVideoGeometry else {
             guard windowVideoGeometry != nil else { return }
             unlockPlayerWindow()
