@@ -42,7 +42,7 @@ struct SeekPreviewSlider: View {
                 .accessibilityLabel("Playback position")
                 .accessibilityValue("\(formatTime(previewPosition ?? value)) of \(formatTime(duration))")
 
-                if previewVisible {
+                if previewVisible, previewImage != nil {
                     previewBubble
                         .frame(width: previewBubbleSize.width, height: previewBubbleSize.height)
                         .position(x: previewX(in: proxy.size.width), y: -64)
@@ -79,8 +79,6 @@ struct SeekPreviewSlider: View {
                     Image(nsImage: previewImage)
                         .resizable()
                         .scaledToFill()
-                } else {
-                    Color.black.opacity(0.55)
                 }
             }
             .frame(width: 180, height: 102)
