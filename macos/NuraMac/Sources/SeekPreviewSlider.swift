@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 struct SeekPreviewSlider: View {
+    private let previewBubbleSize = CGSize(width: 192, height: 136)
+
     @Binding var value: Double
     let duration: Double
     let previewImage: NSImage?
@@ -42,8 +44,8 @@ struct SeekPreviewSlider: View {
 
                 if previewVisible {
                     previewBubble
-                        .frame(width: 180)
-                        .offset(x: previewX(in: proxy.size.width) - 90, y: -38)
+                        .frame(width: previewBubbleSize.width, height: previewBubbleSize.height)
+                        .position(x: previewX(in: proxy.size.width), y: -64)
                         .allowsHitTesting(false)
                         .zIndex(1)
                 }
@@ -98,7 +100,8 @@ struct SeekPreviewSlider: View {
 
     private func previewX(in width: CGFloat) -> CGFloat {
         guard let previewPosition, duration.isFinite, duration > 0 else { return width / 2 }
-        return min(max(CGFloat(previewPosition / duration) * width, 90), max(width - 90, 90))
+        let halfWidth = previewBubbleSize.width / 2
+        return min(max(CGFloat(previewPosition / duration) * width, halfWidth), max(width - halfWidth, halfWidth))
     }
 
     private func formatTime(_ seconds: Double) -> String {
