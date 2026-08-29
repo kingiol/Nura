@@ -39,6 +39,7 @@ struct SeekPreviewSlider: View {
                 )
                 .controlSize(.small)
                 .frame(height: 24)
+                .accessibilityIdentifier("player.seek-slider")
                 .accessibilityLabel("Playback position")
                 .accessibilityValue("\(formatTime(previewPosition ?? value)) of \(formatTime(duration))")
 

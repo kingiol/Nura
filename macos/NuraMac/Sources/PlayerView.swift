@@ -165,16 +165,34 @@ struct PlayerView: View {
 
     private var controlBar: some View {
         VStack(spacing: 8) {
-            SeekPreviewSlider(
-                value: $model.seekPosition,
-                duration: model.duration,
-                previewImage: model.seekPreviewImage,
-                previewPosition: model.seekPreviewPosition,
-                previewVisible: model.isSeekPreviewVisible,
-                onEditingChanged: model.seekEditingChanged,
-                onPreviewPositionChanged: model.updateSeekPreview,
-                onPreviewEnded: model.hideSeekPreview
-            )
+            HStack(spacing: 8) {
+                Text(currentTimeText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .leading)
+                    .accessibilityIdentifier("player.current-time")
+                    .accessibilityLabel("Current time")
+                    .accessibilityValue(currentTimeText)
+
+                SeekPreviewSlider(
+                    value: $model.seekPosition,
+                    duration: model.duration,
+                    previewImage: model.seekPreviewImage,
+                    previewPosition: model.seekPreviewPosition,
+                    previewVisible: model.isSeekPreviewVisible,
+                    onEditingChanged: model.seekEditingChanged,
+                    onPreviewPositionChanged: model.updateSeekPreview,
+                    onPreviewEnded: model.hideSeekPreview
+                )
+
+                Text(durationText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .trailing)
+                    .accessibilityIdentifier("player.duration")
+                    .accessibilityLabel("Duration")
+                    .accessibilityValue(durationText)
+            }
 
             HStack(spacing: 12) {
                 Button(action: { model.togglePlayback() }) {
@@ -229,11 +247,6 @@ struct PlayerView: View {
                     .keyboardShortcut(.rightArrow, modifiers: [.option])
                     .frame(width: 0, height: 0)
                     .opacity(0)
-
-                Text(timeText)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 112, alignment: .leading)
 
                 Spacer(minLength: 8)
 
@@ -342,8 +355,12 @@ struct PlayerView: View {
         .padding(.bottom, 10)
     }
 
-    private var timeText: String {
-        "\(format(model.isSeeking ? model.seekPosition : model.snapshot.positionSeconds)) / \(format(model.snapshot.durationSeconds ?? 0))"
+    private var currentTimeText: String {
+        format(model.isSeeking ? model.seekPosition : model.snapshot.positionSeconds)
+    }
+
+    private var durationText: String {
+        format(model.snapshot.durationSeconds ?? 0)
     }
 
     private func revealControls() {
