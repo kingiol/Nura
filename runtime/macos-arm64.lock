@@ -16,7 +16,7 @@ libfreetype.6.dylib	/opt/homebrew/Cellar/freetype/2.14.3/lib/libfreetype.6.dylib
 libfribidi.0.dylib	/opt/homebrew/Cellar/fribidi/1.0.16/lib/libfribidi.0.dylib	88f3fc7f5f7083d87002cced910958cd56f372968d90219e1fba94e81eafba8a	arm64
 libglib-2.0.0.dylib	/opt/homebrew/Cellar/glib/2.88.3/lib/libglib-2.0.0.dylib	629b656720b26f44814cc1dbb34864f724f36e35f1909a2d008e9a435b7086e5	arm64
 libgraphite2.3.3.1.dylib	/opt/homebrew/Cellar/graphite2/1.3.15/lib/libgraphite2.3.3.1.dylib	fc59eeb61994433d7dcd349848db14951be1fac332349872ad03f86361473153	arm64
-libharfbuzz.0.dylib	/opt/homebrew/Cellar/harfbuzz/14.3.1/lib/libharfbuzz.0.dylib	08ec66635b1f8ab1f186a04670a087e2eb2c86b0924063baa100397c75ab31c8	arm64
+libharfbuzz.0.dylib	/opt/homebrew/Cellar/harfbuzz/14.4.0/lib/libharfbuzz.0.dylib	377b4eb7626287ca0de0de0af73a154ab15ba035fbf8f02e8b0391efccae5a6e	arm64
 libintl.8.dylib	/opt/homebrew/Cellar/gettext/1.0/lib/libintl.8.dylib	0c6d618e75fea85cc3d631e164a71766fba9341d19ce1f723300c52e63037c51	arm64
 libjpeg.8.3.2.dylib	/opt/homebrew/Cellar/jpeg-turbo/3.2.0/lib/libjpeg.8.3.2.dylib	e6585d0aee1969a63f288f97bbe3ef100ac787bc25ebcc4e6487b82b96cdbcae	arm64
 liblcms2.2.dylib	/opt/homebrew/Cellar/little-cms2/2.19.1/lib/liblcms2.2.dylib	faf9c8f2322a2bb47d04d3077a79cc7103fba68a186697cf91e5f6ef467d1b77	arm64
@@ -25,8 +25,8 @@ liblz4.1.10.0.dylib	/opt/homebrew/Cellar/lz4/1.10.0/lib/liblz4.1.10.0.dylib	db60
 liblzma.5.dylib	/opt/homebrew/Cellar/xz/5.8.3/lib/liblzma.5.dylib	3d5bfa2f097c31463642b1daab5e662b44368bb4da368f85e412e7f9adcbaa10	arm64
 libmp3lame.0.dylib	/opt/homebrew/Cellar/lame/4.0/lib/libmp3lame.0.dylib	5150d16a2b09a8f6f3475dcc837fdf5435d4f97e817ca12306fec8da5614647c	arm64
 libmpg123.0.dylib	/opt/homebrew/Cellar/mpg123/1.33.7/lib/libmpg123.0.dylib	435f7bc76659569772b1a90b049a28fe17bc0d605525f1061f830c119807718a	arm64
-libmpv.2.dylib	/opt/homebrew/Cellar/mpv/0.41.0_8/lib/libmpv.2.dylib	ae8663a6dc9ee41a63f47189217fb3b0a5cbbb949de496b784d7ff4320810fd9	arm64
-libmujs.dylib	/opt/homebrew/Cellar/mujs/1.3.9/lib/libmujs.dylib	f9c3c3c230759ef21c9e161d9ad7e17347b2ad2f28cafe02d2fd0aa1a1c731f8	arm64
+libmpv.2.dylib	/opt/homebrew/Cellar/mpv/0.41.0_9/lib/libmpv.2.dylib	f701babc6b30630ce0e59243dcafce6dc8d6380024c18c231da15b2ed524d162	arm64
+libmujs.dylib	/opt/homebrew/Cellar/mujs/1.3.10/lib/libmujs.dylib	a893b1ab345c210c7446c24e953d334a6db70520e42fe9379119ab2ef889c370	arm64
 libopus.0.dylib	/opt/homebrew/Cellar/opus/1.6.1/lib/libopus.0.dylib	435581a316f3dd41982f3101caa6be6ec974572e31765cd0e29c7cbe30198609	arm64
 libpcre2-8.0.dylib	/opt/homebrew/Cellar/pcre2/10.47_1/lib/libpcre2-8.0.dylib	fc0491cc252c2938b6c37d1b6b4d7bfedffb9edb2519c47cef577637eddb73d5	arm64
 libplacebo.360.dylib	/opt/homebrew/Cellar/libplacebo/7.360.1/lib/libplacebo.360.dylib	f81837165c2746db573403138d4dc869b7e93bf04588aa3f908c8f2bd99ed7b8	arm64
