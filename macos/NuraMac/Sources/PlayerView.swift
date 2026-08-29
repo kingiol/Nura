@@ -67,7 +67,7 @@ struct PlayerView: View {
                     onPlayIndex: model.playPlaylistIndex,
                     onRemovePlaylistIndex: model.removePlaylistIndex,
                     onMovePlaylistItem: model.movePlaylistItem,
-                    onSeek: { position in model.seekPosition = position; model.seekEditingChanged(false) },
+                    onSeek: { position in model.seek(to: position) },
                     onSelectVideoTrack: model.selectVideoTrack,
                     onAddExternalSubtitle: model.openExternalSubtitle
                 )
@@ -165,10 +165,16 @@ struct PlayerView: View {
 
     private var controlBar: some View {
         VStack(spacing: 8) {
-            Slider(value: $model.seekPosition, in: 0...model.duration, onEditingChanged: { editing in
-                model.seekEditingChanged(editing)
-            })
-                .controlSize(.small)
+            SeekPreviewSlider(
+                value: $model.seekPosition,
+                duration: model.duration,
+                previewImage: model.seekPreviewImage,
+                previewPosition: model.seekPreviewPosition,
+                previewVisible: model.isSeekPreviewVisible,
+                onEditingChanged: model.seekEditingChanged,
+                onPreviewPositionChanged: model.updateSeekPreview,
+                onPreviewEnded: model.hideSeekPreview
+            )
 
             HStack(spacing: 12) {
                 Button(action: { model.togglePlayback() }) {

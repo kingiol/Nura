@@ -51,6 +51,9 @@ final class PlayerViewModel: ObservableObject {
         error: nil
     )
     @Published var seekPosition = 0.0
+    @Published private(set) var seekPreviewImage: NSImage? = nil
+    @Published private(set) var seekPreviewPosition: Double? = nil
+    @Published private(set) var isSeekPreviewVisible = false
     @Published private(set) var volume = 100.0
     @Published var isSeeking = false
     @Published private(set) var lastError: String?
@@ -63,6 +66,13 @@ final class PlayerViewModel: ObservableObject {
     private var timer: Timer?
     private var renderErrorReported = false
     private var pendingVolume: Double?
+    private let thumbnailGenerator = SeekThumbnailGenerator()
+    private var thumbnailRequest: SeekThumbnailRequest?
+    private var thumbnailTask: Task<Void, Never>?
+    private var seekPreviewGeneration: UInt64 = 0
+    private var seekPreviewRequestID: UInt64 = 0
+    private var sliderSeekGeneration: UInt64?
+    private var activeMediaIdentity: String?
     private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
     private let defaults: UserDefaults
@@ -132,6 +142,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func open(_ url: URL) {
+        invalidateSeekPreview()
         do {
             try bridge?.open(url)
             lastError = nil
@@ -158,6 +169,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func openURL(_ value: String) {
+        invalidateSeekPreview()
         do {
             try bridge?.openURL(value.trimmingCharacters(in: .whitespacesAndNewlines))
             lastError = nil
@@ -221,6 +233,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func playPlaylistIndex(_ index: Int) {
+        invalidateSeekPreview()
         do {
             try bridge?.playPlaylistIndex(index)
             lastError = nil
@@ -230,6 +243,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func next() {
+        invalidateSeekPreview()
         do {
             try bridge?.next()
             lastError = nil
@@ -239,6 +253,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func previous() {
+        invalidateSeekPreview()
         do {
             try bridge?.previous()
             lastError = nil
@@ -393,15 +408,86 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func seekEditingChanged(_ editing: Bool) {
-        isSeeking = editing
-        if !editing {
-            do {
-                try bridge?.seek(seekPosition)
-                lastError = nil
-            } catch {
-                showError(error.localizedDescription)
-            }
+        if editing {
+            guard !isSeeking else { return }
+            isSeeking = true
+            sliderSeekGeneration = seekPreviewGeneration
+            return
         }
+
+        guard isSeeking else { return }
+        isSeeking = false
+        let generation = sliderSeekGeneration
+        sliderSeekGeneration = nil
+        hideSeekPreview()
+        guard generation == seekPreviewGeneration else { return }
+        do {
+            try bridge?.seek(seekPosition)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func seek(to position: Double) {
+        hideSeekPreview()
+        let clamped = min(max(position, 0), duration)
+        seekPosition = clamped
+        do {
+            try bridge?.seek(clamped)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func updateSeekPreview(position: Double) {
+        guard let source = localMediaURL, let rounded = roundedPreviewPosition(position) else {
+            hideSeekPreview()
+            return
+        }
+        isSeekPreviewVisible = true
+        seekPreviewPosition = rounded
+        seekPreviewImage = nil
+        thumbnailRequest?.cancel()
+        thumbnailTask?.cancel()
+        thumbnailRequest = nil
+        seekPreviewRequestID &+= 1
+        let requestID = seekPreviewRequestID
+        let generation = seekPreviewGeneration
+        thumbnailTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+            guard self.seekPreviewRequestID == requestID,
+                  self.seekPreviewGeneration == generation,
+                  self.isSeekPreviewVisible else { return }
+            let request = self.thumbnailGenerator.request(source: source, position: rounded) { [weak self] result in
+                guard let self,
+                      self.seekPreviewGeneration == generation,
+                      self.seekPreviewRequestID == requestID,
+                      self.isSeekPreviewVisible else { return }
+                self.seekPreviewImage = result?.image
+                self.seekPreviewPosition = result?.position ?? rounded
+            }
+            guard self.seekPreviewRequestID == requestID,
+                  self.seekPreviewGeneration == generation,
+                  self.isSeekPreviewVisible else {
+                request.cancel()
+                return
+            }
+            self.thumbnailRequest = request
+        }
+    }
+
+    func hideSeekPreview() {
+        isSeekPreviewVisible = false
+        seekPreviewImage = nil
+        seekPreviewPosition = nil
+        thumbnailTask?.cancel()
+        thumbnailRequest?.cancel()
+        thumbnailTask = nil
+        thumbnailRequest = nil
     }
 
     func seekRelative(_ seconds: Double) {
@@ -633,6 +719,11 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private func apply(_ snapshot: PlaybackSnapshot) {
+        let incomingIdentity = mediaIdentity(for: snapshot.item)
+        if activeMediaIdentity != incomingIdentity {
+            invalidateSeekPreview()
+            activeMediaIdentity = incomingIdentity
+        }
         self.snapshot = snapshot
         if let pendingPlaybackState,
            snapshot.status == "playing" || snapshot.status == "paused",
@@ -654,6 +745,37 @@ final class PlayerViewModel: ObservableObject {
         if !isSeeking {
             seekPosition = min(snapshot.positionSeconds, duration)
         }
+    }
+
+    private func invalidateSeekPreview() {
+        seekPreviewGeneration &+= 1
+        sliderSeekGeneration = nil
+        isSeeking = false
+        hideSeekPreview()
+        thumbnailGenerator.clearCache()
+    }
+
+    private var localMediaURL: URL? {
+        guard case .localFile(let path) = snapshot.item?.source else { return nil }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private func mediaIdentity(for item: MediaItem?) -> String? {
+        guard let item else { return nil }
+        switch item.source {
+        case .localFile(let path): return URL(fileURLWithPath: path).standardizedFileURL.path
+        case .publicURL(let value): return value
+        }
+    }
+
+    private func roundedPreviewPosition(_ position: Double) -> Double? {
+        guard let actualDuration = snapshot.durationSeconds,
+              actualDuration.isFinite,
+              actualDuration > 0,
+              position.isFinite else { return nil }
+        let clamped = min(max(position, 0), actualDuration)
+        return min((clamped / 0.25).rounded() * 0.25, actualDuration)
     }
 
     private var currentVideoGeometry: VideoGeometry? {
