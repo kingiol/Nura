@@ -165,35 +165,6 @@ struct PlayerView: View {
 
     private var controlBar: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Text(currentTimeText)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 56, alignment: .leading)
-                    .accessibilityIdentifier("player.current-time")
-                    .accessibilityLabel("Current time")
-                    .accessibilityValue(currentTimeText)
-
-                SeekPreviewSlider(
-                    value: $model.seekPosition,
-                    duration: model.duration,
-                    previewImage: model.seekPreviewImage,
-                    previewPosition: model.seekPreviewPosition,
-                    previewVisible: model.isSeekPreviewVisible,
-                    onEditingChanged: model.seekEditingChanged,
-                    onPreviewPositionChanged: model.updateSeekPreview,
-                    onPreviewEnded: model.hideSeekPreview
-                )
-
-                Text(durationText)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 56, alignment: .trailing)
-                    .accessibilityIdentifier("player.duration")
-                    .accessibilityLabel("Duration")
-                    .accessibilityValue(durationText)
-            }
-
             HStack(spacing: 12) {
                 Button(action: { model.togglePlayback() }) {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
@@ -347,6 +318,35 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Screenshot")
+            }
+
+            HStack(spacing: 8) {
+                Text(currentTimeText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .leading)
+                    .accessibilityIdentifier("player.current-time")
+                    .accessibilityLabel("Current time")
+                    .accessibilityValue(currentTimeText)
+
+                SeekPreviewSlider(
+                    value: $model.seekPosition,
+                    duration: model.duration,
+                    previewImage: model.seekPreviewImage,
+                    previewPosition: model.seekPreviewPosition,
+                    previewVisible: model.isSeekPreviewVisible,
+                    onEditingChanged: model.seekEditingChanged,
+                    onPreviewPositionChanged: model.updateSeekPreview,
+                    onPreviewEnded: model.hideSeekPreview
+                )
+
+                Text(durationText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .trailing)
+                    .accessibilityIdentifier("player.duration")
+                    .accessibilityLabel("Duration")
+                    .accessibilityValue(durationText)
             }
         }
         .padding(12)
