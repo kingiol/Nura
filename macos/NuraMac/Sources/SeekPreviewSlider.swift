@@ -43,7 +43,7 @@ struct SeekPreviewSlider: View {
                 if previewVisible {
                     previewBubble
                         .frame(width: 180)
-                        .offset(x: previewX(in: proxy.size.width) - 90, y: -30)
+                        .offset(x: previewX(in: proxy.size.width) - 90, y: -38)
                         .allowsHitTesting(false)
                         .zIndex(1)
                 }
