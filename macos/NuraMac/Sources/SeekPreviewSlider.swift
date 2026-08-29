@@ -39,15 +39,6 @@ struct SeekPreviewSlider: View {
                 .frame(height: 24)
                 .accessibilityLabel("Playback position")
                 .accessibilityValue("\(formatTime(previewPosition ?? value)) of \(formatTime(duration))")
-                .onContinuousHover { phase in
-                    switch phase {
-                    case .active(let location):
-                        let normalized = min(max(location.x / max(proxy.size.width, 1), 0), 1)
-                        onPreviewPositionChanged(normalized * duration)
-                    case .ended:
-                        if !isEditing { onPreviewEnded() }
-                    }
-                }
 
                 if previewVisible {
                     previewBubble
@@ -58,6 +49,22 @@ struct SeekPreviewSlider: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    let normalized = min(max(location.x / max(proxy.size.width, 1), 0), 1)
+                    onPreviewPositionChanged(normalized * duration)
+                case .ended:
+                    if !isEditing { onPreviewEnded() }
+                }
+            }
+            .onHover { hovering in
+                if hovering {
+                    onPreviewPositionChanged(value)
+                } else if !isEditing {
+                    onPreviewEnded()
+                }
+            }
         }
         .frame(height: 24)
         .accessibilityElement(children: .contain)

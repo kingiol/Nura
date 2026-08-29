@@ -71,6 +71,7 @@ final class PlayerViewModel: ObservableObject {
     private var thumbnailTask: Task<Void, Never>?
     private var seekPreviewGeneration: UInt64 = 0
     private var seekPreviewRequestID: UInt64 = 0
+    private var lastRequestedPreviewPosition: Double?
     private var sliderSeekGeneration: UInt64?
     private var activeMediaIdentity: String?
     private var windowVideoGeometry: VideoGeometry?
@@ -446,9 +447,15 @@ final class PlayerViewModel: ObservableObject {
             hideSeekPreview()
             return
         }
+        if isSeekPreviewVisible,
+           lastRequestedPreviewPosition == rounded,
+           (thumbnailTask != nil || thumbnailRequest != nil || seekPreviewImage != nil) {
+            return
+        }
         isSeekPreviewVisible = true
         seekPreviewPosition = rounded
         seekPreviewImage = nil
+        lastRequestedPreviewPosition = rounded
         thumbnailRequest?.cancel()
         thumbnailTask?.cancel()
         thumbnailRequest = nil
@@ -484,6 +491,7 @@ final class PlayerViewModel: ObservableObject {
         isSeekPreviewVisible = false
         seekPreviewImage = nil
         seekPreviewPosition = nil
+        lastRequestedPreviewPosition = nil
         thumbnailTask?.cancel()
         thumbnailRequest?.cancel()
         thumbnailTask = nil
