@@ -54,11 +54,12 @@ struct SeekPreviewSlider: View {
                         .frame(width: 180)
                         .offset(x: previewX(in: proxy.size.width) - 90, y: -30)
                         .allowsHitTesting(false)
+                        .zIndex(1)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
-        .frame(height: previewVisible ? 142 : 24)
+        .frame(height: 24)
         .accessibilityElement(children: .contain)
     }
 
