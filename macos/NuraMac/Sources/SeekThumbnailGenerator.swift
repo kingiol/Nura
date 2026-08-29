@@ -31,6 +31,8 @@ struct SeekThumbnailResult {
 final class SeekThumbnailGenerator {
     private let cache = NSCache<NSString, NSImage>()
     private let previewSize = NSSize(width: 180, height: 102)
+    private var cachedSource: URL?
+    private var cachedGenerator: AVAssetImageGenerator?
 
     init() {
         cache.countLimit = 120
@@ -57,11 +59,19 @@ final class SeekThumbnailGenerator {
             return SeekThumbnailRequest(cancelHandler: {})
         }
 
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: source))
+        let generator: AVAssetImageGenerator
+        if cachedSource == source, let cachedGenerator {
+            generator = cachedGenerator
+        } else {
+            generator = AVAssetImageGenerator(asset: AVURLAsset(url: source))
+            cachedSource = source
+            cachedGenerator = generator
+        }
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = previewSize
-        generator.requestedTimeToleranceBefore = .zero
-        generator.requestedTimeToleranceAfter = .zero
+        let tolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
+        generator.requestedTimeToleranceBefore = tolerance
+        generator.requestedTimeToleranceAfter = tolerance
 
         let request = SeekThumbnailRequest {
             generator.cancelAllCGImageGeneration()
@@ -85,6 +95,8 @@ final class SeekThumbnailGenerator {
 
     func clearCache() {
         cache.removeAllObjects()
+        cachedSource = nil
+        cachedGenerator = nil
     }
 
     private func cacheKey(source: URL, position: Double) -> String {

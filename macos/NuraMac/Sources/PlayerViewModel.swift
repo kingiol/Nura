@@ -454,7 +454,6 @@ final class PlayerViewModel: ObservableObject {
         }
         isSeekPreviewVisible = true
         seekPreviewPosition = rounded
-        seekPreviewImage = nil
         lastRequestedPreviewPosition = rounded
         thumbnailRequest?.cancel()
         thumbnailTask?.cancel()
@@ -463,7 +462,7 @@ final class PlayerViewModel: ObservableObject {
         let requestID = seekPreviewRequestID
         let generation = seekPreviewGeneration
         thumbnailTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 80_000_000)
+            try? await Task.sleep(nanoseconds: 30_000_000)
             guard !Task.isCancelled else { return }
             guard let self else { return }
             guard self.seekPreviewRequestID == requestID,
@@ -474,7 +473,9 @@ final class PlayerViewModel: ObservableObject {
                       self.seekPreviewGeneration == generation,
                       self.seekPreviewRequestID == requestID,
                       self.isSeekPreviewVisible else { return }
-                self.seekPreviewImage = result?.image
+                if let image = result?.image {
+                    self.seekPreviewImage = image
+                }
                 self.seekPreviewPosition = result?.position ?? rounded
             }
             guard self.seekPreviewRequestID == requestID,
