@@ -176,7 +176,11 @@ struct PlayerView: View {
     private var controlBar: some View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
-                Button(action: { model.toggleMute() }) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        model.toggleMute()
+                    }
+                } label: {
                     Image(systemName: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 }
                 .buttonStyle(.borderless)
@@ -185,11 +189,12 @@ struct PlayerView: View {
                 .accessibilityLabel("Mute")
                 .accessibilityValue(model.isMuted ? "muted" : "unmuted")
 
-                Slider(value: Binding(get: { model.volume }, set: { value in
+                Slider(value: Binding(get: { model.isMuted ? 0 : model.volume }, set: { value in
                     model.setVolume(value)
                 }), in: 0...100)
                     .frame(width: 110)
                     .controlSize(.small)
+                    .animation(.easeInOut(duration: 0.22), value: model.isMuted)
 
                 Button(action: { model.togglePlayback() }) {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
