@@ -176,6 +176,21 @@ struct PlayerView: View {
     private var controlBar: some View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
+                Button(action: { model.toggleMute() }) {
+                    Image(systemName: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                }
+                .buttonStyle(.borderless)
+                .help(model.isMuted ? "Unmute" : "Mute")
+                .accessibilityIdentifier("player.mute-toggle")
+                .accessibilityLabel("Mute")
+                .accessibilityValue(model.isMuted ? "muted" : "unmuted")
+
+                Slider(value: Binding(get: { model.volume }, set: { value in
+                    model.setVolume(value)
+                }), in: 0...100)
+                    .frame(width: 110)
+                    .controlSize(.small)
+
                 Button(action: { model.togglePlayback() }) {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                 }
@@ -287,21 +302,6 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(model.abLoopLabel)
-
-                Button(action: { model.toggleMute() }) {
-                    Image(systemName: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                }
-                .buttonStyle(.borderless)
-                .help(model.isMuted ? "Unmute" : "Mute")
-                .accessibilityIdentifier("player.mute-toggle")
-                .accessibilityLabel("Mute")
-                .accessibilityValue(model.isMuted ? "muted" : "unmuted")
-
-                Slider(value: Binding(get: { model.volume }, set: { value in
-                    model.setVolume(value)
-                }), in: 0...100)
-                    .frame(width: 110)
-                    .controlSize(.small)
 
                 Button {
                     sidebar = sidebar == .playlist ? nil : .playlist
