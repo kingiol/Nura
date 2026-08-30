@@ -742,7 +742,7 @@ final class PlayerViewModel: ObservableObject {
         if let pendingMutedState, pendingMutedState == snapshot.muted {
             self.pendingMutedState = nil
         }
-        updateWindowVideoGeometryIfNeeded()
+        updateWindowGeometryIfNeeded()
         if let pendingVolume {
             if abs(snapshot.volume - pendingVolume) < 0.001 {
                 self.pendingVolume = nil
@@ -798,11 +798,10 @@ final class PlayerViewModel: ObservableObject {
         )
     }
 
-    private func updateWindowVideoGeometryIfNeeded() {
+    func updateWindowGeometryIfNeeded() {
         guard !disableWindowResize else { return }
         guard let geometry = currentVideoGeometry else {
-            guard windowVideoGeometry != nil else { return }
-            unlockPlayerWindow()
+            configureNonVideoWindow()
             windowVideoGeometry = nil
             return
         }
@@ -838,10 +837,13 @@ final class PlayerViewModel: ObservableObject {
         window.setFrame(frame, display: true, animate: true)
     }
 
-    private func unlockPlayerWindow() {
+    private func configureNonVideoWindow() {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        let minimumLength: CGFloat = snapshot.item == nil ? 600 : 300
+        let minimumSize = NSSize(width: minimumLength, height: minimumLength)
+        guard window.contentAspectRatio != .zero || window.contentMinSize != minimumSize else { return }
         window.contentAspectRatio = .zero
-        window.contentMinSize = NSSize(width: 720, height: 460)
+        window.contentMinSize = minimumSize
     }
 
     private func showError(_ message: String) {

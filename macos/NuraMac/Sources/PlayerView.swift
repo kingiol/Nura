@@ -86,7 +86,10 @@ struct PlayerView: View {
         .onHover { hovering in
             if hovering, !titlebarHovered, !controlBarHovered { revealControls() }
         }
-        .onAppear { revealControls() }
+        .onAppear {
+            model.updateWindowGeometryIfNeeded()
+            revealControls()
+        }
         .onDisappear {
             hideControlsTask?.cancel()
             pipPanel?.close()
