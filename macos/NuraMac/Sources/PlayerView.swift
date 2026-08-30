@@ -7,6 +7,8 @@ struct PlayerView: View {
     private let keepControlsVisible: Bool
     @State private var isDropTargeted = false
     @State private var controlsVisible = true
+    @State private var titlebarHovered = false
+    @State private var controlBarHovered = false
     @State private var sidebar: SidebarTab?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var pipPanel: NSPanel?
@@ -78,10 +80,11 @@ struct PlayerView: View {
         }
         .ignoresSafeArea()
         .background(Color.black)
+        .background(WindowButtonVisibility(isVisible: controlsVisible))
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .animation(.easeOut(duration: 0.18), value: sidebar)
         .onHover { hovering in
-            if hovering { revealControls() }
+            if hovering, !titlebarHovered, !controlBarHovered { revealControls() }
         }
         .onAppear { revealControls() }
         .onDisappear {
@@ -161,6 +164,10 @@ struct PlayerView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.horizontal, 10)
         .padding(.top, 8)
+        .onHover { hovering in
+            titlebarHovered = hovering
+            updateControlsVisibility()
+        }
     }
 
     private var controlBar: some View {
@@ -353,6 +360,10 @@ struct PlayerView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .padding(.horizontal, 10)
         .padding(.bottom, 10)
+        .onHover { hovering in
+            controlBarHovered = hovering
+            updateControlsVisibility()
+        }
     }
 
     private var currentTimeText: String {
@@ -366,10 +377,29 @@ struct PlayerView: View {
     private func revealControls() {
         controlsVisible = true
         hideControlsTask?.cancel()
-        guard !keepControlsVisible else { return }
+        guard !keepControlsVisible, !titlebarHovered, !controlBarHovered else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
+            guard !titlebarHovered, !controlBarHovered else { return }
+            controlsVisible = false
+        }
+    }
+
+    private func updateControlsVisibility() {
+        if titlebarHovered || controlBarHovered {
+            revealControls()
+        } else {
+            scheduleControlsHide()
+        }
+    }
+
+    private func scheduleControlsHide() {
+        hideControlsTask?.cancel()
+        guard !keepControlsVisible else { return }
+        hideControlsTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled, !titlebarHovered, !controlBarHovered else { return }
             controlsVisible = false
         }
     }
@@ -444,6 +474,39 @@ struct PlayerView: View {
         let minutes = (total / 60) % 60
         let remaining = total % 60
         return hours > 0 ? String(format: "%02d:%02d:%02d", hours, minutes, remaining) : String(format: "%02d:%02d", minutes, remaining)
+    }
+}
+
+private struct WindowButtonVisibility: NSViewRepresentable {
+    let isVisible: Bool
+
+    func makeNSView(context: Context) -> WindowButtonVisibilityView {
+        WindowButtonVisibilityView()
+    }
+
+    func updateNSView(_ nsView: WindowButtonVisibilityView, context: Context) {
+        nsView.setButtonsVisible(isVisible)
+    }
+}
+
+private final class WindowButtonVisibilityView: NSView {
+    private var buttonsVisible = true
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyButtonVisibility()
+    }
+
+    func setButtonsVisible(_ isVisible: Bool) {
+        buttonsVisible = isVisible
+        applyButtonVisibility()
+    }
+
+    private func applyButtonVisibility() {
+        guard let window else { return }
+        for buttonType in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(buttonType)?.isHidden = !buttonsVisible
+        }
     }
 }
 
