@@ -91,14 +91,14 @@ rm -f "$DMG" "$ZIP" "$DMG.sha256" "$ZIP.sha256"
 
 DMG_ROOT="$STAGING/dmg-root"
 mkdir -p "$DMG_ROOT"
-cp -R "$APP" "$DMG_ROOT/Nura.app"
+ditto --norsrc --noextattr --noqtn "$APP" "$DMG_ROOT/Nura.app"
 ln -s /Applications "$DMG_ROOT/Applications"
 hdiutil create -volname "Nura $VERSION" -srcfolder "$DMG_ROOT" -format UDZO -ov "$DMG" >/dev/null
 
 ZIP_ROOT="$STAGING/zip-root"
 mkdir -p "$ZIP_ROOT"
-cp -R "$APP" "$ZIP_ROOT/Nura.app"
-ditto -c -k --keepParent "$ZIP_ROOT/Nura.app" "$ZIP"
+ditto --norsrc --noextattr --noqtn "$APP" "$ZIP_ROOT/Nura.app"
+ditto -c -k --keepParent --norsrc --noextattr --noqtn "$ZIP_ROOT/Nura.app" "$ZIP"
 
 if [ "$PUBLISH" = "1" ]; then
     xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
