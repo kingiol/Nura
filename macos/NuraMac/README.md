@@ -38,3 +38,31 @@ run `xcodegen generate --spec project.yml`, and commit the generated project
 and shared scheme.
 
 Release packaging overrides the library path with `NURA_RUST_LIB_DIR=target/release`; use `scripts/build-macos-app.sh` for that flow.
+
+## Website release packaging
+
+Use `scripts/release-macos.sh` to create website-ready Apple Silicon artifacts. The
+default mode is local testing and adds a `-local` suffix. Publish mode requires a
+Developer ID identity and a configured `notarytool` Keychain profile:
+
+```sh
+cd ../..
+NURA_PUBLISH=1 \
+NURA_SIGNING_IDENTITY='Developer ID Application: Your Name (TEAMID)' \
+NURA_NOTARY_PROFILE='NuraNotary' \
+./scripts/release-macos.sh
+```
+
+Artifacts are written to `dist/`:
+
+```text
+Nura-<version>-arm64.dmg
+Nura-<version>-arm64.zip
+Nura-<version>-arm64.dmg.sha256
+Nura-<version>-arm64.zip.sha256
+```
+
+The DMG is the recommended website download. The ZIP is useful as a fallback or
+for automated distribution. Before publishing, complete the bundled-runtime
+license review and test Finder launch plus H.264/AAC playback on a clean macOS
+13+ Apple Silicon machine. Do not publish `-local` artifacts.
