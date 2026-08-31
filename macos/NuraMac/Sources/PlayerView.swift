@@ -9,6 +9,7 @@ struct PlayerView: View {
     @State private var controlsVisible = true
     @State private var titlebarHovered = false
     @State private var controlBarHovered = false
+    @State private var sidebarHovered = false
     @State private var sidebar: SidebarTab?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var pipPanel: NSPanel?
@@ -62,17 +63,32 @@ struct PlayerView: View {
             }
 
             if let sidebar {
-                SidebarView(
-                    tab: sidebar,
-                    snapshot: model.snapshot,
-                    onClose: { self.sidebar = nil },
-                    onPlayIndex: model.playPlaylistIndex,
-                    onRemovePlaylistIndex: model.removePlaylistIndex,
-                    onMovePlaylistItem: model.movePlaylistItem,
-                    onSeek: { position in model.seek(to: position) },
-                    onSelectVideoTrack: model.selectVideoTrack,
-                    onAddExternalSubtitle: model.openExternalSubtitle
-                )
+                Group {
+                    if sidebar == .settings {
+                        SettingsSidebarView(
+                            model: model,
+                            onClose: { self.sidebar = nil },
+                            onOpenURL: openURLPanel,
+                            onTogglePiP: togglePiP
+                        )
+                    } else {
+                        SidebarView(
+                            tab: sidebar,
+                            snapshot: model.snapshot,
+                            onClose: { self.sidebar = nil },
+                            onPlayIndex: model.playPlaylistIndex,
+                            onRemovePlaylistIndex: model.removePlaylistIndex,
+                            onMovePlaylistItem: model.movePlaylistItem,
+                            onSeek: { position in model.seek(to: position) },
+                            onSelectVideoTrack: model.selectVideoTrack,
+                            onAddExternalSubtitle: model.openExternalSubtitle
+                        )
+                    }
+                }
+                .onHover { hovering in
+                    sidebarHovered = hovering
+                    updateControlsVisibility()
+                }
                     .frame(width: 300)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -84,7 +100,7 @@ struct PlayerView: View {
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .animation(.easeOut(duration: 0.18), value: sidebar)
         .onHover { hovering in
-            if hovering, !titlebarHovered, !controlBarHovered { revealControls() }
+            if hovering, !titlebarHovered, !controlBarHovered, !sidebarHovered { revealControls() }
         }
         .onAppear {
             model.updateWindowGeometryIfNeeded()
@@ -99,30 +115,6 @@ struct PlayerView: View {
 
     private var titlebar: some View {
         HStack(spacing: 12) {
-            Button(action: model.openPanel) { Image(systemName: "folder") }
-                .buttonStyle(.borderless)
-                .help("Open media")
-                .keyboardShortcut("o", modifiers: [.command])
-
-            Button(action: openURLPanel) { Image(systemName: "link") }
-                .buttonStyle(.borderless)
-                .help("Open URL")
-                .keyboardShortcut("l", modifiers: [.command])
-
-            Menu {
-                if model.snapshot.recentItems.isEmpty {
-                    Text("No recent media")
-                } else {
-                    ForEach(Array(model.snapshot.recentItems.enumerated()), id: \.offset) { _, item in
-                        Button(item.title) { model.openRecent(item) }
-                    }
-                }
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-            }
-            .menuStyle(.borderlessButton)
-            .help("Recent media")
-
             Text(model.title)
                 .font(.headline)
                 .lineLimit(1)
@@ -140,26 +132,6 @@ struct PlayerView: View {
                 .accessibilityIdentifier("player.status")
                 .accessibilityValue(model.statusText)
 
-            Button {
-                sidebar = sidebar == .playlist ? nil : .playlist
-                revealControls()
-            } label: { Image(systemName: "sidebar.right") }
-                .buttonStyle(.borderless)
-                .help("Show sidebar")
-                .accessibilityIdentifier("player.sidebar-toggle")
-                .accessibilityValue(sidebar == nil ? "closed" : "open")
-
-            Button(action: model.toggleAlwaysOnTop) {
-                Image(systemName: model.alwaysOnTop ? "pin.fill" : "pin")
-            }
-            .buttonStyle(.borderless)
-            .help(model.alwaysOnTop ? "Release window" : "Keep window on top")
-
-            Button(action: togglePiP) {
-                Image(systemName: "pip")
-            }
-            .buttonStyle(.borderless)
-            .help("Picture in Picture")
         }
         .padding(.leading, 82)
         .padding(.trailing, 14)
@@ -227,144 +199,66 @@ struct PlayerView: View {
                     .controlSize(.small)
                     .animation(.easeInOut(duration: 0.22), value: model.isMuted)
 
-                Button(action: { model.togglePlayback() }) {
-                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                Spacer(minLength: 8)
+
+                HStack(spacing: 12) {
+                    Button(action: model.previous) {
+                        Image(systemName: "backward.end.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Previous")
+
+                    Button(action: { model.togglePlayback() }) {
+                        Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(model.isPlaying ? "Pause" : "Play")
+                    .accessibilityIdentifier("player.playback-toggle")
+                    .accessibilityLabel("Playback")
+                    .accessibilityValue(model.isPlaying ? "playing" : "paused")
+                    .keyboardShortcut(.space, modifiers: [])
+
+                    Button(action: model.next) {
+                        Image(systemName: "forward.end.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Next")
+
                 }
-                .buttonStyle(.borderless)
-                .help(model.isPlaying ? "Pause" : "Play")
-                .accessibilityIdentifier("player.playback-toggle")
-                .accessibilityLabel("Playback")
-                .accessibilityValue(model.isPlaying ? "playing" : "paused")
-                .keyboardShortcut(.space, modifiers: [])
-
-                Button(action: model.previous) {
-                    Image(systemName: "backward.end.fill")
-                }
-                .buttonStyle(.borderless)
-                .help("Previous")
-
-                Button { model.seekRelative(-5) } label: {
-                    Image(systemName: "gobackward.5")
-                }
-                .buttonStyle(.borderless)
-                .help("Back 5 seconds")
-                .keyboardShortcut(.leftArrow, modifiers: [])
-
-                Button { model.seekRelative(5) } label: {
-                    Image(systemName: "goforward.5")
-                }
-                .buttonStyle(.borderless)
-                .help("Forward 5 seconds")
-                .keyboardShortcut(.rightArrow, modifiers: [])
-
-                Button(action: model.next) {
-                    Image(systemName: "forward.end.fill")
-                }
-                .buttonStyle(.borderless)
-                .help("Next")
-
-                Button(action: model.frameStep) {
-                    Image(systemName: "forward.frame")
-                }
-                .buttonStyle(.borderless)
-                .help("Next frame")
-                .keyboardShortcut(".", modifiers: [])
-
-                Button { model.seekRelative(-30) } label: { EmptyView() }
-                    .keyboardShortcut(.leftArrow, modifiers: [.option])
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-
-                Button { model.seekRelative(30) } label: { EmptyView() }
-                    .keyboardShortcut(.rightArrow, modifiers: [.option])
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
 
                 Spacer(minLength: 8)
 
-                AudioMenu(
-                    tracks: model.snapshot.audioTracks,
-                    selectedTrack: model.selectedAudioTrack,
-                    devices: model.snapshot.audioDevices,
-                    delay: model.snapshot.audioDelaySeconds,
-                    onSelectTrack: model.selectAudioTrack,
-                    onSelectDevice: model.setAudioDevice,
-                    onSetDelay: model.setAudioDelay
-                )
-                SubtitleMenu(
-                    tracks: model.snapshot.subtitleTracks,
-                    selectedTrack: model.selectedSubtitleTrack,
-                    visible: model.snapshot.subtitlesVisible,
-                    delay: model.snapshot.subtitleDelaySeconds,
-                    scale: model.snapshot.subtitleScale,
-                    position: model.snapshot.subtitlePosition,
-                    onSelectTrack: model.selectSubtitleTrack,
-                    onSetVisible: model.setSubtitlesVisible,
-                    onSetDelay: model.setSubtitleDelay,
-                    onSetScale: model.setSubtitleScale,
-                    onSetPosition: model.setSubtitlePosition
-                )
-                VideoMenu(
-                    aspect: model.snapshot.videoAspect,
-                    rotation: model.snapshot.videoRotationDegrees,
-                    flipped: model.snapshot.videoFlipped,
-                    onSetAspect: model.setVideoAspect,
-                    onFitToVideo: model.fitWindowToVideo,
-                    onRotate: model.rotateVideo,
-                    onToggleFlip: model.toggleVideoFlip
-                )
-                SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+                HStack(spacing: 12) {
+                    Button {
+                        sidebar = sidebar == .settings ? nil : .settings
+                        revealControls()
+                    } label: { Image(systemName: "gearshape") }
+                        .buttonStyle(.borderless)
+                        .help("Settings")
+                        .accessibilityIdentifier("player.settings-toggle")
+                        .accessibilityLabel("Settings")
+                        .accessibilityValue(sidebar == .settings ? "open" : "closed")
 
-                Button(action: model.toggleLoop) {
-                    Image(systemName: model.loopEnabled ? "repeat.1" : "repeat")
-                }
-                .buttonStyle(.borderless)
-                .help(model.loopEnabled ? "Disable loop" : "Loop current item")
+                    Button {
+                        sidebar = sidebar == .playlist ? nil : .playlist
+                        revealControls()
+                    } label: { Image(systemName: "sidebar.right") }
+                        .buttonStyle(.borderless)
+                        .help("Show playlist")
+                        .accessibilityIdentifier("player.sidebar-toggle")
+                        .accessibilityLabel("Playlist")
+                        .accessibilityValue(sidebar == .playlist ? "open" : "closed")
 
-                Button(action: model.togglePlaylistLoop) {
-                    Image(systemName: model.snapshot.playlistLoop ? "repeat.circle.fill" : "repeat.circle")
-                }
-                .buttonStyle(.borderless)
-                .help(model.snapshot.playlistLoop ? "Disable playlist loop" : "Loop playlist")
-
-                Button(action: model.shufflePlaylist) {
-                    Image(systemName: "shuffle")
-                }
-                .buttonStyle(.borderless)
-                .help("Shuffle playlist")
-
-                Button(action: model.advanceABLoop) {
-                    Image(systemName: model.abLoopSymbol)
-                }
-                .buttonStyle(.borderless)
-                .help(model.abLoopLabel)
-
-                Button {
-                    sidebar = sidebar == .playlist ? nil : .playlist
-                    revealControls()
-                } label: { Image(systemName: "sidebar.right") }
+                    Button(action: model.toggleFullscreen) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    }
                     .buttonStyle(.borderless)
-                    .help("Show playlist")
-
-                Button(action: model.toggleFullscreen) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .help("Enter fullscreen")
+                    .keyboardShortcut("f", modifiers: [.command])
                 }
-                .buttonStyle(.borderless)
-                .help("Enter fullscreen")
-                .keyboardShortcut("f", modifiers: [.command])
-
-                Button(action: model.openExternalSubtitle) {
-                    Image(systemName: "text.badge.plus")
-                }
-                .buttonStyle(.borderless)
-                .help("Load external subtitle")
-
-                Button(action: model.screenshot) {
-                    Image(systemName: "camera")
-                }
-                .buttonStyle(.borderless)
-                .help("Screenshot")
             }
+
+            keyboardShortcutSink
 
         }
         .padding(12)
@@ -388,17 +282,17 @@ struct PlayerView: View {
     private func revealControls() {
         controlsVisible = true
         hideControlsTask?.cancel()
-        guard !keepControlsVisible, !titlebarHovered, !controlBarHovered else { return }
+        guard !keepControlsVisible, !titlebarHovered, !controlBarHovered, !sidebarHovered else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
-            guard !titlebarHovered, !controlBarHovered else { return }
+            guard !titlebarHovered, !controlBarHovered, !sidebarHovered else { return }
             controlsVisible = false
         }
     }
 
     private func updateControlsVisibility() {
-        if titlebarHovered || controlBarHovered {
+        if titlebarHovered || controlBarHovered || sidebarHovered {
             revealControls()
         } else {
             scheduleControlsHide()
@@ -410,9 +304,30 @@ struct PlayerView: View {
         guard !keepControlsVisible else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            guard !Task.isCancelled, !titlebarHovered, !controlBarHovered else { return }
+            guard !Task.isCancelled, !titlebarHovered, !controlBarHovered, !sidebarHovered else { return }
             controlsVisible = false
         }
+    }
+
+    private var keyboardShortcutSink: some View {
+        HStack(spacing: 0) {
+            Button { model.seekRelative(-5) } label: { EmptyView() }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+            Button { model.seekRelative(5) } label: { EmptyView() }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+            Button(action: model.frameStep) { EmptyView() }
+                .keyboardShortcut(".", modifiers: [])
+            Button { model.seekRelative(-30) } label: { EmptyView() }
+                .keyboardShortcut(.leftArrow, modifiers: [.option])
+            Button { model.seekRelative(30) } label: { EmptyView() }
+                .keyboardShortcut(.rightArrow, modifiers: [.option])
+            Button(action: model.openPanel) { EmptyView() }
+                .keyboardShortcut("o", modifiers: [.command])
+            Button(action: openURLPanel) { EmptyView() }
+                .keyboardShortcut("l", modifiers: [.command])
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
     }
 
     private func togglePiP() {
@@ -559,6 +474,7 @@ private struct MiniPlayerView: View {
 }
 
 private enum SidebarTab: String, CaseIterable, Identifiable {
+    case settings = "Settings"
     case playlist = "Playlist"
     case chapters = "Chapters"
     case video = "Video"
@@ -568,11 +484,151 @@ private enum SidebarTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var symbol: String {
         switch self {
+        case .settings: return "gearshape"
         case .playlist: return "music.note.list"
         case .chapters: return "list.and.film"
         case .video: return "slider.horizontal.3"
         case .audio: return "waveform"
         case .subtitles: return "captions.bubble"
+        }
+    }
+}
+
+private struct SettingsSidebarView: View {
+    @ObservedObject var model: PlayerViewModel
+    let onClose: () -> Void
+    let onOpenURL: () -> Void
+    let onTogglePiP: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label("Settings", systemImage: "gearshape")
+                    .font(.headline)
+                Spacer()
+                Button(action: onClose) { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .help("Close settings")
+                    .accessibilityLabel("Close settings")
+                    .accessibilityIdentifier("player.sidebar-close")
+            }
+            .padding(12)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    settingsSection("Media") {
+                        Button(action: model.openPanel) {
+                            Label("Open Media", systemImage: "folder")
+                        }
+                        .keyboardShortcut("o", modifiers: [.command])
+
+                        Button(action: onOpenURL) {
+                            Label("Open URL", systemImage: "link")
+                        }
+                        .keyboardShortcut("l", modifiers: [.command])
+
+                        Menu {
+                            if model.snapshot.recentItems.isEmpty {
+                                Text("No recent media")
+                            } else {
+                                ForEach(Array(model.snapshot.recentItems.enumerated()), id: \.offset) { _, item in
+                                    Button(item.title) { model.openRecent(item) }
+                                }
+                            }
+                        } label: {
+                            Label("Recent Media", systemImage: "clock.arrow.circlepath")
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+
+                    settingsSection("Playback") {
+                        Button { model.seekRelative(-5) } label: { Label("Back 5 Seconds", systemImage: "gobackward.5") }
+                        Button { model.seekRelative(5) } label: { Label("Forward 5 Seconds", systemImage: "goforward.5") }
+                        Button { model.seekRelative(-30) } label: { Label("Back 30 Seconds", systemImage: "gobackward.30") }
+                        Button { model.seekRelative(30) } label: { Label("Forward 30 Seconds", systemImage: "goforward.30") }
+                        Button(action: model.frameStep) { Label("Next Frame", systemImage: "forward.frame") }
+                        SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+                    }
+
+                    settingsSection("Tracks") {
+                        AudioMenu(
+                            tracks: model.snapshot.audioTracks,
+                            selectedTrack: model.selectedAudioTrack,
+                            devices: model.snapshot.audioDevices,
+                            delay: model.snapshot.audioDelaySeconds,
+                            onSelectTrack: model.selectAudioTrack,
+                            onSelectDevice: model.setAudioDevice,
+                            onSetDelay: model.setAudioDelay
+                        )
+                        SubtitleMenu(
+                            tracks: model.snapshot.subtitleTracks,
+                            selectedTrack: model.selectedSubtitleTrack,
+                            visible: model.snapshot.subtitlesVisible,
+                            delay: model.snapshot.subtitleDelaySeconds,
+                            scale: model.snapshot.subtitleScale,
+                            position: model.snapshot.subtitlePosition,
+                            onSelectTrack: model.selectSubtitleTrack,
+                            onSetVisible: model.setSubtitlesVisible,
+                            onSetDelay: model.setSubtitleDelay,
+                            onSetScale: model.setSubtitleScale,
+                            onSetPosition: model.setSubtitlePosition
+                        )
+                        Button(action: model.openExternalSubtitle) {
+                            Label("Load External Subtitle", systemImage: "text.badge.plus")
+                        }
+                    }
+
+                    settingsSection("Video") {
+                        VideoMenu(
+                            aspect: model.snapshot.videoAspect,
+                            rotation: model.snapshot.videoRotationDegrees,
+                            flipped: model.snapshot.videoFlipped,
+                            onSetAspect: model.setVideoAspect,
+                            onFitToVideo: model.fitWindowToVideo,
+                            onRotate: model.rotateVideo,
+                            onToggleFlip: model.toggleVideoFlip
+                        )
+                    }
+
+                    settingsSection("Looping") {
+                        Button(action: model.toggleLoop) {
+                            Label(model.loopEnabled ? "Disable Loop" : "Loop Current Item", systemImage: model.loopEnabled ? "repeat.1" : "repeat")
+                        }
+                        Button(action: model.togglePlaylistLoop) {
+                            Label(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", systemImage: model.snapshot.playlistLoop ? "repeat.circle.fill" : "repeat.circle")
+                        }
+                        Button(action: model.shufflePlaylist) { Label("Shuffle Playlist", systemImage: "shuffle") }
+                        Button(action: model.advanceABLoop) { Label(model.abLoopLabel, systemImage: model.abLoopSymbol) }
+                    }
+
+                    settingsSection("Window & Tools") {
+                        Button(action: model.toggleAlwaysOnTop) {
+                            Label(model.alwaysOnTop ? "Release Window" : "Keep Window on Top", systemImage: model.alwaysOnTop ? "pin.fill" : "pin")
+                        }
+                        Button(action: onTogglePiP) { Label("Picture in Picture", systemImage: "pip") }
+                        Button(action: model.screenshot) { Label("Screenshot", systemImage: "camera") }
+                        Button(action: model.copyScreenshot) { Label("Copy Screenshot", systemImage: "doc.on.doc") }
+                        Button(action: model.chooseScreenshotDirectory) { Label("Choose Screenshot Folder", systemImage: "folder.badge.gearshape") }
+                    }
+                }
+                .buttonStyle(.borderless)
+                .padding(14)
+            }
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .leading) { Divider() }
+        .accessibilityIdentifier("player.sidebar")
+    }
+
+    @ViewBuilder
+    private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8, content: content)
         }
     }
 }
@@ -605,6 +661,8 @@ private struct SidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     switch tab {
+                    case .settings:
+                        EmptyView()
                     case .playlist:
                         if snapshot.playlist.isEmpty {
                             Text("No items in playlist").foregroundStyle(.secondary)
@@ -669,6 +727,7 @@ private struct SidebarView: View {
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) { Divider() }
+        .accessibilityIdentifier("player.sidebar")
     }
 
     @ViewBuilder
