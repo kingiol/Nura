@@ -548,21 +548,25 @@ private struct SettingsSidebarView: View {
                         Label(tab.rawValue, systemImage: tab.symbol)
                             .font(.caption.weight(.semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
+                            .padding(.vertical, 9)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(selectedTab == tab ? Color.primary : Color.secondary)
-                    .background(selectedTab == tab ? Color.accentColor.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .foregroundStyle(selectedTab == tab ? Color.white : Color.white.opacity(0.55))
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(selectedTab == tab ? Color.accentColor : Color.clear)
+                            .frame(height: 2)
+                    }
                     .accessibilityLabel(tab.rawValue)
                     .accessibilityValue(selectedTab == tab ? "selected" : "unselected")
                     .accessibilityIdentifier(tab.accessibilityIdentifier)
                 }
             }
-            .padding(3)
-            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(Color.black.opacity(0.12))
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -572,6 +576,7 @@ private struct SettingsSidebarView: View {
                 .padding(14)
             }
         }
+        .background(Color(red: 0.22, green: 0.25, blue: 0.14).opacity(0.94))
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) { Divider() }
         .accessibilityIdentifier("player.sidebar")
@@ -655,30 +660,42 @@ private struct SettingsSidebarView: View {
         }
 
         settingsSection("Aspect ratio") {
-            Picker("Aspect ratio", selection: Binding(
-                get: { model.snapshot.videoAspect },
-                set: { model.setVideoAspect($0) }
-            )) {
-                ForEach(["Auto", "16:9", "4:3", "1.85:1", "2.35:1"], id: \.self) { value in
-                    Text(value == "Auto" ? "Default" : value).tag(value)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
+            SettingSegmentedControl(
+                title: "Aspect ratio",
+                values: ["Auto", "4:3", "16:9", "1.85:1", "2.35:1"],
+                selection: model.snapshot.videoAspect,
+                label: { $0 == "Auto" ? "Default" : $0 },
+                onSelect: model.setVideoAspect
+            )
             Button("Fit to Video", action: model.fitWindowToVideo)
         }
 
         settingsSection("Transform") {
-            HStack {
+            HStack(spacing: 8) {
                 Text("Rotation")
-                Spacer()
-                Button("Rotate 90°", action: model.rotateVideo)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                ValueBadge(text: "\(model.snapshot.videoRotationDegrees)°")
+                Button(action: model.rotateVideo) {
+                    Label("Rotate 90°", systemImage: "rotate.right")
+                }
+                .buttonStyle(.bordered)
                 Button(model.snapshot.videoFlipped ? "Unflip" : "Flip", action: model.toggleVideoFlip)
+                    .buttonStyle(.bordered)
             }
         }
 
         settingsSection("Speed") {
-            SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+            SettingSlider(
+                title: "Speed",
+                value: model.snapshot.speed,
+                range: 0.25...16,
+                step: 0.25,
+                leadingLabel: "0.25x",
+                trailingLabel: "16x",
+                valueLabel: { "\(formatDecimal($0))x" },
+                onChange: model.setSpeed
+            )
         }
     }
 
@@ -713,17 +730,27 @@ private struct SettingsSidebarView: View {
         }
 
         settingsSection("Audio delay") {
-            delayButtons(current: model.snapshot.audioDelaySeconds, onSelect: model.setAudioDelay, prefix: "Audio")
+            SettingSlider(
+                title: "Delay",
+                value: model.snapshot.audioDelaySeconds,
+                range: -5...5,
+                step: 0.5,
+                leadingLabel: "-5s",
+                trailingLabel: "+5s",
+                valueLabel: { "\(formatDecimal($0))s" },
+                onChange: model.setAudioDelay
+            )
         }
     }
 
     @ViewBuilder
     private var subtitleContent: some View {
         settingsSection("Subtitle") {
-            Toggle("Show Subtitles", isOn: Binding(
-                get: { model.snapshot.subtitlesVisible },
-                set: { model.setSubtitlesVisible($0) }
-            ))
+            SettingToggleRow(
+                title: "Show Subtitles",
+                isOn: model.snapshot.subtitlesVisible,
+                onChange: model.setSubtitlesVisible
+            )
             TrackPicker(
                 tracks: model.snapshot.subtitleTracks,
                 selectedTrack: model.selectedSubtitleTrack,
@@ -739,26 +766,39 @@ private struct SettingsSidebarView: View {
         }
 
         settingsSection("Subtitle delay") {
-            delayButtons(current: model.snapshot.subtitleDelaySeconds, onSelect: model.setSubtitleDelay, prefix: "Subtitle")
+            SettingSlider(
+                title: "Delay",
+                value: model.snapshot.subtitleDelaySeconds,
+                range: -5...5,
+                step: 0.5,
+                leadingLabel: "-5s",
+                trailingLabel: "+5s",
+                valueLabel: { "\(formatDecimal($0))s" },
+                onChange: model.setSubtitleDelay
+            )
         }
 
         settingsSection("Appearance") {
-            Picker("Scale", selection: Binding(
-                get: { model.snapshot.subtitleScale },
-                set: { model.setSubtitleScale($0) }
-            )) {
-                ForEach([0.8, 1.0, 1.2, 1.4, 1.6], id: \.self) { value in
-                    Text("Scale \(value, specifier: "%.1f")x").tag(value)
-                }
-            }
-            Picker("Position", selection: Binding(
-                get: { model.snapshot.subtitlePosition },
-                set: { model.setSubtitlePosition($0) }
-            )) {
-                ForEach([70.0, 80.0, 90.0, 100.0], id: \.self) { value in
-                    Text("Position \(Int(value))%").tag(value)
-                }
-            }
+            SettingSlider(
+                title: "Scale",
+                value: model.snapshot.subtitleScale,
+                range: 0.8...1.6,
+                step: 0.1,
+                leadingLabel: "0.8x",
+                trailingLabel: "1.6x",
+                valueLabel: { "\(formatDecimal($0))x" },
+                onChange: model.setSubtitleScale
+            )
+            SettingSlider(
+                title: "Position",
+                value: model.snapshot.subtitlePosition,
+                range: 0...100,
+                step: 1,
+                leadingLabel: "0%",
+                trailingLabel: "100%",
+                valueLabel: { "\(Int($0))%" },
+                onChange: model.setSubtitlePosition
+            )
         }
     }
 
@@ -766,9 +806,12 @@ private struct SettingsSidebarView: View {
     private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.92))
             VStack(alignment: .leading, spacing: 8, content: content)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 }
@@ -795,6 +838,7 @@ private struct TrackPicker: View {
         } label: {
             Label(currentTitle, systemImage: icon)
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .menuStyle(.borderlessButton)
     }
@@ -804,6 +848,140 @@ private struct TrackPicker: View {
             ?? tracks.first(where: { $0.id == selectedTrack })?.language
             ?? (tracks.isEmpty ? "None" : "Select Track")
     }
+}
+
+private struct SettingSegmentedControl: View {
+    let title: String
+    let values: [String]
+    let selection: String
+    let label: (String) -> String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 3) {
+                ForEach(values, id: \.self) { value in
+                    Button {
+                        onSelect(value)
+                    } label: {
+                        Text(label(value))
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(selection == value ? Color.white : Color.white.opacity(0.8))
+                    .background(selection == value ? Color.accentColor : Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                }
+            }
+        }
+    }
+}
+
+private struct SettingSlider: View {
+    let title: String
+    let value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let leadingLabel: String
+    let trailingLabel: String
+    let valueLabel: (Double) -> String
+    let onChange: (Double) -> Void
+
+    @State private var draftValue: Double
+
+    init(
+        title: String,
+        value: Double,
+        range: ClosedRange<Double>,
+        step: Double,
+        leadingLabel: String,
+        trailingLabel: String,
+        valueLabel: @escaping (Double) -> String,
+        onChange: @escaping (Double) -> Void
+    ) {
+        self.title = title
+        self.value = value
+        self.range = range
+        self.step = step
+        self.leadingLabel = leadingLabel
+        self.trailingLabel = trailingLabel
+        self.valueLabel = valueLabel
+        self.onChange = onChange
+        _draftValue = State(initialValue: value)
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                ValueBadge(text: valueLabel(draftValue))
+            }
+            Slider(value: $draftValue, in: range, step: step) { editing in
+                if !editing {
+                    onChange(draftValue)
+                }
+            }
+            .controlSize(.small)
+            HStack {
+                Text(leadingLabel)
+                Spacer()
+                Text(trailingLabel)
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+        .onChange(of: value) { newValue in
+            draftValue = newValue
+        }
+    }
+}
+
+private struct SettingToggleRow: View {
+    let title: String
+    let isOn: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer(minLength: 0)
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { isOn },
+                    set: { onChange($0) }
+                )
+            )
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+        }
+    }
+}
+
+private struct ValueBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+}
+
+private func formatDecimal(_ value: Double) -> String {
+    String(format: "%.2f", value)
+        .replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)
 }
 
 private struct SidebarView: View {
