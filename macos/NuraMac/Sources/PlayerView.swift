@@ -89,7 +89,7 @@ struct PlayerView: View {
                     sidebarHovered = hovering
                     updateControlsVisibility()
                 }
-                    .frame(width: 300)
+                    .frame(width: sidebar == .settings ? 360 : 300)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
@@ -494,11 +494,35 @@ private enum SidebarTab: String, CaseIterable, Identifiable {
     }
 }
 
+private enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "General"
+    case video = "Video"
+    case audio = "Audio"
+    case subtitles = "Subtitles"
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape"
+        case .video: return "rectangle.on.rectangle"
+        case .audio: return "waveform"
+        case .subtitles: return "captions.bubble"
+        }
+    }
+
+    var accessibilityIdentifier: String {
+        "player.settings-tab-" + rawValue.lowercased()
+    }
+}
+
 private struct SettingsSidebarView: View {
     @ObservedObject var model: PlayerViewModel
     let onClose: () -> Void
     let onOpenURL: () -> Void
     let onTogglePiP: () -> Void
+
+    @State private var selectedTab: SettingsTab = .general
 
     var body: some View {
         VStack(spacing: 0) {
@@ -516,102 +540,33 @@ private struct SettingsSidebarView: View {
 
             Divider()
 
+            HStack(spacing: 4) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        Label(tab.rawValue, systemImage: tab.symbol)
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(selectedTab == tab ? Color.primary : Color.secondary)
+                    .background(selectedTab == tab ? Color.accentColor.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .accessibilityLabel(tab.rawValue)
+                    .accessibilityValue(selectedTab == tab ? "selected" : "unselected")
+                    .accessibilityIdentifier(tab.accessibilityIdentifier)
+                }
+            }
+            .padding(3)
+            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    settingsSection("Media") {
-                        Button(action: model.openPanel) {
-                            Label("Open Media", systemImage: "folder")
-                        }
-                        .keyboardShortcut("o", modifiers: [.command])
-
-                        Button(action: onOpenURL) {
-                            Label("Open URL", systemImage: "link")
-                        }
-                        .keyboardShortcut("l", modifiers: [.command])
-
-                        Menu {
-                            if model.snapshot.recentItems.isEmpty {
-                                Text("No recent media")
-                            } else {
-                                ForEach(Array(model.snapshot.recentItems.enumerated()), id: \.offset) { _, item in
-                                    Button(item.title) { model.openRecent(item) }
-                                }
-                            }
-                        } label: {
-                            Label("Recent Media", systemImage: "clock.arrow.circlepath")
-                        }
-                        .menuStyle(.borderlessButton)
-                    }
-
-                    settingsSection("Playback") {
-                        Button { model.seekRelative(-5) } label: { Label("Back 5 Seconds", systemImage: "gobackward.5") }
-                        Button { model.seekRelative(5) } label: { Label("Forward 5 Seconds", systemImage: "goforward.5") }
-                        Button { model.seekRelative(-30) } label: { Label("Back 30 Seconds", systemImage: "gobackward.30") }
-                        Button { model.seekRelative(30) } label: { Label("Forward 30 Seconds", systemImage: "goforward.30") }
-                        Button(action: model.frameStep) { Label("Next Frame", systemImage: "forward.frame") }
-                        SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
-                    }
-
-                    settingsSection("Tracks") {
-                        AudioMenu(
-                            tracks: model.snapshot.audioTracks,
-                            selectedTrack: model.selectedAudioTrack,
-                            devices: model.snapshot.audioDevices,
-                            delay: model.snapshot.audioDelaySeconds,
-                            onSelectTrack: model.selectAudioTrack,
-                            onSelectDevice: model.setAudioDevice,
-                            onSetDelay: model.setAudioDelay
-                        )
-                        SubtitleMenu(
-                            tracks: model.snapshot.subtitleTracks,
-                            selectedTrack: model.selectedSubtitleTrack,
-                            visible: model.snapshot.subtitlesVisible,
-                            delay: model.snapshot.subtitleDelaySeconds,
-                            scale: model.snapshot.subtitleScale,
-                            position: model.snapshot.subtitlePosition,
-                            onSelectTrack: model.selectSubtitleTrack,
-                            onSetVisible: model.setSubtitlesVisible,
-                            onSetDelay: model.setSubtitleDelay,
-                            onSetScale: model.setSubtitleScale,
-                            onSetPosition: model.setSubtitlePosition
-                        )
-                        Button(action: model.openExternalSubtitle) {
-                            Label("Load External Subtitle", systemImage: "text.badge.plus")
-                        }
-                    }
-
-                    settingsSection("Video") {
-                        VideoMenu(
-                            aspect: model.snapshot.videoAspect,
-                            rotation: model.snapshot.videoRotationDegrees,
-                            flipped: model.snapshot.videoFlipped,
-                            onSetAspect: model.setVideoAspect,
-                            onFitToVideo: model.fitWindowToVideo,
-                            onRotate: model.rotateVideo,
-                            onToggleFlip: model.toggleVideoFlip
-                        )
-                    }
-
-                    settingsSection("Looping") {
-                        Button(action: model.toggleLoop) {
-                            Label(model.loopEnabled ? "Disable Loop" : "Loop Current Item", systemImage: model.loopEnabled ? "repeat.1" : "repeat")
-                        }
-                        Button(action: model.togglePlaylistLoop) {
-                            Label(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", systemImage: model.snapshot.playlistLoop ? "repeat.circle.fill" : "repeat.circle")
-                        }
-                        Button(action: model.shufflePlaylist) { Label("Shuffle Playlist", systemImage: "shuffle") }
-                        Button(action: model.advanceABLoop) { Label(model.abLoopLabel, systemImage: model.abLoopSymbol) }
-                    }
-
-                    settingsSection("Window & Tools") {
-                        Button(action: model.toggleAlwaysOnTop) {
-                            Label(model.alwaysOnTop ? "Release Window" : "Keep Window on Top", systemImage: model.alwaysOnTop ? "pin.fill" : "pin")
-                        }
-                        Button(action: onTogglePiP) { Label("Picture in Picture", systemImage: "pip") }
-                        Button(action: model.screenshot) { Label("Screenshot", systemImage: "camera") }
-                        Button(action: model.copyScreenshot) { Label("Copy Screenshot", systemImage: "doc.on.doc") }
-                        Button(action: model.chooseScreenshotDirectory) { Label("Choose Screenshot Folder", systemImage: "folder.badge.gearshape") }
-                    }
+                    content
                 }
                 .buttonStyle(.borderless)
                 .padding(14)
@@ -623,6 +578,191 @@ private struct SettingsSidebarView: View {
     }
 
     @ViewBuilder
+    private var content: some View {
+        switch selectedTab {
+        case .general:
+            generalContent
+        case .video:
+            videoContent
+        case .audio:
+            audioContent
+        case .subtitles:
+            subtitleContent
+        }
+    }
+
+    @ViewBuilder
+    private var generalContent: some View {
+        settingsSection("Media") {
+            Button(action: model.openPanel) { Label("Open Media", systemImage: "folder") }
+                .keyboardShortcut("o", modifiers: [.command])
+            Button(action: onOpenURL) { Label("Open URL", systemImage: "link") }
+                .keyboardShortcut("l", modifiers: [.command])
+            Menu {
+                if model.snapshot.recentItems.isEmpty {
+                    Text("No recent media")
+                } else {
+                    ForEach(Array(model.snapshot.recentItems.enumerated()), id: \.offset) { _, item in
+                        Button(item.title) { model.openRecent(item) }
+                    }
+                }
+            } label: {
+                Label("Recent Media", systemImage: "clock.arrow.circlepath")
+            }
+            .menuStyle(.borderlessButton)
+        }
+
+        settingsSection("Playback") {
+            Button { model.seekRelative(-5) } label: { Label("Back 5 Seconds", systemImage: "gobackward.5") }
+            Button { model.seekRelative(5) } label: { Label("Forward 5 Seconds", systemImage: "goforward.5") }
+            Button { model.seekRelative(-30) } label: { Label("Back 30 Seconds", systemImage: "gobackward.30") }
+            Button { model.seekRelative(30) } label: { Label("Forward 30 Seconds", systemImage: "goforward.30") }
+            Button(action: model.frameStep) { Label("Next Frame", systemImage: "forward.frame") }
+            SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+        }
+
+        settingsSection("Looping") {
+            Button(action: model.toggleLoop) {
+                Label(model.loopEnabled ? "Disable Loop" : "Loop Current Item", systemImage: model.loopEnabled ? "repeat.1" : "repeat")
+            }
+            Button(action: model.togglePlaylistLoop) {
+                Label(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", systemImage: model.snapshot.playlistLoop ? "repeat.circle.fill" : "repeat.circle")
+            }
+            Button(action: model.shufflePlaylist) { Label("Shuffle Playlist", systemImage: "shuffle") }
+            Button(action: model.advanceABLoop) { Label(model.abLoopLabel, systemImage: model.abLoopSymbol) }
+        }
+
+        settingsSection("Window & Tools") {
+            Button(action: model.toggleAlwaysOnTop) {
+                Label(model.alwaysOnTop ? "Release Window" : "Keep Window on Top", systemImage: model.alwaysOnTop ? "pin.fill" : "pin")
+            }
+            Button(action: onTogglePiP) { Label("Picture in Picture", systemImage: "pip") }
+            Button(action: model.screenshot) { Label("Screenshot", systemImage: "camera") }
+            Button(action: model.copyScreenshot) { Label("Copy Screenshot", systemImage: "doc.on.doc") }
+            Button(action: model.chooseScreenshotDirectory) { Label("Choose Screenshot Folder", systemImage: "folder.badge.gearshape") }
+        }
+    }
+
+    @ViewBuilder
+    private var videoContent: some View {
+        settingsSection("Video track") {
+            TrackPicker(
+                tracks: model.snapshot.videoTracks,
+                selectedTrack: model.snapshot.videoTracks.first(where: \.selected)?.id ?? -1,
+                onSelect: model.selectVideoTrack,
+                icon: "rectangle.on.rectangle"
+            )
+        }
+
+        settingsSection("Aspect ratio") {
+            Picker("Aspect ratio", selection: Binding(
+                get: { model.snapshot.videoAspect },
+                set: { model.setVideoAspect($0) }
+            )) {
+                ForEach(["Auto", "16:9", "4:3", "1.85:1", "2.35:1"], id: \.self) { value in
+                    Text(value == "Auto" ? "Default" : value).tag(value)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            Button("Fit to Video", action: model.fitWindowToVideo)
+        }
+
+        settingsSection("Transform") {
+            HStack {
+                Text("Rotation")
+                Spacer()
+                Button("Rotate 90°", action: model.rotateVideo)
+                Button(model.snapshot.videoFlipped ? "Unflip" : "Flip", action: model.toggleVideoFlip)
+            }
+        }
+
+        settingsSection("Speed") {
+            SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+        }
+    }
+
+    @ViewBuilder
+    private var audioContent: some View {
+        settingsSection("Audio track") {
+            TrackPicker(
+                tracks: model.snapshot.audioTracks,
+                selectedTrack: model.selectedAudioTrack,
+                onSelect: model.selectAudioTrack,
+                icon: "waveform"
+            )
+        }
+
+        settingsSection("Output") {
+            Menu {
+                if model.snapshot.audioDevices.isEmpty {
+                    Text("Default Output")
+                } else {
+                    ForEach(model.snapshot.audioDevices) { device in
+                        Button {
+                            model.setAudioDevice(device.id)
+                        } label: {
+                            checkedLabel(device.name, selected: device.selected)
+                        }
+                    }
+                }
+            } label: {
+                Label(model.snapshot.audioDevices.first(where: \.selected)?.name ?? "Default Output", systemImage: "hifispeaker")
+            }
+            .menuStyle(.borderlessButton)
+        }
+
+        settingsSection("Audio delay") {
+            delayButtons(current: model.snapshot.audioDelaySeconds, onSelect: model.setAudioDelay, prefix: "Audio")
+        }
+    }
+
+    @ViewBuilder
+    private var subtitleContent: some View {
+        settingsSection("Subtitle") {
+            Toggle("Show Subtitles", isOn: Binding(
+                get: { model.snapshot.subtitlesVisible },
+                set: { model.setSubtitlesVisible($0) }
+            ))
+            TrackPicker(
+                tracks: model.snapshot.subtitleTracks,
+                selectedTrack: model.selectedSubtitleTrack,
+                onSelect: model.selectSubtitleTrack,
+                icon: "captions.bubble"
+            )
+        }
+
+        settingsSection("External subtitles") {
+            Button(action: model.openExternalSubtitle) {
+                Label("Load External Subtitle", systemImage: "text.badge.plus")
+            }
+        }
+
+        settingsSection("Subtitle delay") {
+            delayButtons(current: model.snapshot.subtitleDelaySeconds, onSelect: model.setSubtitleDelay, prefix: "Subtitle")
+        }
+
+        settingsSection("Appearance") {
+            Picker("Scale", selection: Binding(
+                get: { model.snapshot.subtitleScale },
+                set: { model.setSubtitleScale($0) }
+            )) {
+                ForEach([0.8, 1.0, 1.2, 1.4, 1.6], id: \.self) { value in
+                    Text("Scale \(value, specifier: "%.1f")x").tag(value)
+                }
+            }
+            Picker("Position", selection: Binding(
+                get: { model.snapshot.subtitlePosition },
+                set: { model.setSubtitlePosition($0) }
+            )) {
+                ForEach([70.0, 80.0, 90.0, 100.0], id: \.self) { value in
+                    Text("Position \(Int(value))%").tag(value)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
@@ -630,6 +770,39 @@ private struct SettingsSidebarView: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 8, content: content)
         }
+    }
+}
+
+private struct TrackPicker: View {
+    let tracks: [Track]
+    let selectedTrack: Int64
+    let onSelect: (Int64) -> Void
+    let icon: String
+
+    var body: some View {
+        Menu {
+            if tracks.isEmpty {
+                Text("None")
+            } else {
+                ForEach(tracks, id: \.id) { track in
+                    Button {
+                        onSelect(track.id)
+                    } label: {
+                        checkedLabel(track.title ?? track.language ?? "Track \(track.id)", selected: track.id == selectedTrack)
+                    }
+                }
+            }
+        } label: {
+            Label(currentTitle, systemImage: icon)
+                .lineLimit(1)
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private var currentTitle: String {
+        tracks.first(where: { $0.id == selectedTrack })?.title
+            ?? tracks.first(where: { $0.id == selectedTrack })?.language
+            ?? (tracks.isEmpty ? "None" : "Select Track")
     }
 }
 

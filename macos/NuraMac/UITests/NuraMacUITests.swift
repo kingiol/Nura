@@ -88,6 +88,32 @@ final class NuraMacUITests: XCTestCase {
         assertValue(closedToggle, becomes: "closed", timeout: 5)
     }
 
+    func testCanSwitchSettingsCategories() {
+        let settingsToggle = app.buttons["player.settings-toggle"]
+        XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
+        settingsToggle.click()
+
+        let general = app.buttons["player.settings-tab-general"]
+        let video = app.buttons["player.settings-tab-video"]
+        let audio = app.buttons["player.settings-tab-audio"]
+        let subtitles = app.buttons["player.settings-tab-subtitles"]
+
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        XCTAssertTrue(video.exists)
+        XCTAssertTrue(audio.exists)
+        XCTAssertTrue(subtitles.exists)
+        assertValue(general, becomes: "selected")
+
+        for tab in [video, audio, subtitles] {
+            tab.click()
+            assertValue(tab, becomes: "selected")
+            assertValue(general, becomes: "unselected")
+        }
+
+        app.buttons["player.sidebar-close"].click()
+        assertValue(settingsToggle, becomes: "closed")
+    }
+
     private func assertValue(_ element: XCUIElement, becomes expected: String, timeout: TimeInterval = 10) {
         let predicate = NSPredicate(format: "value == %@", expected)
         expectation(for: predicate, evaluatedWith: element)
