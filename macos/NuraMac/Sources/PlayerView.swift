@@ -563,7 +563,6 @@ private struct SettingsSidebarView: View {
                     .accessibilityIdentifier(tab.accessibilityIdentifier)
                 }
             }
-            .background(Color.black.opacity(0.12))
             .padding(.horizontal, 12)
             .padding(.top, 4)
             .padding(.bottom, 2)
@@ -576,7 +575,6 @@ private struct SettingsSidebarView: View {
                 .padding(14)
             }
         }
-        .background(Color(red: 0.22, green: 0.25, blue: 0.14).opacity(0.94))
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) { Divider() }
         .accessibilityIdentifier("player.sidebar")
@@ -811,7 +809,7 @@ private struct SettingsSidebarView: View {
             VStack(alignment: .leading, spacing: 8, content: content)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 }
