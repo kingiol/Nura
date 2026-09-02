@@ -7,7 +7,6 @@ struct PlayerView: View {
     private let keepControlsVisible: Bool
     @State private var isDropTargeted = false
     @State private var controlsVisible = true
-    @State private var titlebarHovered = false
     @State private var controlBarHovered = false
     @State private var sidebarHovered = false
     @State private var sidebar: SidebarTab?
@@ -48,13 +47,8 @@ struct PlayerView: View {
                     Button("Toggle Fullscreen", action: model.toggleFullscreen)
                 }
 
-            if model.snapshot.item == nil {
-                EmptyPlayerView(isDropTargeted: isDropTargeted)
-            }
-
             VStack(spacing: 0) {
                 if controlsVisible {
-                    titlebar
                     Spacer()
                     controlBar.transition(.opacity)
                 } else {
@@ -99,7 +93,7 @@ struct PlayerView: View {
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .animation(.easeOut(duration: 0.18), value: sidebar)
         .onHover { hovering in
-            if hovering, !titlebarHovered, !controlBarHovered, !sidebarHovered { revealControls() }
+            if hovering, !controlBarHovered, !sidebarHovered { revealControls() }
         }
         .onAppear {
             model.updateWindowGeometryIfNeeded()
@@ -112,40 +106,19 @@ struct PlayerView: View {
         }
     }
 
-    private var titlebar: some View {
-        HStack(spacing: 12) {
-            Text(model.title)
-                .font(.headline)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .accessibilityIdentifier("player.title")
-                .accessibilityLabel(model.title)
-
-            Spacer(minLength: 8)
-
-            Text(model.statusText)
-                .font(.caption)
-                .foregroundStyle(model.hasError ? .red : .secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .accessibilityIdentifier("player.status")
-                .accessibilityValue(model.statusText)
-
-        }
-        .padding(.leading, 82)
-        .padding(.trailing, 14)
-        .padding(.vertical, 9)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.horizontal, 10)
-        .padding(.top, 8)
-        .onHover { hovering in
-            titlebarHovered = hovering
-            updateControlsVisibility()
-        }
-    }
-
     private var controlBar: some View {
         VStack(spacing: 8) {
+            if let title = model.snapshot.item?.title {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("player.title")
+                    .accessibilityLabel(title)
+                    .accessibilityValue(title)
+            }
+
             HStack(spacing: 8) {
                 Text(currentTimeText)
                     .font(.caption.monospacedDigit())
@@ -281,17 +254,17 @@ struct PlayerView: View {
     private func revealControls() {
         controlsVisible = true
         hideControlsTask?.cancel()
-        guard !keepControlsVisible, !titlebarHovered, !controlBarHovered, !sidebarHovered else { return }
+        guard !keepControlsVisible, !controlBarHovered, !sidebarHovered else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
-            guard !titlebarHovered, !controlBarHovered, !sidebarHovered else { return }
+            guard !controlBarHovered, !sidebarHovered else { return }
             controlsVisible = false
         }
     }
 
     private func updateControlsVisibility() {
-        if titlebarHovered || controlBarHovered || sidebarHovered {
+        if controlBarHovered || sidebarHovered {
             revealControls()
         } else {
             scheduleControlsHide()
@@ -303,7 +276,7 @@ struct PlayerView: View {
         guard !keepControlsVisible else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            guard !Task.isCancelled, !titlebarHovered, !controlBarHovered, !sidebarHovered else { return }
+            guard !Task.isCancelled, !controlBarHovered, !sidebarHovered else { return }
             controlsVisible = false
         }
     }
@@ -1078,22 +1051,6 @@ private struct SidebarView: View {
     private func format(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))
         return String(format: "%02d:%02d", total / 60, total % 60)
-    }
-}
-
-private struct EmptyPlayerView: View {
-    let isDropTargeted: Bool
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: isDropTargeted ? "arrow.down.doc.fill" : "film")
-                .font(.system(size: 34))
-                .foregroundStyle(isDropTargeted ? .blue : .secondary)
-            Text(isDropTargeted ? "Release to open" : "Open a media file to begin")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-        }
-        .allowsHitTesting(false)
     }
 }
 
