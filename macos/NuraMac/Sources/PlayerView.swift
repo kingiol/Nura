@@ -545,6 +545,7 @@ private struct SettingsSidebarView: View {
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) { Divider() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.sidebar")
     }
 
@@ -1025,6 +1026,7 @@ private struct SidebarView: View {
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) { Divider() }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.sidebar")
     }
 

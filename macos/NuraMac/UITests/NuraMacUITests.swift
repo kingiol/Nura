@@ -8,34 +8,12 @@ final class NuraMacUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        let fixturePath = ProcessInfo.processInfo.environment["NURA_E2E_MEDIA_PATH"]
-            ?? URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("test-fixtures/media/oceans.mp4")
-                .path
-        guard FileManager.default.fileExists(atPath: fixturePath) else {
-            throw XCTSkip("E2E fixture does not exist: \(fixturePath)")
-        }
-
         stateDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("NuraMacUITests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
         defaultsSuiteName = "com.nura.player.uitests.\(UUID().uuidString)"
 
         app = XCUIApplication()
-        app.launchArguments = [
-            "-e2e-media-path", fixturePath,
-            "-e2e-state-dir", stateDirectory.path,
-            "-e2e-defaults-suite", defaultsSuiteName,
-            "-e2e-keep-controls-visible",
-            "-e2e-disable-window-resize",
-            "-ApplePersistenceIgnoreState", "YES",
-        ]
-        app.launch()
-        app.activate()
     }
 
     override func tearDownWithError() throws {
@@ -48,13 +26,27 @@ final class NuraMacUITests: XCTestCase {
         }
     }
 
-    func testLoadsTheConfiguredMediaFixture() {
+    func testLoadsTheConfiguredMediaFixture() throws {
+        try launch(loadsFixture: true)
+
         let title = app.staticTexts["player.title"]
+        let slider = app.sliders["player.seek-slider"]
         XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
         XCTAssertEqual(title.value as? String, "oceans.mp4")
+        XCTAssertLessThan(title.frame.maxY, slider.frame.minY)
     }
 
-    func testCanPauseAndResumePlayback() {
+    func testDoesNotShowTitleOrEmptyStateWithoutMedia() throws {
+        try launch(loadsFixture: false)
+
+        XCTAssertFalse(app.staticTexts["player.title"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.staticTexts["Open a media file to begin"].exists)
+    }
+
+    func testCanPauseAndResumePlayback() throws {
+        try launch(loadsFixture: true)
+
         let playback = app.buttons["player.playback-toggle"]
         XCTAssertTrue(playback.waitForExistence(timeout: 15))
         assertValue(playback, becomes: "playing", timeout: 15)
@@ -64,7 +56,9 @@ final class NuraMacUITests: XCTestCase {
         assertValue(playback, becomes: "playing")
     }
 
-    func testCanMuteAndUnmute() {
+    func testCanMuteAndUnmute() throws {
+        try launch(loadsFixture: true)
+
         let mute = app.buttons["player.mute-toggle"]
         XCTAssertTrue(mute.waitForExistence(timeout: 15))
         assertValue(mute, becomes: "unmuted", timeout: 15)
@@ -74,7 +68,9 @@ final class NuraMacUITests: XCTestCase {
         assertValue(mute, becomes: "unmuted")
     }
 
-    func testCanOpenAndClosePlaylistSidebar() {
+    func testCanOpenAndClosePlaylistSidebar() throws {
+        try launch(loadsFixture: true)
+
         let toggle = app.buttons["player.sidebar-toggle"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 15))
         assertValue(toggle, becomes: "closed", timeout: 5)
@@ -88,7 +84,9 @@ final class NuraMacUITests: XCTestCase {
         assertValue(closedToggle, becomes: "closed", timeout: 5)
     }
 
-    func testCanSwitchSettingsCategories() {
+    func testCanSwitchSettingsCategories() throws {
+        try launch(loadsFixture: true)
+
         let settingsToggle = app.buttons["player.settings-toggle"]
         XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
         settingsToggle.click()
@@ -118,5 +116,40 @@ final class NuraMacUITests: XCTestCase {
         let predicate = NSPredicate(format: "value == %@", expected)
         expectation(for: predicate, evaluatedWith: element)
         waitForExpectations(timeout: timeout)
+    }
+
+    private func launch(loadsFixture: Bool) throws {
+        let stateDirectory = try XCTUnwrap(stateDirectory)
+        let defaultsSuiteName = try XCTUnwrap(defaultsSuiteName)
+        var arguments: [String] = [
+            "-e2e-state-dir", stateDirectory.path,
+            "-e2e-defaults-suite", defaultsSuiteName,
+            "-e2e-keep-controls-visible",
+            "-e2e-disable-window-resize",
+            "-ApplePersistenceIgnoreState", "YES",
+        ]
+
+        if loadsFixture {
+            arguments.insert(contentsOf: ["-e2e-media-path", try requiredFixturePath()], at: 0)
+        }
+
+        app.launchArguments = arguments
+        app.launch()
+        app.activate()
+    }
+
+    private func requiredFixturePath() throws -> String {
+        let fixturePath = ProcessInfo.processInfo.environment["NURA_E2E_MEDIA_PATH"]
+            ?? URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("test-fixtures/media/oceans.mp4")
+                .path
+        guard FileManager.default.fileExists(atPath: fixturePath) else {
+            throw XCTSkip("E2E fixture does not exist: \(fixturePath)")
+        }
+        return fixturePath
     }
 }
