@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct PlayerView: View {
-    @StateObject private var model: PlayerViewModel
+    @ObservedObject var model: PlayerViewModel
     private let keepControlsVisible: Bool
     @State private var isDropTargeted = false
     @State private var controlsVisible = true
@@ -14,9 +14,9 @@ struct PlayerView: View {
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var pipPanel: NSPanel?
 
-    init(launchConfiguration: PlayerLaunchConfiguration = .current) {
-        _model = StateObject(wrappedValue: PlayerViewModel(launchConfiguration: launchConfiguration))
-        keepControlsVisible = launchConfiguration.keepControlsVisible
+    init(model: PlayerViewModel, keepControlsVisible: Bool) {
+        self.model = model
+        self.keepControlsVisible = keepControlsVisible
     }
 
     var body: some View {
@@ -68,7 +68,6 @@ struct PlayerView: View {
                         SettingsSidebarView(
                             model: model,
                             onClose: { self.sidebar = nil },
-                            onOpenURL: openURLPanel,
                             onTogglePiP: togglePiP
                         )
                     } else {
@@ -321,10 +320,6 @@ struct PlayerView: View {
                 .keyboardShortcut(.leftArrow, modifiers: [.option])
             Button { model.seekRelative(30) } label: { EmptyView() }
                 .keyboardShortcut(.rightArrow, modifiers: [.option])
-            Button(action: model.openPanel) { EmptyView() }
-                .keyboardShortcut("o", modifiers: [.command])
-            Button(action: openURLPanel) { EmptyView() }
-                .keyboardShortcut("l", modifiers: [.command])
         }
         .frame(width: 0, height: 0)
         .opacity(0)
@@ -350,20 +345,6 @@ struct PlayerView: View {
         panel.center()
         panel.makeKeyAndOrderFront(nil)
         pipPanel = panel
-    }
-
-    private func openURLPanel() {
-        let alert = NSAlert()
-        alert.messageText = "Open URL"
-        alert.informativeText = "Enter a public media URL, YouTube link, or Bilibili link."
-        let field = NSTextField(string: "")
-        field.placeholderString = "https://..."
-        field.frame = NSRect(x: 0, y: 0, width: 360, height: 24)
-        alert.accessoryView = field
-        alert.addButton(withTitle: "Open")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        model.openURL(field.stringValue)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -516,10 +497,24 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
+func showOpenURLPanel(model: PlayerViewModel) {
+    let alert = NSAlert()
+    alert.messageText = "Open URL"
+    alert.informativeText = "Enter a public media URL, YouTube link, or Bilibili link."
+    let field = NSTextField(string: "")
+    field.placeholderString = "https://..."
+    field.frame = NSRect(x: 0, y: 0, width: 360, height: 24)
+    alert.accessoryView = field
+    alert.addButton(withTitle: "Open")
+    alert.addButton(withTitle: "Cancel")
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    model.openURL(field.stringValue)
+}
+
 private struct SettingsSidebarView: View {
     @ObservedObject var model: PlayerViewModel
     let onClose: () -> Void
-    let onOpenURL: () -> Void
     let onTogglePiP: () -> Void
 
     @State private var selectedTab: SettingsTab = .general
@@ -596,25 +591,6 @@ private struct SettingsSidebarView: View {
 
     @ViewBuilder
     private var generalContent: some View {
-        settingsSection("Media") {
-            Button(action: model.openPanel) { Label("Open Media", systemImage: "folder") }
-                .keyboardShortcut("o", modifiers: [.command])
-            Button(action: onOpenURL) { Label("Open URL", systemImage: "link") }
-                .keyboardShortcut("l", modifiers: [.command])
-            Menu {
-                if model.snapshot.recentItems.isEmpty {
-                    Text("No recent media")
-                } else {
-                    ForEach(Array(model.snapshot.recentItems.enumerated()), id: \.offset) { _, item in
-                        Button(item.title) { model.openRecent(item) }
-                    }
-                }
-            } label: {
-                Label("Recent Media", systemImage: "clock.arrow.circlepath")
-            }
-            .menuStyle(.borderlessButton)
-        }
-
         settingsSection("Playback") {
             Button { model.seekRelative(-5) } label: { Label("Back 5 Seconds", systemImage: "gobackward.5") }
             Button { model.seekRelative(5) } label: { Label("Forward 5 Seconds", systemImage: "goforward.5") }
