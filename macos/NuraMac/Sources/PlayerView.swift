@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct PlayerView: View {
     @Bindable var model: PlayerViewModel
     private let keepControlsVisible: Bool
+    private let onOpenInNewWindow: (MediaItem) -> Void
     private let onWindowAvailable: (NSWindow) -> Void
     @State private var isDropTargeted = false
     @State private var controlsVisible = true
@@ -16,10 +17,12 @@ struct PlayerView: View {
     init(
         model: PlayerViewModel,
         keepControlsVisible: Bool,
+        onOpenInNewWindow: @escaping (MediaItem) -> Void = { _ in },
         onWindowAvailable: @escaping (NSWindow) -> Void = { _ in }
     ) {
         self.model = model
         self.keepControlsVisible = keepControlsVisible
+        self.onOpenInNewWindow = onOpenInNewWindow
         self.onWindowAvailable = onWindowAvailable
     }
 
@@ -88,7 +91,17 @@ struct PlayerView: View {
                                 onMovePlaylistItem: model.movePlaylistItem,
                                 onSeek: { position in model.seek(to: position) },
                                 onSelectVideoTrack: model.selectVideoTrack,
-                                onAddExternalSubtitle: model.openExternalSubtitle
+                                onAddExternalSubtitle: model.openExternalSubtitle,
+                                onOpenInNewWindow: onOpenInNewWindow,
+                                onAddFile: model.addPlaylistPanel,
+                                onAddURL: model.addPlaylistURLPrompt,
+                                onClearPlaylist: model.clearPlaylist,
+                                onShufflePlaylist: model.shufflePlaylist,
+                                onToggleLoop: model.cyclePlaylistLoopMode,
+                                onSortPlaylist: model.sortPlaylist,
+                                onPlayNext: model.playPlaylistItemNext,
+                                loopLabel: model.playlistLoopLabel,
+                                loopSymbol: model.playlistLoopSymbol
                             )
                         }
                     }
@@ -1000,6 +1013,16 @@ private struct SidebarView: View {
     let onSeek: (Double) -> Void
     let onSelectVideoTrack: (Int64) -> Void
     let onAddExternalSubtitle: () -> Void
+    let onOpenInNewWindow: (MediaItem) -> Void
+    let onAddFile: () -> Void
+    let onAddURL: () -> Void
+    let onClearPlaylist: () -> Void
+    let onShufflePlaylist: () -> Void
+    let onToggleLoop: () -> Void
+    let onSortPlaylist: (PlaylistSortKey, Bool) -> Void
+    let onPlayNext: (Int) -> Void
+    let loopLabel: String
+    let loopSymbol: String
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1015,77 +1038,69 @@ private struct SidebarView: View {
             }
             .padding(12)
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    switch tab {
-                    case .settings:
-                        EmptyView()
-                    case .playlist:
-                        if snapshot.playlist.isEmpty {
-                            Text("No items in playlist").foregroundStyle(.secondary)
-                        } else {
-                            ForEach(Array(snapshot.playlist.enumerated()), id: \.offset) { index, item in
-                                HStack(spacing: 6) {
-                                    Button { onPlayIndex(index) } label: {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: index == snapshot.playlistIndex ? "play.fill" : "film")
-                                                .frame(width: 16)
-                                            Text(item.title).lineLimit(1)
-                                            Spacer(minLength: 0)
-                                        }
-                                    }
-                                    .buttonStyle(.borderless)
-                                    Menu {
-                                        if index > 0 {
-                                            Button("Move Up") { onMovePlaylistItem(index, index - 1) }
-                                        }
-                                        if index + 1 < snapshot.playlist.count {
-                                            Button("Move Down") { onMovePlaylistItem(index, index + 1) }
-                                        }
-                                        Divider()
-                                        Button("Remove", role: .destructive) { onRemovePlaylistIndex(index) }
-                                    } label: {
-                                        Image(systemName: "ellipsis.circle")
-                                    }
-                                    .menuStyle(.borderlessButton)
-                                    .fixedSize()
-                                }
-                            }
-                        }
-                    case .chapters:
-                        if snapshot.chapters.isEmpty {
-                            Text("No chapters").foregroundStyle(.secondary)
-                        } else {
-                            ForEach(snapshot.chapters) { chapter in
-                                Button {
-                                    onSeek(chapter.startSeconds)
-                                } label: {
-                                    HStack {
-                                        Text(chapter.title).lineLimit(1)
-                                        Spacer()
-                                        Text(format(chapter.startSeconds)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                    }
-                                }
-                                .buttonStyle(.borderless)
-                            }
-                        }
-                    case .video:
-                        trackList(snapshot.videoTracks, onSelect: onSelectVideoTrack)
-                    case .audio:
-                        trackList(snapshot.audioTracks)
-                    case .subtitles:
-                        Button("Load External Subtitle", action: onAddExternalSubtitle)
-                            .buttonStyle(.borderless)
-                        trackList(snapshot.subtitleTracks)
+            if tab == .playlist {
+                PlaylistSidebarContent(
+                    snapshot: snapshot,
+                    onPlayIndex: onPlayIndex,
+                    onRemovePlaylistIndex: onRemovePlaylistIndex,
+                    onMovePlaylistItem: onMovePlaylistItem,
+                    onAddFile: onAddFile,
+                    onAddURL: onAddURL,
+                    onClear: onClearPlaylist,
+                    onShuffle: onShufflePlaylist,
+                    onToggleLoop: onToggleLoop,
+                    onSort: onSortPlaylist,
+                    onPlayNext: onPlayNext,
+                    loopLabel: loopLabel,
+                    loopSymbol: loopSymbol,
+                    onOpenInNewWindow: onOpenInNewWindow
+                )
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        nonPlaylistContent
                     }
+                    .padding(14)
                 }
-                .padding(14)
             }
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) { Divider() }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.sidebar")
+    }
+
+    @ViewBuilder
+    private var nonPlaylistContent: some View {
+        switch tab {
+        case .settings:
+            EmptyView()
+        case .playlist:
+            EmptyView()
+        case .chapters:
+            if snapshot.chapters.isEmpty {
+                Text("No chapters").foregroundStyle(.secondary)
+            } else {
+                ForEach(snapshot.chapters) { chapter in
+                    Button { onSeek(chapter.startSeconds) } label: {
+                        HStack {
+                            Text(chapter.title).lineLimit(1)
+                            Spacer()
+                            Text(format(chapter.startSeconds)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        case .video:
+            trackList(snapshot.videoTracks, onSelect: onSelectVideoTrack)
+        case .audio:
+            trackList(snapshot.audioTracks)
+        case .subtitles:
+            Button("Load External Subtitle", action: onAddExternalSubtitle)
+                .buttonStyle(.borderless)
+            trackList(snapshot.subtitleTracks)
+        }
     }
 
     @ViewBuilder
@@ -1111,6 +1126,140 @@ private struct SidebarView: View {
     private func format(_ seconds: Double) -> String {
         let total = max(0, Int(seconds.rounded()))
         return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+}
+
+private struct PlaylistSidebarContent: View {
+    let snapshot: PlaybackSnapshot
+    let onPlayIndex: (Int) -> Void
+    let onRemovePlaylistIndex: (Int) -> Void
+    let onMovePlaylistItem: (Int, Int) -> Void
+    let onAddFile: () -> Void
+    let onAddURL: () -> Void
+    let onClear: () -> Void
+    let onShuffle: () -> Void
+    let onToggleLoop: () -> Void
+    let onSort: (PlaylistSortKey, Bool) -> Void
+    let onPlayNext: (Int) -> Void
+    let loopLabel: String
+    let loopSymbol: String
+    let onOpenInNewWindow: (MediaItem) -> Void
+
+    @State private var selection: Set<Int> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Button(action: onToggleLoop) {
+                    Label(loopLabel, systemImage: loopSymbol)
+                }
+                .buttonStyle(.borderless)
+                .help(loopLabel)
+
+                Button(action: onShuffle) {
+                    Image(systemName: "shuffle")
+                }
+                .buttonStyle(.borderless)
+                .help("Shuffle Playlist")
+
+                Menu {
+                    Section("Sort by Title") {
+                        Button("Ascending") { onSort(.title, true) }
+                        Button("Descending") { onSort(.title, false) }
+                    }
+                    Section("Sort by Location") {
+                        Button("Ascending") { onSort(.locator, true) }
+                        Button("Descending") { onSort(.locator, false) }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .menuStyle(.borderlessButton)
+                .help("Sort Playlist")
+
+                Spacer(minLength: 0)
+
+                Button(action: onAddFile) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .help("Add File")
+                .accessibilityIdentifier("player.playlist-add-file")
+
+                Button(action: onAddURL) {
+                    Image(systemName: "link")
+                }
+                .buttonStyle(.borderless)
+                .help("Add URL")
+                .accessibilityIdentifier("player.playlist-add-url")
+
+                Button {
+                    for index in selection.sorted(by: >) {
+                        onRemovePlaylistIndex(index)
+                    }
+                    selection.removeAll()
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(.borderless)
+                .help("Remove Selected")
+                .disabled(selection.isEmpty)
+
+                Button(action: onClear) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Clear Playlist")
+                .disabled(snapshot.playlist.isEmpty)
+                .accessibilityIdentifier("player.playlist-clear")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            if snapshot.playlist.isEmpty {
+                ContentUnavailableView("No items in playlist", systemImage: "music.note.list")
+            } else {
+                List(selection: $selection) {
+                    ForEach(Array(snapshot.playlist.enumerated()), id: \.offset) { index, item in
+                        Button {
+                            onPlayIndex(index)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: index == snapshot.playlistIndex ? "play.fill" : "film")
+                                    .frame(width: 16)
+                                    .foregroundStyle(index == snapshot.playlistIndex ? Color.accentColor : Color.secondary)
+                                Text(item.title)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .tag(index)
+                        .contextMenu {
+                            Button("Play Next") { onPlayNext(index) }
+                            Button("Play in New Window") { onOpenInNewWindow(item) }
+                            Divider()
+                            Button("Remove", role: .destructive) { onRemovePlaylistIndex(index) }
+                            Divider()
+                            Button("Add File…") { onAddFile() }
+                            Button("Add URL…") { onAddURL() }
+                            Button("Clear Playlist") { onClear() }
+                        }
+                    }
+                    .onMove { offsets, destination in
+                        guard offsets.count == 1, let source = offsets.first else { return }
+                        let target = destination > source ? destination - 1 : destination
+                        guard source != target else { return }
+                        onMovePlaylistItem(source, target)
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+        }
     }
 }
 

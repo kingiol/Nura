@@ -130,6 +130,23 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
+    pub fn clear_playlist(&mut self) -> Result<(), PlayerError> {
+        if self.snapshot.playlist.is_empty() {
+            return Ok(());
+        }
+        self.persist_current_position()?;
+        self.engine.stop()?;
+        self.snapshot = PlaybackSnapshot {
+            playlist_loop: self.snapshot.playlist_loop,
+            speed: self.snapshot.speed,
+            volume: self.snapshot.volume,
+            muted: self.snapshot.muted,
+            ..PlaybackSnapshot::default()
+        };
+        self.emit_state();
+        Ok(())
+    }
+
     pub fn remove_playlist_index(&mut self, index: usize) -> Result<(), PlayerError> {
         if index >= self.snapshot.playlist.len() {
             return Err(PlayerError::Engine(EngineError::Message(
@@ -957,6 +974,32 @@ mod tests {
         assert_eq!(session.snapshot.item.as_ref().unwrap().title, "second.mkv");
         assert_eq!(session.snapshot.playlist.len(), 2);
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn clear_playlist_stops_playback_and_preserves_global_settings() {
+        let root =
+            std::env::temp_dir().join(format!("nura-playlist-clear-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&root);
+        let first = root.join("first.mkv");
+        std::fs::write(&first, b"fixture").unwrap();
+        let engine = FakeEngine::default();
+        let history = MemoryHistory { resume: None };
+        let mut session = PlayerSession::new(engine, history);
+
+        session.open(&first).unwrap();
+        session.set_playlist_loop(true);
+        session.set_volume(42.0).unwrap();
+        session.set_mute(true).unwrap();
+        session.clear_playlist().unwrap();
+
+        assert!(session.snapshot.playlist.is_empty());
+        assert_eq!(session.snapshot.playlist_index, None);
+        assert_eq!(session.snapshot.playlist_loop, true);
+        assert_eq!(session.snapshot.volume, 42.0);
+        assert!(session.snapshot.muted);
+        assert_eq!(session.snapshot.status, PlaybackStatus::Empty);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

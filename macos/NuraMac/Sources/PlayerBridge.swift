@@ -16,6 +16,8 @@ private func nura_player_open_async(_ player: NuraHandle?, _ path: UnsafePointer
 private func nura_player_open_url_async(_ player: NuraHandle?, _ url: UnsafePointer<CChar>?) -> Int32
 @_silgen_name("nura_player_enqueue_async")
 private func nura_player_enqueue_async(_ player: NuraHandle?, _ locator: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_clear_playlist_async")
+private func nura_player_clear_playlist_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_remove_index_async")
 private func nura_player_remove_index_async(_ player: NuraHandle?, _ index: Int) -> Int32
 @_silgen_name("nura_player_move_index_async")
@@ -279,6 +281,7 @@ final class PlayerBridge {
     func enqueueURL(_ value: String) throws {
         try command { value.withCString { nura_player_enqueue_async(handle, $0) } }
     }
+    func clearPlaylist() throws { try command { nura_player_clear_playlist_async(handle) } }
     func removePlaylistIndex(_ index: Int) throws { try command { nura_player_remove_index_async(handle, index) } }
     func movePlaylistItem(from: Int, to: Int) throws { try command { nura_player_move_index_async(handle, from, to) } }
     func playPlaylistIndex(_ index: Int) throws { try command { nura_player_play_index_async(handle, index) } }

@@ -21,6 +21,18 @@ private enum PendingOpenRequest {
     case url(String)
 }
 
+enum PlaylistSortKey {
+    case title
+    case locator
+
+    func value(for item: MediaItem) -> String {
+        switch self {
+        case .title: return item.title
+        case .locator: return item.locator
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class PlayerViewModel {
@@ -303,6 +315,52 @@ final class PlayerViewModel {
         }
     }
 
+    func addPlaylistPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        addPlaylistURLs(panel.urls)
+    }
+
+    func addPlaylistURLs(_ urls: [URL]) {
+        let expanded = Self.expandMediaURLs(urls)
+        guard !expanded.isEmpty else {
+            showError("No supported media files were found")
+            return
+        }
+        if snapshot.item == nil {
+            openExpandedMediaURLs(expanded)
+            return
+        }
+        do {
+            for url in expanded {
+                if url.isFileURL {
+                    try bridge?.enqueue(url)
+                } else {
+                    try bridge?.enqueueURL(url.absoluteString)
+                }
+            }
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func addPlaylistURLPrompt() {
+        showOpenURLPanel { [weak self] value in
+            guard let self else { return }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if self.snapshot.item == nil {
+                self.openURL(trimmed)
+            } else {
+                self.enqueueURL(trimmed)
+            }
+        }
+    }
+
     func removePlaylistIndex(_ index: Int) {
         do {
             try bridge?.removePlaylistIndex(index)
@@ -318,6 +376,40 @@ final class PlayerViewModel {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    func clearPlaylist() {
+        do {
+            try bridge?.clearPlaylist()
+            loopEnabled = false
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func playPlaylistItemNext(_ index: Int) {
+        guard let current = snapshot.playlistIndex,
+              index != current,
+              !snapshot.playlist.isEmpty else { return }
+        let destination = index < current ? current : min(current + 1, snapshot.playlist.count - 1)
+        movePlaylistItem(from: index, to: destination)
+    }
+
+    func sortPlaylist(by key: PlaylistSortKey, ascending: Bool) {
+        guard snapshot.playlist.count > 1 else { return }
+        let sortedIDs = snapshot.playlist.enumerated().sorted { lhs, rhs in
+            let left = key.value(for: lhs.element)
+            let right = key.value(for: rhs.element)
+            return ascending ? left.localizedStandardCompare(right) == .orderedAscending : left.localizedStandardCompare(right) == .orderedDescending
+        }.map(\.offset)
+        var currentOrder = Array(snapshot.playlist.indices)
+        for target in sortedIDs.indices {
+            guard let from = currentOrder.firstIndex(of: sortedIDs[target]), from != target else { continue }
+            let itemID = currentOrder.remove(at: from)
+            currentOrder.insert(itemID, at: target)
+            movePlaylistItem(from: from, to: target)
         }
     }
 
@@ -517,6 +609,46 @@ final class PlayerViewModel {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    var playlistLoopLabel: String {
+        if loopEnabled { return "Loop Current Item" }
+        if snapshot.playlistLoop { return "Loop Playlist" }
+        return "Loop Off"
+    }
+
+    var playlistLoopSymbol: String {
+        if loopEnabled { return "repeat.1" }
+        if snapshot.playlistLoop { return "repeat" }
+        return "repeat"
+    }
+
+    func cyclePlaylistLoopMode() {
+        if loopEnabled {
+            do {
+                try bridge?.setLoop(false)
+                try bridge?.setPlaylistLoop(true)
+                loopEnabled = false
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
+        } else if snapshot.playlistLoop {
+            do {
+                try bridge?.setPlaylistLoop(false)
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
+        } else {
+            do {
+                try bridge?.setLoop(true)
+                loopEnabled = true
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
         }
     }
 
