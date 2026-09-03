@@ -1,5 +1,5 @@
 import AppKit
-import Combine
+import Observation
 import UniformTypeIdentifiers
 
 private struct VideoGeometry: Equatable {
@@ -22,8 +22,9 @@ private enum PendingOpenRequest {
 }
 
 @MainActor
-final class PlayerViewModel: ObservableObject {
-    @Published private(set) var snapshot = PlaybackSnapshot(
+@Observable
+final class PlayerViewModel {
+    private(set) var snapshot = PlaybackSnapshot(
         item: nil,
         playlist: [],
         recentItems: [],
@@ -56,19 +57,19 @@ final class PlayerViewModel: ObservableObject {
         subtitleTracks: [],
         error: nil
     )
-    @Published var seekPosition = 0.0
-    @Published private(set) var seekPreviewImage: NSImage? = nil
-    @Published private(set) var seekPreviewPosition: Double? = nil
-    @Published private(set) var isSeekPreviewVisible = false
-    @Published private(set) var volume = 100.0
-    @Published var isSeeking = false
-    @Published private(set) var lastError: String?
-    @Published private(set) var alwaysOnTop = false
-    @Published private(set) var loopEnabled = false
-    @Published private var pendingPlaybackState: Bool?
-    @Published private var pendingMutedState: Bool?
-    @Published private(set) var onlineSubtitleResults: [OnlineSubtitleResult] = []
-    @Published private(set) var isSearchingOnlineSubtitles = false
+    var seekPosition = 0.0
+    private(set) var seekPreviewImage: NSImage? = nil
+    private(set) var seekPreviewPosition: Double? = nil
+    private(set) var isSeekPreviewVisible = false
+    private(set) var volume = 100.0
+    var isSeeking = false
+    private(set) var lastError: String?
+    private(set) var alwaysOnTop = false
+    private(set) var loopEnabled = false
+    private var pendingPlaybackState: Bool?
+    private var pendingMutedState: Bool?
+    private(set) var onlineSubtitleResults: [OnlineSubtitleResult] = []
+    private(set) var isSearchingOnlineSubtitles = false
 
     private var bridge: PlayerBridge?
     private var timer: Timer?
@@ -91,6 +92,7 @@ final class PlayerViewModel: ObservableObject {
     private let defaults: UserDefaults
     private let disableWindowResize: Bool
     let settings: NuraSettings
+    @ObservationIgnored
     private lazy var nowPlaying = NowPlayingCoordinator(model: self)
 
     init(
@@ -392,7 +394,6 @@ final class PlayerViewModel: ObservableObject {
     func togglePlayback() {
         let target = !isPlaying
         pendingPlaybackState = target
-        objectWillChange.send()
         do {
             try bridge?.toggle()
             lastError = nil
@@ -405,7 +406,6 @@ final class PlayerViewModel: ObservableObject {
     func toggleMute() {
         let target = !isMuted
         pendingMutedState = target
-        objectWillChange.send()
         do {
             try bridge?.setMuted(target)
             lastError = nil

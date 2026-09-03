@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct NuraSettingsView: View {
-    @ObservedObject var settings: NuraSettings
-    @ObservedObject var model: PlayerViewModel
+    let settings: NuraSettings
+    let model: PlayerViewModel
 
     var body: some View {
         TabView {
@@ -32,8 +32,8 @@ struct NuraSettingsView: View {
 }
 
 private struct GeneralSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
-    @ObservedObject var model: PlayerViewModel
+    let settings: NuraSettings
+    let model: PlayerViewModel
 
     var body: some View {
         Form {
@@ -57,7 +57,7 @@ private struct GeneralSettingsPage: View {
 }
 
 private struct PlaybackSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
+    @Bindable var settings: NuraSettings
 
     var body: some View {
         Form {
@@ -92,7 +92,7 @@ private struct PlaybackSettingsPage: View {
 }
 
 private struct ControlsSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
+    let settings: NuraSettings
 
     var body: some View {
         Form {
@@ -112,7 +112,7 @@ private struct ControlsSettingsPage: View {
 
 private struct ShortcutEditor: View {
     let action: ShortcutAction
-    @ObservedObject var settings: NuraSettings
+    let settings: NuraSettings
 
     var body: some View {
         let binding = settings.binding(for: action)
@@ -146,7 +146,7 @@ private struct ShortcutEditor: View {
 }
 
 private struct VideoSettingsPage: View {
-    @ObservedObject var model: PlayerViewModel
+    let model: PlayerViewModel
 
     var body: some View {
         Form {
@@ -173,8 +173,8 @@ private struct VideoSettingsPage: View {
 }
 
 private struct AudioSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
-    @ObservedObject var model: PlayerViewModel
+    @Bindable var settings: NuraSettings
+    let model: PlayerViewModel
 
     var body: some View {
         Form {
@@ -206,8 +206,8 @@ private struct AudioSettingsPage: View {
 }
 
 private struct SubtitleSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
-    @ObservedObject var model: PlayerViewModel
+    @Bindable var settings: NuraSettings
+    let model: PlayerViewModel
 
     var body: some View {
         Form {
@@ -242,7 +242,7 @@ private struct SubtitleSettingsPage: View {
 }
 
 private struct NetworkSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
+    @Bindable var settings: NuraSettings
 
     var body: some View {
         Form {
@@ -262,7 +262,7 @@ private struct NetworkSettingsPage: View {
 }
 
 private struct AdvancedSettingsPage: View {
-    @ObservedObject var settings: NuraSettings
+    @Bindable var settings: NuraSettings
     private let allowedOptions = ["deband", "interpolation", "scale", "cscale", "dscale", "video-sync"]
 
     var body: some View {
@@ -305,7 +305,7 @@ private struct AdvancedSettingsPage: View {
 }
 
 private struct HistorySettingsPage: View {
-    @ObservedObject var model: PlayerViewModel
+    let model: PlayerViewModel
     @State private var confirmClear = false
 
     var body: some View {

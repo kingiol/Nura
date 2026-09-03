@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct PlayerView: View {
-    @ObservedObject var model: PlayerViewModel
+    @Bindable var model: PlayerViewModel
     private let keepControlsVisible: Bool
     private let onWindowAvailable: (NSWindow) -> Void
     @State private var isDropTargeted = false
@@ -406,7 +406,7 @@ private func droppedFileURL(from item: NSSecureCoding?) -> URL? {
 }
 
 private struct MiniPlayerView: View {
-    @ObservedObject var model: PlayerViewModel
+    let model: PlayerViewModel
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -488,7 +488,7 @@ func showOpenURLPanel(open: @escaping (String) -> Void) {
 }
 
 private struct SettingsSidebarView: View {
-    @ObservedObject var model: PlayerViewModel
+    let model: PlayerViewModel
     let onClose: () -> Void
     let onTogglePiP: () -> Void
 
@@ -887,7 +887,7 @@ private struct SettingSlider: View {
             .font(.caption2.monospacedDigit())
             .foregroundStyle(.secondary)
         }
-        .onChange(of: value) { newValue in
+        .onChange(of: value) { _, newValue in
             draftValue = newValue
         }
     }

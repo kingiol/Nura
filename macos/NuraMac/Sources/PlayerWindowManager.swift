@@ -1,16 +1,16 @@
 import AppKit
-import Combine
+import Observation
 
 @MainActor
-final class PlayerWindowManager: ObservableObject {
-    @Published private(set) var activeModel: PlayerViewModel?
+@Observable
+final class PlayerWindowManager {
+    private(set) var activeModel: PlayerViewModel?
 
     private let launchConfiguration: PlayerLaunchConfiguration
     private let settings: NuraSettings
     private var models: [ObjectIdentifier: PlayerViewModel] = [:]
     private var pendingModels: [String: PlayerViewModel] = [:]
     private var windowObservers: [ObjectIdentifier: [NSObjectProtocol]] = [:]
-    private var modelObservers: [ObjectIdentifier: AnyCancellable] = [:]
     private var openedSecondaryMediaForTesting = false
     private var openPlayerWindow: ((String) -> Void)?
 
@@ -48,7 +48,6 @@ final class PlayerWindowManager: ObservableObject {
         models[identifier] = model
         model.attach(to: window)
         observe(window: window, identifier: identifier)
-        observe(model: model, identifier: identifier)
         activeModel = model
         openSecondaryMediaForTestingIfNeeded()
     }
@@ -141,17 +140,10 @@ final class PlayerWindowManager: ObservableObject {
         windowObservers[identifier] = [becameKey, willClose]
     }
 
-    private func observe(model: PlayerViewModel, identifier: ObjectIdentifier) {
-        modelObservers[identifier] = model.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }
-    }
-
     private func unregister(window: NSWindow) {
         let identifier = ObjectIdentifier(window)
         let model = models.removeValue(forKey: identifier)
         model?.detachWindow()
-        modelObservers.removeValue(forKey: identifier)
         for observer in windowObservers.removeValue(forKey: identifier) ?? [] {
             NotificationCenter.default.removeObserver(observer)
         }

@@ -2,13 +2,13 @@ name: NuraMac
 options:
   bundleIdPrefix: com.nura
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "14.0"
   createIntermediateGroups: true
   groupSortPosition: top
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
     ARCHS: arm64
     PRODUCT_BUNDLE_IDENTIFIER: com.nura.player
     PRODUCT_NAME: Nura

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftUI
 import Security
 
@@ -109,7 +110,8 @@ private enum KeychainStore {
 }
 
 @MainActor
-final class NuraSettings: ObservableObject {
+@Observable
+final class NuraSettings {
     private enum Key {
         static let nowPlayingEnabled = "nowPlayingEnabled"
         static let defaultPlaybackSpeed = "defaultPlaybackSpeed"
@@ -130,22 +132,22 @@ final class NuraSettings: ObservableObject {
 
     private let defaults: UserDefaults
 
-    @Published var nowPlayingEnabled: Bool { didSet { defaults.set(nowPlayingEnabled, forKey: Key.nowPlayingEnabled) } }
-    @Published var defaultPlaybackSpeed: Double { didSet { defaults.set(defaultPlaybackSpeed, forKey: Key.defaultPlaybackSpeed) } }
-    @Published var defaultVolume: Double { didSet { defaults.set(defaultVolume, forKey: Key.defaultVolume) } }
-    @Published var shortSeekSeconds: Double { didSet { defaults.set(shortSeekSeconds, forKey: Key.shortSeekSeconds) } }
-    @Published var longSeekSeconds: Double { didSet { defaults.set(longSeekSeconds, forKey: Key.longSeekSeconds) } }
-    @Published var preferredAudioLanguages: String { didSet { defaults.set(preferredAudioLanguages, forKey: Key.preferredAudioLanguages) } }
-    @Published var preferredSubtitleLanguages: String { didSet { defaults.set(preferredSubtitleLanguages, forKey: Key.preferredSubtitleLanguages) } }
-    @Published var subtitleSearchLanguage: String { didSet { defaults.set(subtitleSearchLanguage, forKey: Key.subtitleSearchLanguage) } }
-    @Published var openSubtitlesAPIKey: String { didSet { KeychainStore.set(openSubtitlesAPIKey, for: "opensubtitles-api-key") } }
-    @Published var ytdlEnabled: Bool { didSet { defaults.set(ytdlEnabled, forKey: Key.ytdlEnabled) } }
-    @Published var cacheEnabled: Bool { didSet { defaults.set(cacheEnabled, forKey: Key.cacheEnabled) } }
-    @Published var cacheSizeKiB: Int { didSet { defaults.set(cacheSizeKiB, forKey: Key.cacheSizeKiB) } }
-    @Published var httpProxy: String { didSet { defaults.set(httpProxy, forKey: Key.httpProxy) } }
-    @Published var userAgent: String { didSet { defaults.set(userAgent, forKey: Key.userAgent) } }
-    @Published var shortcuts: [ShortcutAction: ShortcutBinding] { didSet { save(shortcuts, key: Key.shortcuts) } }
-    @Published var advancedOptions: [AdvancedMpvOption] { didSet { save(advancedOptions, key: Key.advancedOptions) } }
+    var nowPlayingEnabled: Bool { didSet { defaults.set(nowPlayingEnabled, forKey: Key.nowPlayingEnabled) } }
+    var defaultPlaybackSpeed: Double { didSet { defaults.set(defaultPlaybackSpeed, forKey: Key.defaultPlaybackSpeed) } }
+    var defaultVolume: Double { didSet { defaults.set(defaultVolume, forKey: Key.defaultVolume) } }
+    var shortSeekSeconds: Double { didSet { defaults.set(shortSeekSeconds, forKey: Key.shortSeekSeconds) } }
+    var longSeekSeconds: Double { didSet { defaults.set(longSeekSeconds, forKey: Key.longSeekSeconds) } }
+    var preferredAudioLanguages: String { didSet { defaults.set(preferredAudioLanguages, forKey: Key.preferredAudioLanguages) } }
+    var preferredSubtitleLanguages: String { didSet { defaults.set(preferredSubtitleLanguages, forKey: Key.preferredSubtitleLanguages) } }
+    var subtitleSearchLanguage: String { didSet { defaults.set(subtitleSearchLanguage, forKey: Key.subtitleSearchLanguage) } }
+    var openSubtitlesAPIKey: String { didSet { KeychainStore.set(openSubtitlesAPIKey, for: "opensubtitles-api-key") } }
+    var ytdlEnabled: Bool { didSet { defaults.set(ytdlEnabled, forKey: Key.ytdlEnabled) } }
+    var cacheEnabled: Bool { didSet { defaults.set(cacheEnabled, forKey: Key.cacheEnabled) } }
+    var cacheSizeKiB: Int { didSet { defaults.set(cacheSizeKiB, forKey: Key.cacheSizeKiB) } }
+    var httpProxy: String { didSet { defaults.set(httpProxy, forKey: Key.httpProxy) } }
+    var userAgent: String { didSet { defaults.set(userAgent, forKey: Key.userAgent) } }
+    var shortcuts: [ShortcutAction: ShortcutBinding] { didSet { save(shortcuts, key: Key.shortcuts) } }
+    var advancedOptions: [AdvancedMpvOption] { didSet { save(advancedOptions, key: Key.advancedOptions) } }
 
     init(defaults: UserDefaults) {
         self.defaults = defaults

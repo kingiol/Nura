@@ -3,18 +3,18 @@ import SwiftUI
 @main
 struct NuraMacApp: App {
     private let launchConfiguration: PlayerLaunchConfiguration
-    @StateObject private var settings: NuraSettings
-    @StateObject private var playerWindows: PlayerWindowManager
-    @StateObject private var mainModel: PlayerViewModel
+    @State private var settings: NuraSettings
+    @State private var playerWindows: PlayerWindowManager
+    @State private var mainModel: PlayerViewModel
 
     init() {
         let launchConfiguration = PlayerLaunchConfiguration.current
         self.launchConfiguration = launchConfiguration
         let settings = NuraSettings(defaults: launchConfiguration.defaults)
         let playerWindows = PlayerWindowManager(launchConfiguration: launchConfiguration, settings: settings)
-        _settings = StateObject(wrappedValue: settings)
-        _playerWindows = StateObject(wrappedValue: playerWindows)
-        _mainModel = StateObject(wrappedValue: playerWindows.makeInitialModel())
+        _settings = State(initialValue: settings)
+        _playerWindows = State(initialValue: playerWindows)
+        _mainModel = State(initialValue: playerWindows.makeInitialModel())
     }
 
     var body: some Scene {
@@ -47,8 +47,8 @@ struct NuraMacApp: App {
 
 private struct MainPlayerWindow: View {
     @Environment(\.openWindow) private var openWindow
-    @ObservedObject var model: PlayerViewModel
-    @ObservedObject var playerWindows: PlayerWindowManager
+    let model: PlayerViewModel
+    let playerWindows: PlayerWindowManager
     let keepControlsVisible: Bool
 
     var body: some View {
@@ -66,14 +66,14 @@ private struct MainPlayerWindow: View {
 }
 
 private struct AdditionalPlayerWindow: View {
-    @ObservedObject var playerWindows: PlayerWindowManager
-    @StateObject private var model: PlayerViewModel
+    let playerWindows: PlayerWindowManager
+    @State private var model: PlayerViewModel
     private let keepControlsVisible: Bool
 
     init(sessionID: String?, playerWindows: PlayerWindowManager, keepControlsVisible: Bool) {
         self.playerWindows = playerWindows
         self.keepControlsVisible = keepControlsVisible
-        _model = StateObject(wrappedValue: playerWindows.makePlayerModel(for: sessionID))
+        _model = State(initialValue: playerWindows.makePlayerModel(for: sessionID))
     }
 
     var body: some View {
@@ -88,8 +88,8 @@ private struct AdditionalPlayerWindow: View {
 }
 
 private struct NuraPlayerCommands: Commands {
-    @ObservedObject var playerWindows: PlayerWindowManager
-    @ObservedObject var settings: NuraSettings
+    let playerWindows: PlayerWindowManager
+    let settings: NuraSettings
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {

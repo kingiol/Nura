@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RenderSurfaceView: NSViewRepresentable {
-    @ObservedObject var model: PlayerViewModel
+    let model: PlayerViewModel
 
     func makeNSView(context: Context) -> RenderSurface {
         let surface = RenderSurface()
