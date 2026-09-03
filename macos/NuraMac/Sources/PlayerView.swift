@@ -12,7 +12,6 @@ struct PlayerView: View {
     @State private var sidebarHovered = false
     @State private var sidebar: SidebarTab?
     @State private var hideControlsTask: Task<Void, Never>?
-    @State private var pipPanel: NSPanel?
 
     init(
         model: PlayerViewModel,
@@ -51,6 +50,7 @@ struct PlayerView: View {
                         Button("Take Screenshot", action: model.screenshot)
                         Button("Copy Screenshot", action: model.copyScreenshot)
                         Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
+                        Button("Picture in Picture", action: model.togglePiP)
                         Button("Toggle Fullscreen", action: model.toggleFullscreen)
                     }
 
@@ -110,8 +110,7 @@ struct PlayerView: View {
             }
             .onDisappear {
                 hideControlsTask?.cancel()
-                pipPanel?.close()
-                pipPanel = nil
+                model.stopPiP()
             }
         }
     }
@@ -242,6 +241,12 @@ struct PlayerView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 12) {
+                    Button(action: model.togglePiP) {
+                        Image(systemName: "pip")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Picture in Picture")
+
                     Button {
                         sidebar = sidebar == .settings ? nil : .settings
                         revealControls()
@@ -319,25 +324,7 @@ struct PlayerView: View {
     }
 
     private func togglePiP() {
-        if let pipPanel, pipPanel.isVisible {
-            pipPanel.orderOut(nil)
-            return
-        }
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 260),
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.title = "Nura PiP"
-        panel.level = .floating
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.contentView = NSHostingView(rootView: MiniPlayerView(model: model))
-        panel.center()
-        panel.makeKeyAndOrderFront(nil)
-        pipPanel = panel
+        model.togglePiP()
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

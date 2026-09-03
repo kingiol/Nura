@@ -16,6 +16,7 @@ private let nuraGLColorBufferBit: GLBitfield = 0x00004000
 final class RenderSurface: NSOpenGLView {
     var attachRenderer: (() -> Void)?
     var renderFrame: ((Int32, Int32, Int32) -> Bool)?
+    var captureFrame: ((Int32, Int32) -> Void)?
     private var redrawTimer: Timer?
     private var rendererAttached = false
 
@@ -58,12 +59,15 @@ final class RenderSurface: NSOpenGLView {
         attachRendererIfNeeded()
         var framebuffer: GLInt = 0
         nura_glGetIntegerv(nuraGLDrawFramebufferBinding, &framebuffer)
-        nura_glViewport(0, 0, GLSize(bounds.width * windowScale), GLSize(bounds.height * windowScale))
+        let width = Int32(bounds.width * windowScale)
+        let height = Int32(bounds.height * windowScale)
+        nura_glViewport(0, 0, width, height)
         nura_glClearColor(0.035, 0.04, 0.05, 1.0)
         nura_glClear(nuraGLColorBufferBit)
-        guard renderFrame?(Int32(framebuffer), Int32(bounds.width * windowScale), Int32(bounds.height * windowScale)) == true else {
+        guard renderFrame?(Int32(framebuffer), width, height) == true else {
             return
         }
+        captureFrame?(width, height)
         context.flushBuffer()
     }
 

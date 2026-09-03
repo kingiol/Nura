@@ -95,6 +95,23 @@ final class PlayerViewModel {
     let settings: NuraSettings
     @ObservationIgnored
     private lazy var nowPlaying = NowPlayingCoordinator(model: self)
+    @ObservationIgnored
+    private lazy var pictureInPicture = PictureInPictureCoordinator(
+        onPlayingChange: { [weak self] playing in
+            guard let self, playing != self.isPlaying else { return }
+            self.togglePlayback()
+        },
+        onSeekRelative: { [weak self] offset in
+            self?.seekRelative(offset)
+        },
+        currentPlaybackState: { [weak self] in
+            guard let self else { return (false, 0) }
+            return (self.isPlaying, self.snapshot.durationSeconds ?? 0)
+        },
+        reportError: { [weak self] message in
+            self?.showError(message)
+        }
+    )
 
     init(
         launchConfiguration: PlayerLaunchConfiguration = .current,
@@ -797,6 +814,22 @@ final class PlayerViewModel {
         playerWindow?.toggleFullScreen(nil)
     }
 
+    func togglePiP() {
+        guard snapshot.item != nil, snapshot.videoWidth != nil, snapshot.videoHeight != nil else {
+            showError("Open a video before starting Picture in Picture")
+            return
+        }
+        pictureInPicture.toggle()
+    }
+
+    func stopPiP() {
+        pictureInPicture.stop()
+    }
+
+    func capturePiPFrame(width: Int32, height: Int32) {
+        pictureInPicture.appendFrame(width: width, height: height)
+    }
+
     func fitWindowToVideo() {
         guard let geometry = currentVideoGeometry else {
             showError("Video dimensions are not available yet")
@@ -907,6 +940,7 @@ final class PlayerViewModel {
             seekPosition = min(snapshot.positionSeconds, duration)
         }
         nowPlaying.update(snapshot: snapshot, enabled: settings.nowPlayingEnabled)
+        pictureInPicture.invalidatePlaybackState()
     }
 
     private func invalidateSeekPreview() {

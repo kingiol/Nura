@@ -47,6 +47,10 @@ targets:
           - Security
           - "-framework"
           - MediaPlayer
+          - "-framework"
+          - AVFoundation
+          - "-framework"
+          - AVKit
         SWIFT_OBJC_BRIDGING_HEADER: ""
     preBuildScripts:
       - name: Build Rust Player Core

@@ -133,5 +133,8 @@ private struct NuraPlayerCommands: Commands {
             Button("Toggle Full Screen", action: { playerWindows.activeModel?.toggleFullscreen() })
                 .keyboardShortcut(settings.keyEquivalent(for: .toggleFullscreen), modifiers: settings.modifiers(for: .toggleFullscreen))
         }
+        CommandMenu("Window") {
+            Button("Picture in Picture", action: { playerWindows.activeModel?.togglePiP() })
+        }
     }
 }
