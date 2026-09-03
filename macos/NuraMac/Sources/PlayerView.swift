@@ -377,11 +377,21 @@ struct PlayerView: View {
 private struct PiPPlaceholderView: View {
     var body: some View {
         ZStack {
-            Color.black
-            Image("PiPPlaceholder")
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle()
+                .fill(.regularMaterial)
+                .overlay(Color.black.opacity(0.12))
+
+            VStack(spacing: 18) {
+                Image(systemName: "pip")
+                    .font(.system(size: 76, weight: .light))
+                    .foregroundStyle(.secondary)
+
+                Text("This video is playing in picture in picture")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("This video is playing in picture in picture")

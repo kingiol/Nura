@@ -12,7 +12,11 @@ struct RenderSurfaceView: NSViewRepresentable {
             model?.render(fbo: fbo, width: width, height: height) ?? false
         }
         surface.captureFrame = { [weak model] framebuffer, width, height in
-            model?.capturePiPFrame(framebuffer: framebuffer, width: width, height: height)
+            model?.capturePiPFrame(
+                framebuffer: framebuffer,
+                width: width,
+                height: height
+            )
         }
         return surface
     }

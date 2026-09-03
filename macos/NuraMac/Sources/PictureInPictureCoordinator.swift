@@ -109,35 +109,58 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     }
 
     /// Called while the model's OpenGL context is current.
-    func appendFrame(framebuffer: Int32, width: Int32, height: Int32) {
+    func appendFrame(
+        framebuffer: Int32,
+        width: Int32,
+        height: Int32,
+        videoWidth: Int32?,
+        videoHeight: Int32?
+    ) {
         guard captureEnabled, width > 0, height > 0 else { return }
         let now = CACurrentMediaTime()
         guard now - lastFrameTime >= (1.0 / 30.0) else { return }
         lastFrameTime = now
+        let captureRegion = videoCaptureRegion(
+            viewportWidth: Int(width),
+            viewportHeight: Int(height),
+            videoWidth: videoWidth,
+            videoHeight: videoHeight
+        )
         let pixelCount = Int(width) * Int(height) * 4
         if readbackBuffer.count != pixelCount {
             readbackBuffer = [UInt8](repeating: 0, count: pixelCount)
         }
         // AVKit mirrors this layer into the PiP window on macOS. Keep a
         // concrete, non-zero geometry so the mirrored layer has a render size.
-        displayLayer.frame = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
-        displayLayer.bounds = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+        let layerWidth = CGFloat(captureRegion.width)
+        let layerHeight = CGFloat(captureRegion.height)
+        displayLayer.frame = CGRect(x: 0, y: 0, width: layerWidth, height: layerHeight)
+        displayLayer.bounds = CGRect(x: 0, y: 0, width: layerWidth, height: layerHeight)
         ensureController()
         nura_glBindFramebuffer(0x8D40, framebuffer)
         readbackBuffer.withUnsafeMutableBytes { bytes in
             nura_glReadPixels(0, 0, width, height, nuraGLRGBA, nuraGLUnsignedByte, bytes.baseAddress)
         }
 
-        guard let pixelBuffer = makePixelBuffer(width: width, height: height) else { return }
+        guard let pixelBuffer = makePixelBuffer(
+            sourceWidth: width,
+            sourceHeight: height,
+            cropX: captureRegion.originX,
+            cropTop: captureRegion.originY,
+            width: captureRegion.width,
+            height: captureRegion.height
+        ) else { return }
         var formatDescription = currentFormatDescription
-        if currentDimensions.width != width || currentDimensions.height != height || formatDescription == nil {
+        let outputWidth = Int32(captureRegion.width)
+        let outputHeight = Int32(captureRegion.height)
+        if currentDimensions.width != outputWidth || currentDimensions.height != outputHeight || formatDescription == nil {
             guard CMVideoFormatDescriptionCreateForImageBuffer(
                 allocator: nil,
                 imageBuffer: pixelBuffer,
                 formatDescriptionOut: &formatDescription
             ) == noErr else { return }
             currentFormatDescription = formatDescription
-            currentDimensions = CMVideoDimensions(width: width, height: height)
+            currentDimensions = CMVideoDimensions(width: outputWidth, height: outputHeight)
         }
         guard let formatDescription else { return }
 
@@ -172,7 +195,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         displayLayer.enqueue(sampleBuffer)
         if !loggedFirstFrame {
             loggedFirstFrame = true
-            logger.info("queued first PiP frame \(width)x\(height), layerStatus=\(String(describing: self.displayLayer.status.rawValue)), ready=\(self.displayLayer.isReadyForMoreMediaData)")
+            logger.info("queued first PiP frame \(outputWidth)x\(outputHeight), layerStatus=\(String(describing: self.displayLayer.status.rawValue)), ready=\(self.displayLayer.isReadyForMoreMediaData)")
         }
         startIfPossible()
     }
@@ -195,7 +218,14 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         controller = newController
     }
 
-    private func makePixelBuffer(width: Int32, height: Int32) -> CVPixelBuffer? {
+    private func makePixelBuffer(
+        sourceWidth: Int32,
+        sourceHeight: Int32,
+        cropX: Int,
+        cropTop: Int,
+        width: Int,
+        height: Int
+    ) -> CVPixelBuffer? {
         var pixelBuffer: CVPixelBuffer?
         let attributes: [String: Any] = [
             kCVPixelBufferIOSurfacePropertiesKey as String: [:],
@@ -203,8 +233,8 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         ]
         guard CVPixelBufferCreate(
             kCFAllocatorDefault,
-            Int(width),
-            Int(height),
+            width,
+            height,
             kCVPixelFormatType_32BGRA,
             attributes as CFDictionary,
             &pixelBuffer
@@ -216,14 +246,14 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
             return nil
         }
 
-        let sourceRowBytes = Int(width) * 4
+        let sourceRowBytes = Int(sourceWidth) * 4
         let destinationRowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
         let destinationBytes = destination.assumingMemoryBound(to: UInt8.self)
-        for row in 0..<Int(height) {
-            let sourceRow = Int(height) - row - 1
-            let sourceOffset = sourceRow * sourceRowBytes
+        for row in 0..<height {
+            let sourceRow = Int(sourceHeight) - cropTop - row - 1
+            let sourceOffset = sourceRow * sourceRowBytes + cropX * 4
             let destinationOffset = row * destinationRowBytes
-            for column in 0..<Int(width) {
+            for column in 0..<width {
                 let source = sourceOffset + column * 4
                 let target = destinationOffset + column * 4
                 destinationBytes[target] = readbackBuffer[source + 2]
@@ -234,6 +264,30 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         }
         CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
         return pixelBuffer
+    }
+
+    private func videoCaptureRegion(
+        viewportWidth: Int,
+        viewportHeight: Int,
+        videoWidth: Int32?,
+        videoHeight: Int32?
+    ) -> (originX: Int, originY: Int, width: Int, height: Int) {
+        guard let videoWidth, let videoHeight, videoWidth > 0, videoHeight > 0 else {
+            return (0, 0, viewportWidth, viewportHeight)
+        }
+        let viewportAspect = Double(viewportWidth) / Double(viewportHeight)
+        let videoAspect = Double(videoWidth) / Double(videoHeight)
+        guard viewportAspect.isFinite, videoAspect.isFinite, viewportAspect > 0, videoAspect > 0 else {
+            return (0, 0, viewportWidth, viewportHeight)
+        }
+
+        if viewportAspect > videoAspect {
+            let croppedWidth = max(2, Int((Double(viewportHeight) * videoAspect).rounded()))
+            return ((viewportWidth - croppedWidth) / 2, 0, croppedWidth, viewportHeight)
+        }
+
+        let croppedHeight = max(2, Int((Double(viewportWidth) / videoAspect).rounded()))
+        return (0, (viewportHeight - croppedHeight) / 2, viewportWidth, croppedHeight)
     }
 
     func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
