@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use libloading::Library;
 use nura_domain::{AudioDevice, MediaItem, Track, TrackKind};
 use nura_player_core::{EngineError, EngineEvent, PlaybackEngine};
+use serde::Deserialize;
 use thiserror::Error;
 
 type MpvHandle = c_void;
@@ -49,6 +50,95 @@ const MPV_RENDER_PARAM_API_TYPE: c_int = 1;
 const MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: c_int = 2;
 const MPV_RENDER_PARAM_OPENGL_FBO: c_int = 3;
 const MPV_RENDER_PARAM_FLIP_Y: c_int = 4;
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default)]
+pub struct MpvStartupOptions {
+    pub ytdl_enabled: bool,
+    pub http_proxy: Option<String>,
+    pub user_agent: Option<String>,
+    pub preferred_audio_languages: Option<String>,
+    pub preferred_subtitle_languages: Option<String>,
+    pub cache_enabled: bool,
+    pub cache_size_kib: Option<u64>,
+    pub advanced_options: Vec<MpvOption>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct MpvOption {
+    pub key: String,
+    pub value: String,
+}
+
+impl Default for MpvStartupOptions {
+    fn default() -> Self {
+        Self {
+            ytdl_enabled: true,
+            http_proxy: None,
+            user_agent: None,
+            preferred_audio_languages: None,
+            preferred_subtitle_languages: None,
+            cache_enabled: true,
+            cache_size_kib: None,
+            advanced_options: Vec::new(),
+        }
+    }
+}
+
+impl MpvStartupOptions {
+    fn validated_options(&self) -> Result<Vec<(String, String)>, MpvError> {
+        let mut options = vec![
+            (
+                "ytdl".to_owned(),
+                if self.ytdl_enabled { "yes" } else { "no" }.to_owned(),
+            ),
+            (
+                "cache".to_owned(),
+                if self.cache_enabled { "yes" } else { "no" }.to_owned(),
+            ),
+        ];
+        if let Some(proxy) = self.http_proxy.as_deref().filter(|value| !value.is_empty()) {
+            options.push(("http-proxy".to_owned(), validate_value(proxy)?));
+        }
+        if let Some(agent) = self.user_agent.as_deref().filter(|value| !value.is_empty()) {
+            options.push(("user-agent".to_owned(), validate_value(agent)?));
+        }
+        if let Some(languages) = self
+            .preferred_audio_languages
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            options.push(("alang".to_owned(), validate_value(languages)?));
+        }
+        if let Some(languages) = self
+            .preferred_subtitle_languages
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            options.push(("slang".to_owned(), validate_value(languages)?));
+        }
+        if let Some(size) = self.cache_size_kib.filter(|value| *value > 0) {
+            options.push(("demuxer-max-bytes".to_owned(), format!("{size}KiB")));
+        }
+        for option in &self.advanced_options {
+            if !matches!(
+                option.key.as_str(),
+                "deband" | "interpolation" | "scale" | "cscale" | "dscale" | "video-sync"
+            ) {
+                return Err(MpvError::InvalidOption(option.key.clone()));
+            }
+            options.push((option.key.clone(), validate_value(&option.value)?));
+        }
+        Ok(options)
+    }
+}
+
+fn validate_value(value: &str) -> Result<String, MpvError> {
+    if value.is_empty() || value.len() > 512 || value.contains('\0') {
+        return Err(MpvError::InvalidOptionValue);
+    }
+    Ok(value.to_owned())
+}
 
 struct MpvApi {
     _library: Library,
@@ -198,38 +288,42 @@ impl MpvEngine {
             .find(|path| Path::new(path).is_file())
     }
 
-    pub fn new() -> Result<Self, MpvError> {
+    pub fn new(startup_options: MpvStartupOptions) -> Result<Self, MpvError> {
         let api = MpvApi::load()?;
         let handle = unsafe { (api.create)() };
         if handle.is_null() {
             return Err(MpvError::Create);
         }
         let mut options = vec![
-            ("vo", "libmpv"),
+            ("vo".to_owned(), "libmpv".to_owned()),
             // The initial OpenGL render path does not provide hardware-decoder
             // interop resources, so keep decoded frames in a software surface.
-            ("hwdec", "no"),
-            ("idle", "yes"),
-            ("audio-display", "no"),
-            ("keep-open", "yes"),
-            ("input-default-bindings", "no"),
-            ("input-vo-keyboard", "no"),
+            ("hwdec".to_owned(), "no".to_owned()),
+            ("idle".to_owned(), "yes".to_owned()),
+            ("audio-display".to_owned(), "no".to_owned()),
+            ("keep-open".to_owned(), "yes".to_owned()),
+            ("input-default-bindings".to_owned(), "no".to_owned()),
+            ("input-vo-keyboard".to_owned(), "no".to_owned()),
             // Keep libmpv's metadata-driven autorotation enabled. `no` would
             // suppress rotation metadata from phone/camera videos.
-            ("video-rotate", "0"),
+            ("video-rotate".to_owned(), "0".to_owned()),
             // Keep online media enabled; the bundled ytdl hook resolves public
             // YouTube/Bilibili URLs before mpv opens the resulting streams.
-            ("ytdl", "yes"),
-            ("ytdl-format", "bestvideo+bestaudio/best"),
+            (
+                "ytdl-format".to_owned(),
+                "bestvideo+bestaudio/best".to_owned(),
+            ),
         ];
         if let Some(path) = Self::ytdl_path() {
-            let value: &'static str =
-                Box::leak(format!("ytdl_hook-ytdl_path={path}").into_boxed_str());
-            options.push(("script-opts", value));
+            options.push((
+                "script-opts".to_owned(),
+                format!("ytdl_hook-ytdl_path={path}"),
+            ));
         }
+        options.extend(startup_options.validated_options()?);
         for (key, value) in options {
-            let key = CString::new(key).unwrap();
-            let value = CString::new(value).unwrap();
+            let key = CString::new(key).map_err(|_| MpvError::InvalidOptionValue)?;
+            let value = CString::new(value).map_err(|_| MpvError::InvalidOptionValue)?;
             let result = unsafe { (api.set_option_string)(handle, key.as_ptr(), value.as_ptr()) };
             if result < 0 {
                 unsafe { (api.terminate_destroy)(handle) };
@@ -846,6 +940,10 @@ pub enum MpvError {
     Call(c_int),
     #[error("missing libmpv symbol {name}: {error}")]
     Symbol { name: String, error: String },
+    #[error("unsupported advanced mpv option: {0}")]
+    InvalidOption(String),
+    #[error("invalid mpv option value")]
+    InvalidOptionValue,
 }
 
 #[cfg(test)]

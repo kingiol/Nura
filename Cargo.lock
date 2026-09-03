@@ -141,6 +141,7 @@ dependencies = [
  "libloading",
  "nura-domain",
  "nura-player-core",
+ "serde",
  "thiserror",
 ]
 

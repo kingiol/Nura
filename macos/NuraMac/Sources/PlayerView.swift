@@ -226,12 +226,8 @@ struct PlayerView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Enter fullscreen")
-                    .keyboardShortcut("f", modifiers: [.command])
                 }
             }
-
-            keyboardShortcutSink
-
         }
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -279,23 +275,6 @@ struct PlayerView: View {
             guard !Task.isCancelled, !controlBarHovered, !sidebarHovered else { return }
             controlsVisible = false
         }
-    }
-
-    private var keyboardShortcutSink: some View {
-        HStack(spacing: 0) {
-            Button { model.seekRelative(-5) } label: { EmptyView() }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-            Button { model.seekRelative(5) } label: { EmptyView() }
-                .keyboardShortcut(.rightArrow, modifiers: [])
-            Button(action: model.frameStep) { EmptyView() }
-                .keyboardShortcut(".", modifiers: [])
-            Button { model.seekRelative(-30) } label: { EmptyView() }
-                .keyboardShortcut(.leftArrow, modifiers: [.option])
-            Button { model.seekRelative(30) } label: { EmptyView() }
-                .keyboardShortcut(.rightArrow, modifiers: [.option])
-        }
-        .frame(width: 0, height: 0)
-        .opacity(0)
     }
 
     private func togglePiP() {

@@ -12,6 +12,13 @@ pub struct MediaItem {
     pub title: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub item: MediaItem,
+    pub resume_seconds: Option<f64>,
+    pub opened_at_seconds: i64,
+}
+
 impl MediaItem {
     pub fn from_path(path: impl Into<PathBuf>) -> Result<Self, DomainError> {
         let path = path.into();
@@ -148,6 +155,7 @@ pub struct PlaybackSnapshot {
     pub item: Option<MediaItem>,
     pub playlist: Vec<MediaItem>,
     pub recent_items: Vec<MediaItem>,
+    pub history_items: Vec<HistoryEntry>,
     pub playlist_index: Option<usize>,
     pub chapters: Vec<Chapter>,
     pub playlist_loop: bool,
@@ -183,6 +191,7 @@ impl Default for PlaybackSnapshot {
             item: None,
             playlist: Vec::new(),
             recent_items: Vec::new(),
+            history_items: Vec::new(),
             playlist_index: None,
             chapters: Vec::new(),
             playlist_loop: false,

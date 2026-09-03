@@ -1,14 +1,8 @@
 use std::path::Path;
 
-use nura_domain::MediaItem;
+use nura_domain::{HistoryEntry, MediaItem, MediaSource};
 use rusqlite::{Connection, params};
 use thiserror::Error;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ResumeRecord {
-    pub item: MediaItem,
-    pub position_seconds: f64,
-}
 
 pub trait HistoryRepository: Send {
     fn resume_position(&mut self, item: &MediaItem) -> Result<Option<f64>, HistoryError>;
@@ -19,6 +13,9 @@ pub trait HistoryRepository: Send {
     ) -> Result<(), HistoryError>;
     fn clear_resume(&mut self, item: &MediaItem) -> Result<(), HistoryError>;
     fn recent_items(&mut self, limit: usize) -> Result<Vec<MediaItem>, HistoryError>;
+    fn history_items(&mut self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError>;
+    fn remove_history_item(&mut self, path_key: &str) -> Result<(), HistoryError>;
+    fn clear_history(&mut self) -> Result<(), HistoryError>;
 }
 
 pub struct SqliteHistoryRepository {
@@ -107,6 +104,51 @@ impl HistoryRepository for SqliteHistoryRepository {
         .collect::<Result<Vec<_>, rusqlite::Error>>()
         .map_err(HistoryError::Sqlite)
     }
+
+    fn history_items(&mut self, limit: usize) -> Result<Vec<HistoryEntry>, HistoryError> {
+        let mut statement = self.connection.prepare(
+            "SELECT path, title, resume_seconds, opened_at
+             FROM media_history
+             ORDER BY opened_at DESC, rowid DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map(params![limit as i64], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<f64>>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (path, title, resume_seconds, opened_at_seconds) = row?;
+            let source = if path.starts_with("http://") || path.starts_with("https://") {
+                MediaSource::PublicUrl(path)
+            } else {
+                MediaSource::LocalFile(path.into())
+            };
+            Ok(HistoryEntry {
+                item: MediaItem { source, title },
+                resume_seconds,
+                opened_at_seconds,
+            })
+        })
+        .collect::<Result<Vec<_>, rusqlite::Error>>()
+        .map_err(HistoryError::Sqlite)
+    }
+
+    fn remove_history_item(&mut self, path_key: &str) -> Result<(), HistoryError> {
+        self.connection.execute(
+            "DELETE FROM media_history WHERE path = ?1",
+            params![path_key],
+        )?;
+        Ok(())
+    }
+
+    fn clear_history(&mut self) -> Result<(), HistoryError> {
+        self.connection.execute("DELETE FROM media_history", [])?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -158,6 +200,30 @@ mod tests {
         let recent = history.recent_items(10).unwrap();
         assert_eq!(recent.len(), 2);
         assert_eq!(recent[0].title, "second.mp4");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn lists_and_removes_history_entries() {
+        let directory =
+            std::env::temp_dir().join(format!("nura-history-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let media_path = directory.join("example.mp4");
+        fs::write(&media_path, []).unwrap();
+        let item = MediaItem::from_path(&media_path).unwrap();
+        let mut history = SqliteHistoryRepository::open(directory.join("history.sqlite")).unwrap();
+
+        history.remember(&item, Some(42.0)).unwrap();
+        let entries = history.history_items(10).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].item, item);
+        assert_eq!(entries[0].resume_seconds, Some(42.0));
+
+        history
+            .remove_history_item(&entries[0].item.path_key())
+            .unwrap();
+        assert!(history.history_items(10).unwrap().is_empty());
+        history.clear_history().unwrap();
         fs::remove_dir_all(directory).unwrap();
     }
 }

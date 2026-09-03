@@ -4,7 +4,10 @@ private typealias NuraHandle = OpaquePointer
 private let nuraRenderSkipped: Int32 = 1
 
 @_silgen_name("nura_player_create")
-private func nura_player_create(_ directory: UnsafePointer<CChar>?) -> NuraHandle?
+private func nura_player_create(
+    _ directory: UnsafePointer<CChar>?,
+    _ startupOptionsJSON: UnsafePointer<CChar>?
+) -> NuraHandle?
 @_silgen_name("nura_player_destroy")
 private func nura_player_destroy(_ player: NuraHandle?)
 @_silgen_name("nura_player_open_async")
@@ -81,6 +84,10 @@ private func nura_player_select_subtitle_track_async(_ player: NuraHandle?, _ tr
 private func nura_player_select_video_track_async(_ player: NuraHandle?, _ trackID: Int64) -> Int32
 @_silgen_name("nura_player_add_external_subtitle_async")
 private func nura_player_add_external_subtitle_async(_ player: NuraHandle?, _ path: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_remove_history_item_async")
+private func nura_player_remove_history_item_async(_ player: NuraHandle?, _ pathKey: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_player_clear_history_async")
+private func nura_player_clear_history_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_attach_opengl_context")
 private func nura_player_attach_opengl_context(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_render_opengl")
@@ -126,6 +133,26 @@ enum MediaSource: Decodable {
 struct MediaItem: Decodable {
     let source: MediaSource
     let title: String
+
+    var locator: String {
+        switch source {
+        case .localFile(let path), .publicURL(let path): path
+        }
+    }
+}
+
+struct HistoryEntry: Decodable, Identifiable {
+    let item: MediaItem
+    let resumeSeconds: Double?
+    let openedAtSeconds: Int64
+
+    var id: String { item.locator }
+
+    enum CodingKeys: String, CodingKey {
+        case item
+        case resumeSeconds = "resume_seconds"
+        case openedAtSeconds = "opened_at_seconds"
+    }
 }
 
 struct Chapter: Decodable, Identifiable {
@@ -142,6 +169,7 @@ struct PlaybackSnapshot: Decodable {
     let item: MediaItem?
     let playlist: [MediaItem]
     let recentItems: [MediaItem]
+    let historyItems: [HistoryEntry]
     let playlistIndex: Int?
     let chapters: [Chapter]
     let playlistLoop: Bool
@@ -171,7 +199,7 @@ struct PlaybackSnapshot: Decodable {
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case item, playlist, recentItems = "recent_items", playlistIndex = "playlist_index", chapters
+        case item, playlist, recentItems = "recent_items", historyItems = "history_items", playlistIndex = "playlist_index", chapters
         case playlistLoop = "playlist_loop"
         case abLoopStartSeconds = "ab_loop_start_seconds", abLoopEndSeconds = "ab_loop_end_seconds"
         case status
@@ -216,11 +244,15 @@ final class PlayerBridge {
     private var handle: NuraHandle?
     private let decoder = JSONDecoder()
 
-    init(stateDirectory: URL? = nil) throws {
+    init(stateDirectory: URL? = nil, startupOptionsJSON: String = "{}") throws {
         let directory = stateDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Nura", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let created = directory.path.withCString { nura_player_create($0) }
+        let created = directory.path.withCString { directoryPath in
+            startupOptionsJSON.withCString { options in
+                nura_player_create(directoryPath, options)
+            }
+        }
         guard let created else { throw PlayerBridgeError.unavailable(Self.lastError()) }
         handle = created
     }
@@ -283,6 +315,10 @@ final class PlayerBridge {
     func addExternalSubtitle(_ url: URL) throws {
         try command { url.path.withCString { nura_player_add_external_subtitle_async(handle, $0) } }
     }
+    func removeHistoryItem(_ item: HistoryEntry) throws {
+        try command { item.item.locator.withCString { nura_player_remove_history_item_async(handle, $0) } }
+    }
+    func clearHistory() throws { try command { nura_player_clear_history_async(handle) } }
     func attachOpenGLContext() throws { try command { nura_player_attach_opengl_context(handle) } }
 
     func render(fbo: Int32, width: Int32, height: Int32) throws -> Bool {

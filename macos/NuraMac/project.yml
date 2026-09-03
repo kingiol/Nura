@@ -43,6 +43,10 @@ targets:
           - AppKit
           - "-framework"
           - OpenGL
+          - "-framework"
+          - Security
+          - "-framework"
+          - MediaPlayer
         SWIFT_OBJC_BRIDGING_HEADER: ""
     preBuildScripts:
       - name: Build Rust Player Core

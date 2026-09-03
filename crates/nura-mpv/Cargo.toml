@@ -9,4 +9,5 @@ libc = "0.2"
 libloading.workspace = true
 nura-domain = { path = "../nura-domain" }
 nura-player-core = { path = "../nura-player-core" }
+serde.workspace = true
 thiserror.workspace = true

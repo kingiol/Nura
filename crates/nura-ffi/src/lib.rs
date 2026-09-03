@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use nura_domain::TrackKind;
 use nura_library::SqliteHistoryRepository;
-use nura_mpv::{MpvEngine, SharedMpvEngine};
+use nura_mpv::{MpvEngine, MpvStartupOptions, SharedMpvEngine};
 use nura_player_core::{PlayerEvent, PlayerSession};
 
 type Reply = mpsc::SyncSender<Result<(), String>>;
@@ -93,6 +93,8 @@ enum AsyncCommand {
     SubtitleTrack(Option<i64>),
     VideoTrack(Option<i64>),
     ExternalSubtitle(PathBuf),
+    RemoveHistoryItem(String),
+    ClearHistory,
 }
 
 pub struct NuraPlayer {
@@ -208,6 +210,8 @@ fn handle_async_command(
         AsyncCommand::SubtitleTrack(id) => session.select_track(TrackKind::Subtitle, id),
         AsyncCommand::VideoTrack(id) => session.select_track(TrackKind::Video, id),
         AsyncCommand::ExternalSubtitle(path) => session.add_external_subtitle(path),
+        AsyncCommand::RemoveHistoryItem(path_key) => session.remove_history_item(&path_key),
+        AsyncCommand::ClearHistory => session.clear_history(),
     };
     if let Err(error) = result {
         push_error(events, error.to_string());
@@ -387,13 +391,23 @@ pub extern "C" fn nura_last_error() -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn nura_player_create(data_directory: *const c_char) -> *mut NuraPlayer {
+pub extern "C" fn nura_player_create(
+    data_directory: *const c_char,
+    startup_options_json: *const c_char,
+) -> *mut NuraPlayer {
     let result: Result<Box<NuraPlayer>, String> = (|| {
         let data_directory = unsafe { read_string(data_directory) }?;
+        let startup_options = if startup_options_json.is_null() {
+            MpvStartupOptions::default()
+        } else {
+            let value = unsafe { read_string(startup_options_json) }?;
+            serde_json::from_str(&value)
+                .map_err(|error| format!("invalid player settings: {error}"))?
+        };
         let directory = PathBuf::from(data_directory);
         std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let engine = SharedMpvEngine(Arc::new(Mutex::new(
-            MpvEngine::new().map_err(|error| error.to_string())?,
+            MpvEngine::new(startup_options).map_err(|error| error.to_string())?,
         )));
         let (sender, receiver) = mpsc::sync_channel(32);
         let pending_volume = Arc::new(Mutex::new(None));
@@ -953,6 +967,34 @@ pub unsafe extern "C" fn nura_player_add_external_subtitle_async(
         return -1;
     };
     async_command_result(player, AsyncCommand::ExternalSubtitle(PathBuf::from(path)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_remove_history_item_async(
+    player: *mut NuraPlayer,
+    path_key: *const c_char,
+) -> c_int {
+    let path_key = match read_string(path_key) {
+        Ok(value) => value,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::RemoveHistoryItem(path_key))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_clear_history_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::ClearHistory)
 }
 
 #[unsafe(no_mangle)]

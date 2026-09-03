@@ -22,6 +22,7 @@ final class PlayerViewModel: ObservableObject {
         item: nil,
         playlist: [],
         recentItems: [],
+        historyItems: [],
         playlistIndex: nil,
         chapters: [],
         playlistLoop: false,
@@ -61,6 +62,8 @@ final class PlayerViewModel: ObservableObject {
     @Published private(set) var loopEnabled = false
     @Published private var pendingPlaybackState: Bool?
     @Published private var pendingMutedState: Bool?
+    @Published private(set) var onlineSubtitleResults: [OnlineSubtitleResult] = []
+    @Published private(set) var isSearchingOnlineSubtitles = false
 
     private var bridge: PlayerBridge?
     private var timer: Timer?
@@ -78,12 +81,20 @@ final class PlayerViewModel: ObservableObject {
     private let screenshotDirectoryKey = "screenshotDirectory"
     private let defaults: UserDefaults
     private let disableWindowResize: Bool
+    let settings: NuraSettings
+    private lazy var nowPlaying = NowPlayingCoordinator(model: self)
 
-    init(launchConfiguration: PlayerLaunchConfiguration = .current) {
+    init(
+        launchConfiguration: PlayerLaunchConfiguration = .current,
+        settings: NuraSettings? = nil
+    ) {
         defaults = launchConfiguration.defaults
         disableWindowResize = launchConfiguration.disableWindowResize
+        self.settings = settings ?? NuraSettings(defaults: launchConfiguration.defaults)
         configureBridge(stateDirectory: launchConfiguration.stateDirectory)
         configureScreenshotDirectory()
+        setVolume(self.settings.defaultVolume)
+        setSpeed(self.settings.defaultPlaybackSpeed)
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.pollEvents()
@@ -186,6 +197,28 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
+    func removeHistoryItem(_ item: HistoryEntry) {
+        do {
+            try bridge?.removeHistoryItem(item)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func clearHistory() {
+        do {
+            try bridge?.clearHistory()
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func refreshNowPlaying() {
+        nowPlaying.update(snapshot: snapshot, enabled: settings.nowPlayingEnabled)
+    }
+
     func enqueueURL(_ value: String) {
         do {
             try bridge?.enqueueURL(value.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -228,6 +261,49 @@ final class PlayerViewModel: ObservableObject {
                 try bridge?.addExternalSubtitle(url)
                 lastError = nil
             } catch {
+                showError(error.localizedDescription)
+            }
+        }
+    }
+
+    func searchOnlineSubtitles() {
+        guard let item = snapshot.item else {
+            showError("Open media before searching for subtitles")
+            return
+        }
+        isSearchingOnlineSubtitles = true
+        onlineSubtitleResults = []
+        let query = URL(fileURLWithPath: item.title).deletingPathExtension().lastPathComponent
+        let language = settings.subtitleSearchLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = settings.openSubtitlesAPIKey
+        Task { [weak self] in
+            do {
+                let results = try await OpenSubtitlesClient().search(
+                    query: query,
+                    language: language.isEmpty ? "en" : language,
+                    apiKey: apiKey
+                )
+                guard let self else { return }
+                onlineSubtitleResults = results
+                isSearchingOnlineSubtitles = false
+            } catch {
+                guard let self else { return }
+                isSearchingOnlineSubtitles = false
+                showError(error.localizedDescription)
+            }
+        }
+    }
+
+    func loadOnlineSubtitle(_ result: OnlineSubtitleResult) {
+        let apiKey = settings.openSubtitlesAPIKey
+        Task { [weak self] in
+            do {
+                let url = try await OpenSubtitlesClient().download(result: result, apiKey: apiKey)
+                guard let self else { return }
+                try bridge?.addExternalSubtitle(url)
+                lastError = nil
+            } catch {
+                guard let self else { return }
                 showError(error.localizedDescription)
             }
         }
@@ -693,7 +769,10 @@ final class PlayerViewModel: ObservableObject {
 
     private func configureBridge(stateDirectory: URL?) {
         do {
-            bridge = try PlayerBridge(stateDirectory: stateDirectory)
+            bridge = try PlayerBridge(
+                stateDirectory: stateDirectory,
+                startupOptionsJSON: settings.startupOptionsJSON
+            )
         } catch {
             showError(error.localizedDescription)
         }
@@ -754,6 +833,7 @@ final class PlayerViewModel: ObservableObject {
         if !isSeeking {
             seekPosition = min(snapshot.positionSeconds, duration)
         }
+        nowPlaying.update(snapshot: snapshot, enabled: settings.nowPlayingEnabled)
     }
 
     private func invalidateSeekPreview() {

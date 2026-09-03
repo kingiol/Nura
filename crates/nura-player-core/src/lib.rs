@@ -86,7 +86,7 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             events: Vec::new(),
             last_persisted_position: 0.0,
         };
-        let _ = session.refresh_recent_items();
+        let _ = session.refresh_history_items();
         session.emit_state();
         session
     }
@@ -105,6 +105,20 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         self.persist_current_position()?;
         self.snapshot.playlist = vec![item.clone()];
         self.start_item(item, 0)
+    }
+
+    pub fn remove_history_item(&mut self, path_key: &str) -> Result<(), PlayerError> {
+        self.history.remove_history_item(path_key)?;
+        self.refresh_history_items()?;
+        self.emit_state();
+        Ok(())
+    }
+
+    pub fn clear_history(&mut self) -> Result<(), PlayerError> {
+        self.history.clear_history()?;
+        self.refresh_history_items()?;
+        self.emit_state();
+        Ok(())
     }
 
     pub fn enqueue_item(&mut self, item: MediaItem) -> Result<(), PlayerError> {
@@ -258,7 +272,7 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         }
         self.history
             .remember(&item, item.is_local().then_some(resume_position))?;
-        self.refresh_recent_items()?;
+        self.refresh_history_items()?;
         if item.is_local() {
             if let Some(path) = item.local_path() {
                 if let Some(subtitle) = same_name_subtitle(path) {
@@ -640,8 +654,15 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         Ok(())
     }
 
-    fn refresh_recent_items(&mut self) -> Result<(), PlayerError> {
-        self.snapshot.recent_items = self.history.recent_items(12)?;
+    fn refresh_history_items(&mut self) -> Result<(), PlayerError> {
+        self.snapshot.history_items = self.history.history_items(250)?;
+        self.snapshot.recent_items = self
+            .snapshot
+            .history_items
+            .iter()
+            .take(12)
+            .map(|entry| entry.item.clone())
+            .collect();
         Ok(())
     }
 
@@ -805,6 +826,18 @@ mod tests {
         }
         fn recent_items(&mut self, _: usize) -> Result<Vec<MediaItem>, nura_library::HistoryError> {
             Ok(vec![])
+        }
+        fn history_items(
+            &mut self,
+            _: usize,
+        ) -> Result<Vec<nura_domain::HistoryEntry>, nura_library::HistoryError> {
+            Ok(vec![])
+        }
+        fn remove_history_item(&mut self, _: &str) -> Result<(), nura_library::HistoryError> {
+            Ok(())
+        }
+        fn clear_history(&mut self) -> Result<(), nura_library::HistoryError> {
+            Ok(())
         }
     }
 
