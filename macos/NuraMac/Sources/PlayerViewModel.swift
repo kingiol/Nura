@@ -66,6 +66,7 @@ final class PlayerViewModel {
     private(set) var lastError: String?
     private(set) var alwaysOnTop = false
     private(set) var loopEnabled = false
+    private(set) var isPictureInPictureActive = false
     private var pendingPlaybackState: Bool?
     private var pendingMutedState: Bool?
     private(set) var onlineSubtitleResults: [OnlineSubtitleResult] = []
@@ -110,6 +111,9 @@ final class PlayerViewModel {
         },
         reportError: { [weak self] message in
             self?.showError(message)
+        },
+        onActiveChange: { [weak self] active in
+            self?.isPictureInPictureActive = active
         }
     )
 

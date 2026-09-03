@@ -30,6 +30,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private let onSeekRelative: (Double) -> Void
     private let currentPlaybackState: () -> (isPlaying: Bool, duration: Double)
     private let reportError: (String) -> Void
+    private let onActiveChange: (Bool) -> Void
 
     private var controller: AVPictureInPictureController?
     private var readbackBuffer: [UInt8] = []
@@ -47,12 +48,14 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         onPlayingChange: @escaping (Bool) -> Void,
         onSeekRelative: @escaping (Double) -> Void,
         currentPlaybackState: @escaping () -> (isPlaying: Bool, duration: Double),
-        reportError: @escaping (String) -> Void
+        reportError: @escaping (String) -> Void,
+        onActiveChange: @escaping (Bool) -> Void = { _ in }
     ) {
         self.onPlayingChange = onPlayingChange
         self.onSeekRelative = onSeekRelative
         self.currentPlaybackState = currentPlaybackState
         self.reportError = reportError
+        self.onActiveChange = onActiveChange
         super.init()
 
         displayLayer.videoGravity = .resizeAspect
@@ -237,6 +240,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
 
     func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         isActive = true
+        onActiveChange(true)
         invalidatePlaybackState()
     }
 
@@ -249,6 +253,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         captureStartTime = nil
         loggedFirstFrame = false
         isActive = false
+        onActiveChange(false)
         reportError("Unable to start Picture in Picture: \(error.localizedDescription)")
     }
 
@@ -258,6 +263,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         captureEnabled = false
         startRequested = false
         isActive = false
+        onActiveChange(false)
         displayLayer.flush()
     }
 

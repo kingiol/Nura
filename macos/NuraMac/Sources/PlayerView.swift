@@ -54,6 +54,11 @@ struct PlayerView: View {
                         Button("Toggle Fullscreen", action: model.toggleFullscreen)
                     }
 
+                if model.isPictureInPictureActive {
+                    PiPPlaceholderView()
+                        .transition(.opacity)
+                }
+
                 VStack(spacing: 0) {
                     if controlsVisible {
                         Spacer()
@@ -107,6 +112,11 @@ struct PlayerView: View {
             .onAppear {
                 model.updateWindowGeometryIfNeeded()
                 revealControls()
+            }
+            .onChange(of: model.isPictureInPictureActive) { _, active in
+                if active {
+                    revealControls()
+                }
             }
             .onDisappear {
                 hideControlsTask?.cancel()
@@ -296,7 +306,7 @@ struct PlayerView: View {
     private func revealControls() {
         controlsVisible = true
         hideControlsTask?.cancel()
-        guard !keepControlsVisible, !controlBarHovered, !sidebarHovered else { return }
+        guard !keepControlsVisible, !model.isPictureInPictureActive, !controlBarHovered, !sidebarHovered else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
@@ -315,7 +325,7 @@ struct PlayerView: View {
 
     private func scheduleControlsHide() {
         hideControlsTask?.cancel()
-        guard !keepControlsVisible else { return }
+        guard !keepControlsVisible, !model.isPictureInPictureActive else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled, !controlBarHovered, !sidebarHovered else { return }
@@ -361,6 +371,20 @@ struct PlayerView: View {
         let minutes = (total / 60) % 60
         let remaining = total % 60
         return hours > 0 ? String(format: "%02d:%02d:%02d", hours, minutes, remaining) : String(format: "%02d:%02d", minutes, remaining)
+    }
+}
+
+private struct PiPPlaceholderView: View {
+    var body: some View {
+        ZStack {
+            Color.black
+            Image("PiPPlaceholder")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("This video is playing in picture in picture")
     }
 }
 
