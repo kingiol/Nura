@@ -2,6 +2,7 @@ import AVFoundation
 import AVKit
 import CoreVideo
 import Foundation
+import OSLog
 import QuartzCore
 
 private typealias GLInt = Int32
@@ -23,6 +24,7 @@ private let nuraGLRGBA: GLEnum = 0x1908
 private let nuraGLUnsignedByte: GLEnum = 0x1401
 
 final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
+    private let logger = Logger(subsystem: "com.nura.Nura", category: "PictureInPicture")
     private let displayLayer = AVSampleBufferDisplayLayer()
     private let onPlayingChange: (Bool) -> Void
     private let onSeekRelative: (Double) -> Void
@@ -36,6 +38,8 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var captureEnabled = false
     private var startRequested = false
     private var lastFrameTime: CFTimeInterval = 0
+    private var captureStartTime: CFTimeInterval?
+    private var loggedFirstFrame = false
     private(set) var isActive = false
 
     init(
@@ -51,12 +55,16 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         super.init()
 
         displayLayer.videoGravity = .resizeAspect
-        let source = AVPictureInPictureController.ContentSource(
-            sampleBufferDisplayLayer: displayLayer,
-            playbackDelegate: self
-        )
-        controller = AVPictureInPictureController(contentSource: source)
-        controller?.delegate = self
+        var timebase: CMTimebase?
+        if CMTimebaseCreateWithSourceClock(
+            allocator: kCFAllocatorDefault,
+            sourceClock: CMClockGetHostTimeClock(),
+            timebaseOut: &timebase
+        ) == noErr, let timebase {
+            CMTimebaseSetTime(timebase, time: .zero)
+            CMTimebaseSetRate(timebase, rate: 1)
+            displayLayer.controlTimebase = timebase
+        }
     }
 
     func toggle() {
@@ -68,18 +76,18 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
             reportError("Picture in Picture is not supported on this Mac")
             return
         }
-        guard controller != nil else {
-            reportError("Picture in Picture is unavailable")
-            return
-        }
         captureEnabled = true
         startRequested = true
+        captureStartTime = nil
+        lastFrameTime = 0
+        loggedFirstFrame = false
         startIfPossible()
     }
 
     func stop() {
         captureEnabled = false
         startRequested = false
+        captureStartTime = nil
         guard let controller, controller.isPictureInPictureActive else {
             isActive = false
             return
@@ -94,7 +102,6 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     /// Called while the model's OpenGL context is current.
     func appendFrame(framebuffer: Int32, width: Int32, height: Int32) {
         guard captureEnabled, width > 0, height > 0 else { return }
-        guard displayLayer.isReadyForMoreMediaData else { return }
         let now = CACurrentMediaTime()
         guard now - lastFrameTime >= (1.0 / 30.0) else { return }
         lastFrameTime = now
@@ -102,6 +109,11 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         if readbackBuffer.count != pixelCount {
             readbackBuffer = [UInt8](repeating: 0, count: pixelCount)
         }
+        // AVKit mirrors this layer into the PiP window on macOS. Keep a
+        // concrete, non-zero geometry so the mirrored layer has a render size.
+        displayLayer.frame = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+        displayLayer.bounds = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+        ensureController()
         nura_glBindFramebuffer(0x8D40, framebuffer)
         readbackBuffer.withUnsafeMutableBytes { bytes in
             nura_glReadPixels(0, 0, width, height, nuraGLRGBA, nuraGLUnsignedByte, bytes.baseAddress)
@@ -120,9 +132,15 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         }
         guard let formatDescription else { return }
 
+        let captureNow = CACurrentMediaTime()
+        if captureStartTime == nil { captureStartTime = captureNow }
+        let presentationTime = CMTime(
+            seconds: max(0, captureNow - (captureStartTime ?? captureNow)),
+            preferredTimescale: 600
+        )
         var timing = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: 60),
-            presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
+            presentationTimeStamp: presentationTime,
             decodeTimeStamp: .invalid
         )
         var sampleBuffer: CMSampleBuffer?
@@ -133,8 +151,20 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
             sampleTiming: &timing,
             sampleBufferOut: &sampleBuffer
         ) == noErr, let sampleBuffer else { return }
-        if displayLayer.status == .failed { displayLayer.flush() }
+        CMSetAttachment(
+            sampleBuffer,
+            key: kCMSampleAttachmentKey_DisplayImmediately,
+            value: kCFBooleanTrue,
+            attachmentMode: kCMAttachmentMode_ShouldNotPropagate
+        )
+        if displayLayer.status == .failed || displayLayer.requiresFlushToResumeDecoding {
+            displayLayer.flush()
+        }
         displayLayer.enqueue(sampleBuffer)
+        if !loggedFirstFrame {
+            loggedFirstFrame = true
+            logger.info("queued first PiP frame \(width)x\(height), layerStatus=\(String(describing: self.displayLayer.status.rawValue)), ready=\(self.displayLayer.isReadyForMoreMediaData)")
+        }
         startIfPossible()
     }
 
@@ -143,6 +173,17 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         guard controller.isPictureInPicturePossible else { return }
         startRequested = false
         controller.startPictureInPicture()
+    }
+
+    private func ensureController() {
+        guard controller == nil else { return }
+        let source = AVPictureInPictureController.ContentSource(
+            sampleBufferDisplayLayer: displayLayer,
+            playbackDelegate: self
+        )
+        let newController = AVPictureInPictureController(contentSource: source)
+        newController.delegate = self
+        controller = newController
     }
 
     private func makePixelBuffer(width: Int32, height: Int32) -> CVPixelBuffer? {
@@ -199,6 +240,8 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     ) {
         captureEnabled = false
         startRequested = false
+        captureStartTime = nil
+        loggedFirstFrame = false
         isActive = false
         reportError("Unable to start Picture in Picture: \(error.localizedDescription)")
     }
@@ -225,7 +268,11 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
 
     func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
         let duration = currentPlaybackState().duration
-        guard duration.isFinite, duration > 0 else { return .invalid }
+        guard duration.isFinite, duration > 0 else {
+            // A transiently unknown duration must not make AVKit show an
+            // endless loading state while the first frames are already queued.
+            return CMTimeRange(start: .zero, duration: .positiveInfinity)
+        }
         return CMTimeRange(start: .zero, duration: CMTime(seconds: duration, preferredTimescale: 600))
     }
 
