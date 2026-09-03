@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Duration;
 
 use nura_domain::{HistoryEntry, MediaItem, MediaSource};
 use rusqlite::{Connection, params};
@@ -25,6 +26,7 @@ pub struct SqliteHistoryRepository {
 impl SqliteHistoryRepository {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, HistoryError> {
         let connection = Connection::open(path)?;
+        connection.busy_timeout(Duration::from_secs(5))?;
         connection.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS media_history (

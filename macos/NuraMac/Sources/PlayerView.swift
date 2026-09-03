@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct PlayerView: View {
     @ObservedObject var model: PlayerViewModel
     private let keepControlsVisible: Bool
+    private let onWindowAvailable: (NSWindow) -> Void
     @State private var isDropTargeted = false
     @State private var controlsVisible = true
     @State private var controlBarHovered = false
@@ -13,9 +14,14 @@ struct PlayerView: View {
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var pipPanel: NSPanel?
 
-    init(model: PlayerViewModel, keepControlsVisible: Bool) {
+    init(
+        model: PlayerViewModel,
+        keepControlsVisible: Bool,
+        onWindowAvailable: @escaping (NSWindow) -> Void = { _ in }
+    ) {
         self.model = model
         self.keepControlsVisible = keepControlsVisible
+        self.onWindowAvailable = onWindowAvailable
     }
 
     var body: some View {
@@ -89,7 +95,7 @@ struct PlayerView: View {
         }
         .ignoresSafeArea()
         .background(Color.black)
-        .background(WindowButtonVisibility(isVisible: controlsVisible))
+        .background(WindowButtonVisibility(isVisible: controlsVisible, onWindowAvailable: onWindowAvailable))
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .animation(.easeOut(duration: 0.18), value: sidebar)
         .onHover { hovering in
@@ -338,9 +344,10 @@ struct PlayerView: View {
 
 private struct WindowButtonVisibility: NSViewRepresentable {
     let isVisible: Bool
+    let onWindowAvailable: (NSWindow) -> Void
 
     func makeNSView(context: Context) -> WindowButtonVisibilityView {
-        WindowButtonVisibilityView()
+        WindowButtonVisibilityView(onWindowAvailable: onWindowAvailable)
     }
 
     func updateNSView(_ nsView: WindowButtonVisibilityView, context: Context) {
@@ -350,9 +357,25 @@ private struct WindowButtonVisibility: NSViewRepresentable {
 
 private final class WindowButtonVisibilityView: NSView {
     private var buttonsVisible = true
+    private let onWindowAvailable: (NSWindow) -> Void
+
+    init(onWindowAvailable: @escaping (NSWindow) -> Void) {
+        self.onWindowAvailable = onWindowAvailable
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let window {
+            DispatchQueue.main.async { [weak self, weak window] in
+                guard let self, let window else { return }
+                self.onWindowAvailable(window)
+            }
+        }
         applyButtonVisibility()
     }
 
@@ -450,7 +473,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-func showOpenURLPanel(model: PlayerViewModel) {
+func showOpenURLPanel(open: @escaping (String) -> Void) {
     let alert = NSAlert()
     alert.messageText = "Open URL"
     alert.informativeText = "Enter a public media URL, YouTube link, or Bilibili link."
@@ -461,7 +484,7 @@ func showOpenURLPanel(model: PlayerViewModel) {
     alert.addButton(withTitle: "Open")
     alert.addButton(withTitle: "Cancel")
     guard alert.runModal() == .alertFirstButtonReturn else { return }
-    model.openURL(field.stringValue)
+    open(field.stringValue)
 }
 
 private struct SettingsSidebarView: View {

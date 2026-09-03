@@ -16,6 +16,11 @@ private struct VideoGeometry: Equatable {
     }
 }
 
+private enum PendingOpenRequest {
+    case media([URL])
+    case url(String)
+}
+
 @MainActor
 final class PlayerViewModel: ObservableObject {
     @Published private(set) var snapshot = PlaybackSnapshot(
@@ -77,6 +82,10 @@ final class PlayerViewModel: ObservableObject {
     private var lastRequestedPreviewPosition: Double?
     private var sliderSeekGeneration: UInt64?
     private var activeMediaIdentity: String?
+    private var requestedMediaIdentity: String?
+    private var isOpenGLContextAttached = false
+    private var pendingOpenRequest: PendingOpenRequest?
+    private weak var playerWindow: NSWindow?
     private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
     private let defaults: UserDefaults
@@ -155,37 +164,53 @@ final class PlayerViewModel: ObservableObject {
 
     func open(_ url: URL) {
         invalidateSeekPreview()
-        do {
-            try bridge?.open(url)
-            lastError = nil
-        } catch {
-            showError(error.localizedDescription)
-        }
+        requestedMediaIdentity = Self.mediaIdentity(for: url)
+        requestOpen(.media([url]))
     }
 
     func open(_ urls: [URL]) {
-        let expanded = expandMediaURLs(urls)
-        guard let first = expanded.first else {
+        openExpandedMediaURLs(Self.expandMediaURLs(urls))
+    }
+
+    func openExpandedMediaURLs(_ expanded: [URL]) {
+        guard !expanded.isEmpty else {
             showError("No supported media files were found")
             return
         }
-        open(first)
-        for url in expanded.dropFirst() {
-            do {
-                try bridge?.enqueue(url)
-            } catch {
-                showError(error.localizedDescription)
-                break
-            }
-        }
+        invalidateSeekPreview()
+        requestedMediaIdentity = Self.mediaIdentity(for: expanded[0])
+        requestOpen(.media(expanded))
     }
 
     func openURL(_ value: String) {
         invalidateSeekPreview()
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        requestedMediaIdentity = trimmedValue
+        requestOpen(.url(trimmedValue))
+    }
+
+    private func requestOpen(_ request: PendingOpenRequest) {
+        pendingOpenRequest = request
+        startPendingOpenIfReady()
+    }
+
+    private func startPendingOpenIfReady() {
+        guard isOpenGLContextAttached, let request = pendingOpenRequest else { return }
+        pendingOpenRequest = nil
         do {
-            try bridge?.openURL(value.trimmingCharacters(in: .whitespacesAndNewlines))
+            switch request {
+            case .media(let urls):
+                guard let first = urls.first else { return }
+                try bridge?.open(first)
+                for url in urls.dropFirst() {
+                    try bridge?.enqueue(url)
+                }
+            case .url(let value):
+                try bridge?.openURL(value)
+            }
             lastError = nil
         } catch {
+            requestedMediaIdentity = nil
             showError(error.localizedDescription)
         }
     }
@@ -195,6 +220,31 @@ final class PlayerViewModel: ObservableObject {
         case .localFile(let path): open(URL(fileURLWithPath: path))
         case .publicURL(let value): openURL(value)
         }
+    }
+
+    func shouldOpenInNewWindow(for url: URL) -> Bool {
+        guard let currentMediaIdentity else { return false }
+        return currentMediaIdentity != Self.mediaIdentity(for: url)
+    }
+
+    func shouldOpenInNewWindow(forURL value: String) -> Bool {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let currentMediaIdentity else { return false }
+        return currentMediaIdentity != value
+    }
+
+    func shouldOpenInNewWindow(for item: MediaItem) -> Bool {
+        guard let currentMediaIdentity else { return false }
+        return currentMediaIdentity != Self.mediaIdentity(for: item)
+    }
+
+    func attach(to window: NSWindow) {
+        playerWindow = window
+        updateWindowGeometryIfNeeded()
+    }
+
+    func detachWindow() {
+        playerWindow = nil
     }
 
     func removeHistoryItem(_ item: HistoryEntry) {
@@ -716,7 +766,9 @@ final class PlayerViewModel: ObservableObject {
     func attachOpenGLContext() {
         do {
             try bridge?.attachOpenGLContext()
+            isOpenGLContextAttached = true
             lastError = nil
+            startPendingOpenIfReady()
         } catch {
             showError(error.localizedDescription)
         }
@@ -740,7 +792,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func toggleFullscreen() {
-        NSApp.keyWindow?.toggleFullScreen(nil)
+        playerWindow?.toggleFullScreen(nil)
     }
 
     func fitWindowToVideo() {
@@ -748,7 +800,7 @@ final class PlayerViewModel: ObservableObject {
             showError("Video dimensions are not available yet")
             return
         }
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else {
+        guard let window = playerWindow else {
             showError("Player window is unavailable")
             return
         }
@@ -764,7 +816,7 @@ final class PlayerViewModel: ObservableObject {
 
     func toggleAlwaysOnTop() {
         alwaysOnTop.toggle()
-        NSApp.keyWindow?.level = alwaysOnTop ? .floating : .normal
+        playerWindow?.level = alwaysOnTop ? .floating : .normal
     }
 
     private func configureBridge(stateDirectory: URL?) {
@@ -801,6 +853,7 @@ final class PlayerViewModel: ObservableObject {
             case .state(let snapshot):
                 apply(snapshot)
             case .error(let message):
+                requestedMediaIdentity = nil
                 showError(message)
             }
         }
@@ -808,6 +861,9 @@ final class PlayerViewModel: ObservableObject {
 
     private func apply(_ snapshot: PlaybackSnapshot) {
         let incomingIdentity = mediaIdentity(for: snapshot.item)
+        if incomingIdentity == requestedMediaIdentity {
+            requestedMediaIdentity = nil
+        }
         if activeMediaIdentity != incomingIdentity {
             invalidateSeekPreview()
             activeMediaIdentity = incomingIdentity
@@ -850,12 +906,24 @@ final class PlayerViewModel: ObservableObject {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    private var currentMediaIdentity: String? {
+        requestedMediaIdentity ?? mediaIdentity(for: snapshot.item)
+    }
+
     private func mediaIdentity(for item: MediaItem?) -> String? {
         guard let item else { return nil }
+        return Self.mediaIdentity(for: item)
+    }
+
+    private static func mediaIdentity(for item: MediaItem) -> String {
         switch item.source {
         case .localFile(let path): return URL(fileURLWithPath: path).standardizedFileURL.path
         case .publicURL(let value): return value
         }
+    }
+
+    private static func mediaIdentity(for url: URL) -> String {
+        url.isFileURL ? url.standardizedFileURL.path : url.absoluteString
     }
 
     private func roundedPreviewPosition(_ position: Double) -> Double? {
@@ -886,7 +954,7 @@ final class PlayerViewModel: ObservableObject {
             return
         }
         guard geometry != windowVideoGeometry,
-              let window = NSApp.keyWindow ?? NSApp.mainWindow,
+              let window = playerWindow,
               let screen = window.screen ?? NSScreen.main else {
             return
         }
@@ -918,7 +986,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private func configureNonVideoWindow() {
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        guard let window = playerWindow else { return }
         let minimumLength: CGFloat = snapshot.item == nil ? 600 : 300
         let minimumSize = NSSize(width: minimumLength, height: minimumLength)
         guard window.contentAspectRatio != .zero || window.contentMinSize != minimumSize else { return }
@@ -930,7 +998,7 @@ final class PlayerViewModel: ObservableObject {
         lastError = message
     }
 
-    private func expandMediaURLs(_ urls: [URL]) -> [URL] {
+    static func expandMediaURLs(_ urls: [URL]) -> [URL] {
         var result: [URL] = []
         var seen = Set<String>()
         for url in urls {
@@ -944,7 +1012,7 @@ final class PlayerViewModel: ObservableObject {
         return result
     }
 
-    private func expandMediaURL(_ url: URL) -> [URL] {
+    private static func expandMediaURL(_ url: URL) -> [URL] {
         if url.hasDirectoryPath {
             let keys: Set<String> = ["mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg"]
             guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return [] }
@@ -966,7 +1034,7 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    private func parsePlaylist(_ url: URL) -> [URL] {
+    private static func parsePlaylist(_ url: URL) -> [URL] {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
         return content.split(whereSeparator: \.isNewline).compactMap { rawLine in
             let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
