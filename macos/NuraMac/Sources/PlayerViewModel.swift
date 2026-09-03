@@ -826,8 +826,8 @@ final class PlayerViewModel {
         pictureInPicture.stop()
     }
 
-    func capturePiPFrame(width: Int32, height: Int32) {
-        pictureInPicture.appendFrame(width: width, height: height)
+    func capturePiPFrame(framebuffer: Int32, width: Int32, height: Int32) {
+        pictureInPicture.appendFrame(framebuffer: framebuffer, width: width, height: height)
     }
 
     func fitWindowToVideo() {

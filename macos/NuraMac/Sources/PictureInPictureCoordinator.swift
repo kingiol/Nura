@@ -17,6 +17,7 @@ private typealias GLEnum = UInt32
     _ type: GLEnum,
     _ pixels: UnsafeMutableRawPointer?
 )
+@_silgen_name("glBindFramebuffer") private func nura_glBindFramebuffer(_ target: GLEnum, _ framebuffer: GLInt)
 
 private let nuraGLRGBA: GLEnum = 0x1908
 private let nuraGLUnsignedByte: GLEnum = 0x1401
@@ -91,7 +92,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     }
 
     /// Called while the model's OpenGL context is current.
-    func appendFrame(width: Int32, height: Int32) {
+    func appendFrame(framebuffer: Int32, width: Int32, height: Int32) {
         guard captureEnabled, width > 0, height > 0 else { return }
         guard displayLayer.isReadyForMoreMediaData else { return }
         let now = CACurrentMediaTime()
@@ -101,6 +102,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         if readbackBuffer.count != pixelCount {
             readbackBuffer = [UInt8](repeating: 0, count: pixelCount)
         }
+        nura_glBindFramebuffer(0x8D40, framebuffer)
         readbackBuffer.withUnsafeMutableBytes { bytes in
             nura_glReadPixels(0, 0, width, height, nuraGLRGBA, nuraGLUnsignedByte, bytes.baseAddress)
         }
