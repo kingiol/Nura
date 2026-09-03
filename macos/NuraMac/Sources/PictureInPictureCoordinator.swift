@@ -42,6 +42,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var captureStartTime: CFTimeInterval?
     private var loggedFirstFrame = false
     private var controlTimebase: CMTimebase?
+    private var pipRenderSize = CMVideoDimensions(width: 480, height: 270)
     private(set) var isActive = false
 
     init(
@@ -132,8 +133,9 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         }
         // AVKit mirrors this layer into the PiP window on macOS. Keep a
         // concrete, non-zero geometry so the mirrored layer has a render size.
-        let layerWidth = CGFloat(captureRegion.width)
-        let layerHeight = CGFloat(captureRegion.height)
+        let outputSize = outputDimensions(for: captureRegion)
+        let layerWidth = CGFloat(outputSize.width)
+        let layerHeight = CGFloat(outputSize.height)
         displayLayer.frame = CGRect(x: 0, y: 0, width: layerWidth, height: layerHeight)
         displayLayer.bounds = CGRect(x: 0, y: 0, width: layerWidth, height: layerHeight)
         ensureController()
@@ -147,12 +149,14 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
             sourceHeight: height,
             cropX: captureRegion.originX,
             cropTop: captureRegion.originY,
-            width: captureRegion.width,
-            height: captureRegion.height
+            cropWidth: captureRegion.width,
+            cropHeight: captureRegion.height,
+            width: outputSize.width,
+            height: outputSize.height
         ) else { return }
         var formatDescription = currentFormatDescription
-        let outputWidth = Int32(captureRegion.width)
-        let outputHeight = Int32(captureRegion.height)
+        let outputWidth = Int32(outputSize.width)
+        let outputHeight = Int32(outputSize.height)
         if currentDimensions.width != outputWidth || currentDimensions.height != outputHeight || formatDescription == nil {
             guard CMVideoFormatDescriptionCreateForImageBuffer(
                 allocator: nil,
@@ -223,6 +227,8 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         sourceHeight: Int32,
         cropX: Int,
         cropTop: Int,
+        cropWidth: Int,
+        cropHeight: Int,
         width: Int,
         height: Int
     ) -> CVPixelBuffer? {
@@ -250,11 +256,13 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         let destinationRowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
         let destinationBytes = destination.assumingMemoryBound(to: UInt8.self)
         for row in 0..<height {
-            let sourceRow = Int(sourceHeight) - cropTop - row - 1
+            let sourceCropRow = min(cropHeight - 1, (row * cropHeight) / height)
+            let sourceRow = Int(sourceHeight) - cropTop - sourceCropRow - 1
             let sourceOffset = sourceRow * sourceRowBytes + cropX * 4
             let destinationOffset = row * destinationRowBytes
             for column in 0..<width {
-                let source = sourceOffset + column * 4
+                let sourceColumn = min(cropWidth - 1, (column * cropWidth) / width)
+                let source = sourceOffset + sourceColumn * 4
                 let target = destinationOffset + column * 4
                 destinationBytes[target] = readbackBuffer[source + 2]
                 destinationBytes[target + 1] = readbackBuffer[source + 1]
@@ -264,6 +272,23 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         }
         CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
         return pixelBuffer
+    }
+
+    private func outputDimensions(
+        for region: (originX: Int, originY: Int, width: Int, height: Int)
+    ) -> (width: Int, height: Int) {
+        let sourceAspect = Double(region.width) / Double(region.height)
+        let targetWidth = max(2, Int(pipRenderSize.width))
+        let targetHeight = max(2, Int(pipRenderSize.height))
+        let targetAspect = Double(targetWidth) / Double(targetHeight)
+        guard sourceAspect.isFinite, sourceAspect > 0, targetAspect.isFinite, targetAspect > 0 else {
+            return (targetWidth, targetHeight)
+        }
+
+        if sourceAspect > targetAspect {
+            return (targetWidth, max(2, Int((Double(targetWidth) / sourceAspect).rounded())))
+        }
+        return (max(2, Int((Double(targetHeight) * sourceAspect).rounded())), targetHeight)
     }
 
     private func videoCaptureRegion(
@@ -349,7 +374,10 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
-    ) {}
+    ) {
+        guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
+        pipRenderSize = newRenderSize
+    }
 
     func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
