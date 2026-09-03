@@ -25,90 +25,125 @@ struct PlayerView: View {
     }
 
     var body: some View {
-        ZStack {
-            RenderSurfaceView(model: model)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.black)
-                .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
-                .onTapGesture { revealControls() }
-                .contextMenu {
-                    Button(model.isPlaying ? "Pause" : "Play", action: model.togglePlayback)
-                    Divider()
-                    Button("Previous", action: model.previous)
-                    Button("Next", action: model.next)
-                    Button("Back 5 Seconds") { model.seekRelative(-5) }
-                    Button("Forward 5 Seconds") { model.seekRelative(5) }
-                    Button("Back 30 Seconds") { model.seekRelative(-30) }
-                    Button("Forward 30 Seconds") { model.seekRelative(30) }
-                    Button("Next Frame", action: model.frameStep)
-                    Button(model.loopEnabled ? "Disable Loop" : "Loop Current Item", action: model.toggleLoop)
-                    Button(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", action: model.togglePlaylistLoop)
-                    Button("Shuffle Playlist", action: model.shufflePlaylist)
-                    Button(model.abLoopLabel, action: model.advanceABLoop)
-                    Divider()
-                    Button("Load External Subtitle", action: model.openExternalSubtitle)
-                    Button("Take Screenshot", action: model.screenshot)
-                    Button("Copy Screenshot", action: model.copyScreenshot)
-                    Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
-                    Button("Toggle Fullscreen", action: model.toggleFullscreen)
-                }
+        GeometryReader { container in
+            ZStack {
+                RenderSurfaceView(model: model)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
+                    .onTapGesture { revealControls() }
+                    .contextMenu {
+                        Button(model.isPlaying ? "Pause" : "Play", action: model.togglePlayback)
+                        Divider()
+                        Button("Previous", action: model.previous)
+                        Button("Next", action: model.next)
+                        Button("Back 5 Seconds") { model.seekRelative(-5) }
+                        Button("Forward 5 Seconds") { model.seekRelative(5) }
+                        Button("Back 30 Seconds") { model.seekRelative(-30) }
+                        Button("Forward 30 Seconds") { model.seekRelative(30) }
+                        Button("Next Frame", action: model.frameStep)
+                        Button(model.loopEnabled ? "Disable Loop" : "Loop Current Item", action: model.toggleLoop)
+                        Button(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", action: model.togglePlaylistLoop)
+                        Button("Shuffle Playlist", action: model.shufflePlaylist)
+                        Button(model.abLoopLabel, action: model.advanceABLoop)
+                        Divider()
+                        Button("Load External Subtitle", action: model.openExternalSubtitle)
+                        Button("Take Screenshot", action: model.screenshot)
+                        Button("Copy Screenshot", action: model.copyScreenshot)
+                        Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
+                        Button("Toggle Fullscreen", action: model.toggleFullscreen)
+                    }
 
-            VStack(spacing: 0) {
-                if controlsVisible {
-                    Spacer()
-                    controlBar.transition(.opacity)
-                } else {
-                    Spacer()
-                }
-            }
-
-            if let sidebar {
-                Group {
-                    if sidebar == .settings {
-                        SettingsSidebarView(
-                            model: model,
-                            onClose: { self.sidebar = nil },
-                            onTogglePiP: togglePiP
-                        )
+                VStack(spacing: 0) {
+                    if controlsVisible {
+                        Spacer()
+                        controlBar
+                            .frame(width: controlBarWidth(in: container.size))
+                            .transition(.opacity)
                     } else {
-                        SidebarView(
-                            tab: sidebar,
-                            snapshot: model.snapshot,
-                            onClose: { self.sidebar = nil },
-                            onPlayIndex: model.playPlaylistIndex,
-                            onRemovePlaylistIndex: model.removePlaylistIndex,
-                            onMovePlaylistItem: model.movePlaylistItem,
-                            onSeek: { position in model.seek(to: position) },
-                            onSelectVideoTrack: model.selectVideoTrack,
-                            onAddExternalSubtitle: model.openExternalSubtitle
-                        )
+                        Spacer()
                     }
                 }
-                .onHover { hovering in
-                    sidebarHovered = hovering
-                    updateControlsVisibility()
+
+                if let sidebar {
+                    Group {
+                        if sidebar == .settings {
+                            SettingsSidebarView(
+                                model: model,
+                                onClose: { self.sidebar = nil },
+                                onTogglePiP: togglePiP
+                            )
+                        } else {
+                            SidebarView(
+                                tab: sidebar,
+                                snapshot: model.snapshot,
+                                onClose: { self.sidebar = nil },
+                                onPlayIndex: model.playPlaylistIndex,
+                                onRemovePlaylistIndex: model.removePlaylistIndex,
+                                onMovePlaylistItem: model.movePlaylistItem,
+                                onSeek: { position in model.seek(to: position) },
+                                onSelectVideoTrack: model.selectVideoTrack,
+                                onAddExternalSubtitle: model.openExternalSubtitle
+                            )
+                        }
+                    }
+                    .onHover { hovering in
+                        sidebarHovered = hovering
+                        updateControlsVisibility()
+                    }
+                        .frame(width: sidebar == .settings ? 360 : 300)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-                    .frame(width: sidebar == .settings ? 360 : 300)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+            .ignoresSafeArea()
+            .background(Color.black)
+            .background(WindowButtonVisibility(isVisible: controlsVisible, onWindowAvailable: onWindowAvailable))
+            .animation(.easeOut(duration: 0.18), value: controlsVisible)
+            .animation(.easeOut(duration: 0.18), value: sidebar)
+            .onHover { hovering in
+                if hovering, !controlBarHovered, !sidebarHovered { revealControls() }
+            }
+            .onAppear {
+                model.updateWindowGeometryIfNeeded()
+                revealControls()
+            }
+            .onDisappear {
+                hideControlsTask?.cancel()
+                pipPanel?.close()
+                pipPanel = nil
             }
         }
-        .ignoresSafeArea()
-        .background(Color.black)
-        .background(WindowButtonVisibility(isVisible: controlsVisible, onWindowAvailable: onWindowAvailable))
-        .animation(.easeOut(duration: 0.18), value: controlsVisible)
-        .animation(.easeOut(duration: 0.18), value: sidebar)
-        .onHover { hovering in
-            if hovering, !controlBarHovered, !sidebarHovered { revealControls() }
+    }
+
+    private func controlBarWidth(in containerSize: CGSize) -> CGFloat {
+        let outerHorizontalPadding: CGFloat = 20
+        guard let aspectRatio = videoAspectRatio, containerSize.width > 0, containerSize.height > 0 else {
+            return containerSize.width
         }
-        .onAppear {
-            model.updateWindowGeometryIfNeeded()
-            revealControls()
+
+        let displayedVideoWidth = min(containerSize.width, containerSize.height * aspectRatio)
+        return min(containerSize.width, displayedVideoWidth + outerHorizontalPadding)
+    }
+
+    private var videoAspectRatio: CGFloat? {
+        guard let width = model.snapshot.videoWidth,
+              let height = model.snapshot.videoHeight,
+              width > 0,
+              height > 0 else {
+            return nil
         }
-        .onDisappear {
-            hideControlsTask?.cancel()
-            pipPanel?.close()
-            pipPanel = nil
+
+        let rotated = model.snapshot.videoRotationDegrees % 180 != 0
+        let sourceWidth = CGFloat(rotated ? height : width)
+        let sourceHeight = CGFloat(rotated ? width : height)
+
+        switch model.snapshot.videoAspect {
+        case "16:9": return 16 / 9
+        case "4:3": return 4 / 3
+        case "1.85:1": return 1.85
+        case "2.35:1": return 2.35
+        default: return sourceWidth / sourceHeight
         }
     }
 

@@ -39,6 +39,7 @@ struct NuraMacApp: App {
         Settings {
             NuraSettingsView(settings: settings, model: mainModel)
         }
+        .windowToolbarStyle(.unifiedCompact)
         .commands {
             NuraPlayerCommands(playerWindows: playerWindows, settings: settings)
         }

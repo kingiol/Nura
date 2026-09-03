@@ -90,6 +90,8 @@ private func nura_player_remove_history_item_async(_ player: NuraHandle?, _ path
 private func nura_player_clear_history_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_attach_opengl_context")
 private func nura_player_attach_opengl_context(_ player: NuraHandle?) -> Int32
+@_silgen_name("nura_player_detach_opengl_context")
+private func nura_player_detach_opengl_context(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_render_opengl")
 private func nura_player_render_opengl(_ player: NuraHandle?, _ fbo: Int32, _ width: Int32, _ height: Int32) -> Int32
 @_silgen_name("nura_player_next_event")
@@ -320,6 +322,7 @@ final class PlayerBridge {
     }
     func clearHistory() throws { try command { nura_player_clear_history_async(handle) } }
     func attachOpenGLContext() throws { try command { nura_player_attach_opengl_context(handle) } }
+    func detachOpenGLContext() throws { try command { nura_player_detach_opengl_context(handle) } }
 
     func render(fbo: Int32, width: Int32, height: Int32) throws -> Bool {
         switch nura_player_render_opengl(handle, fbo, width, height) {

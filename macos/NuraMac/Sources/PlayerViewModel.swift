@@ -89,6 +89,7 @@ final class PlayerViewModel {
     private weak var playerWindow: NSWindow?
     private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
+    private let stateDirectory: URL?
     private let defaults: UserDefaults
     private let disableWindowResize: Bool
     let settings: NuraSettings
@@ -99,18 +100,11 @@ final class PlayerViewModel {
         launchConfiguration: PlayerLaunchConfiguration = .current,
         settings: NuraSettings? = nil
     ) {
+        stateDirectory = launchConfiguration.stateDirectory
         defaults = launchConfiguration.defaults
         disableWindowResize = launchConfiguration.disableWindowResize
         self.settings = settings ?? NuraSettings(defaults: launchConfiguration.defaults)
-        configureBridge(stateDirectory: launchConfiguration.stateDirectory)
-        configureScreenshotDirectory()
-        setVolume(self.settings.defaultVolume)
-        setSpeed(self.settings.defaultPlaybackSpeed)
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.pollEvents()
-            }
-        }
+        startRuntime()
         if let mediaURL = launchConfiguration.mediaURL, bridge != nil {
             DispatchQueue.main.async { [weak self] in
                 self?.open(mediaURL)
@@ -242,10 +236,18 @@ final class PlayerViewModel {
 
     func attach(to window: NSWindow) {
         playerWindow = window
+        startRuntime()
         updateWindowGeometryIfNeeded()
     }
 
     func detachWindow() {
+        timer?.invalidate()
+        timer = nil
+        try? bridge?.detachOpenGLContext()
+        bridge = nil
+        isOpenGLContextAttached = false
+        pendingOpenRequest = nil
+        windowVideoGeometry = nil
         playerWindow = nil
     }
 
@@ -827,6 +829,21 @@ final class PlayerViewModel {
             )
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    private func startRuntime() {
+        guard bridge == nil else { return }
+        configureBridge(stateDirectory: stateDirectory)
+        guard bridge != nil else { return }
+
+        configureScreenshotDirectory()
+        setVolume(settings.defaultVolume)
+        setSpeed(settings.defaultPlaybackSpeed)
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pollEvents()
+            }
         }
     }
 

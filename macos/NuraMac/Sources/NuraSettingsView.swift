@@ -1,33 +1,97 @@
 import SwiftUI
 
+private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
+    case general
+    case playback
+    case controls
+    case video
+    case audio
+    case subtitles
+    case network
+    case advanced
+    case history
+    case about
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .playback: "Playback"
+        case .controls: "Controls"
+        case .video: "Video"
+        case .audio: "Audio"
+        case .subtitles: "Subtitles"
+        case .network: "Network"
+        case .advanced: "Advanced"
+        case .history: "History"
+        case .about: "About"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: "gearshape"
+        case .playback: "play.circle"
+        case .controls: "keyboard"
+        case .video: "rectangle.on.rectangle"
+        case .audio: "waveform"
+        case .subtitles: "captions.bubble"
+        case .network: "network"
+        case .advanced: "slider.horizontal.3"
+        case .history: "clock.arrow.circlepath"
+        case .about: "info.circle"
+        }
+    }
+}
+
 struct NuraSettingsView: View {
     let settings: NuraSettings
     let model: PlayerViewModel
+    @State private var selection: SettingsSection? = .general
 
     var body: some View {
-        TabView {
-            GeneralSettingsPage(settings: settings, model: model)
-                .tabItem { Label("General", systemImage: "gearshape") }
-            PlaybackSettingsPage(settings: settings)
-                .tabItem { Label("Playback", systemImage: "play.circle") }
-            ControlsSettingsPage(settings: settings)
-                .tabItem { Label("Controls", systemImage: "keyboard") }
-            VideoSettingsPage(model: model)
-                .tabItem { Label("Video", systemImage: "rectangle.on.rectangle") }
-            AudioSettingsPage(settings: settings, model: model)
-                .tabItem { Label("Audio", systemImage: "waveform") }
-            SubtitleSettingsPage(settings: settings, model: model)
-                .tabItem { Label("Subtitles", systemImage: "captions.bubble") }
-            NetworkSettingsPage(settings: settings)
-                .tabItem { Label("Network", systemImage: "network") }
-            AdvancedSettingsPage(settings: settings)
-                .tabItem { Label("Advanced", systemImage: "slider.horizontal.3") }
-            HistorySettingsPage(model: model)
-                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
-            AboutSettingsPage()
-                .tabItem { Label("About", systemImage: "info.circle") }
+        NavigationSplitView {
+            List(selection: $selection) {
+                Section("Nura") {
+                    ForEach(SettingsSection.allCases) { section in
+                        Label(section.title, systemImage: section.systemImage)
+                            .tag(section)
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+            .frame(minWidth: 190, idealWidth: 210)
+        } detail: {
+            Group {
+                switch selection ?? .general {
+                case .general:
+                    GeneralSettingsPage(settings: settings, model: model)
+                case .playback:
+                    PlaybackSettingsPage(settings: settings)
+                case .controls:
+                    ControlsSettingsPage(settings: settings)
+                case .video:
+                    VideoSettingsPage(model: model)
+                case .audio:
+                    AudioSettingsPage(settings: settings, model: model)
+                case .subtitles:
+                    SubtitleSettingsPage(settings: settings, model: model)
+                case .network:
+                    NetworkSettingsPage(settings: settings)
+                case .advanced:
+                    AdvancedSettingsPage(settings: settings)
+                case .history:
+                    HistorySettingsPage(model: model)
+                case .about:
+                    AboutSettingsPage()
+                }
+            }
+            .navigationTitle((selection ?? .general).title)
         }
-        .frame(width: 760, height: 560)
+        .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
+        .frame(minWidth: 820, idealWidth: 900, minHeight: 560, idealHeight: 620)
     }
 }
 

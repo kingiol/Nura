@@ -523,6 +523,16 @@ impl MpvEngine {
         Ok(())
     }
 
+    pub fn detach_opengl_context(&mut self) {
+        if self.render_context.is_null() {
+            return;
+        }
+        unsafe {
+            (self.api.render_free)(self.render_context);
+        }
+        self.render_context = ptr::null_mut();
+    }
+
     pub fn render_opengl(&mut self, fbo: i32, width: i32, height: i32) -> Result<(), EngineError> {
         if self.render_context.is_null() {
             return Err(EngineError::Message(
@@ -565,10 +575,8 @@ impl MpvEngine {
 
 impl Drop for MpvEngine {
     fn drop(&mut self) {
+        self.detach_opengl_context();
         unsafe {
-            if !self.render_context.is_null() {
-                (self.api.render_free)(self.render_context);
-            }
             if !self.handle.is_null() {
                 (self.api.terminate_destroy)(self.handle);
             }

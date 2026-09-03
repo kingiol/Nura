@@ -441,11 +441,14 @@ pub unsafe extern "C" fn nura_player_destroy(player: *mut NuraPlayer) {
     if player.is_null() {
         return;
     }
-    let mut player = Box::from_raw(player);
-    let _ = send_command(&player, Command::Shutdown);
-    if let Some(worker) = player.worker.take() {
-        let _ = worker.join();
-    }
+    let player = Box::from_raw(player);
+    std::thread::spawn(move || {
+        let mut player = player;
+        let _ = send_command(&player, Command::Shutdown);
+        if let Some(worker) = player.worker.take() {
+            let _ = worker.join();
+        }
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -1015,6 +1018,28 @@ pub unsafe extern "C" fn nura_player_attach_opengl_context(player: *mut NuraPlay
         Ok(()) => 0,
         Err(error) => {
             set_last_error(error.to_string());
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_detach_opengl_context(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        return -1;
+    };
+    match player
+        .engine
+        .0
+        .lock()
+        .map_err(|_| "player lock poisoned".to_owned())
+    {
+        Ok(mut engine) => {
+            engine.detach_opengl_context();
+            0
+        }
+        Err(error) => {
+            set_last_error(error);
             -1
         }
     }
