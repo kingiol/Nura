@@ -2,6 +2,7 @@ import AVFoundation
 import AVKit
 import CoreVideo
 import Foundation
+import QuartzCore
 
 private typealias GLInt = Int32
 private typealias GLSize = Int32
@@ -33,6 +34,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var currentDimensions: CMVideoDimensions = .init(width: 0, height: 0)
     private var captureEnabled = false
     private var startRequested = false
+    private var lastFrameTime: CFTimeInterval = 0
     private(set) var isActive = false
 
     init(
@@ -92,6 +94,9 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     func appendFrame(width: Int32, height: Int32) {
         guard captureEnabled, width > 0, height > 0 else { return }
         guard displayLayer.isReadyForMoreMediaData else { return }
+        let now = CACurrentMediaTime()
+        guard now - lastFrameTime >= (1.0 / 30.0) else { return }
+        lastFrameTime = now
         let pixelCount = Int(width) * Int(height) * 4
         if readbackBuffer.count != pixelCount {
             readbackBuffer = [UInt8](repeating: 0, count: pixelCount)
