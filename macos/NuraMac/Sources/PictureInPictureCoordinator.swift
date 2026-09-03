@@ -296,25 +296,13 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private func videoCaptureRegion(
         viewportWidth: Int,
         viewportHeight: Int,
-        videoWidth: Int32?,
-        videoHeight: Int32?
+        videoWidth _: Int32?,
+        videoHeight _: Int32?
     ) -> (originX: Int, originY: Int, width: Int, height: Int) {
-        guard let videoWidth, let videoHeight, videoWidth > 0, videoHeight > 0 else {
-            return (0, 0, viewportWidth, viewportHeight)
-        }
-        let viewportAspect = Double(viewportWidth) / Double(viewportHeight)
-        let videoAspect = Double(videoWidth) / Double(videoHeight)
-        guard viewportAspect.isFinite, videoAspect.isFinite, viewportAspect > 0, videoAspect > 0 else {
-            return (0, 0, viewportWidth, viewportHeight)
-        }
-
-        if viewportAspect > videoAspect {
-            let croppedWidth = max(2, Int((Double(viewportHeight) * videoAspect).rounded()))
-            return ((viewportWidth - croppedWidth) / 2, 0, croppedWidth, viewportHeight)
-        }
-
-        let croppedHeight = max(2, Int((Double(viewportWidth) / videoAspect).rounded()))
-        return (0, (viewportHeight - croppedHeight) / 2, viewportWidth, croppedHeight)
+        // Keep the complete rendered viewport. mpv may apply its own aspect,
+        // zoom, rotation, or subtitle layout, so inferring and cropping a
+        // content rectangle here can remove valid video pixels.
+        return (0, 0, viewportWidth, viewportHeight)
     }
 
     func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
