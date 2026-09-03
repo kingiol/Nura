@@ -43,6 +43,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var loggedFirstFrame = false
     private var controlTimebase: CMTimebase?
     private var pipRenderSize = CMVideoDimensions(width: 480, height: 270)
+    private let maxPiPRenderSize = CMVideoDimensions(width: 480, height: 270)
     private(set) var isActive = false
 
     init(
@@ -60,6 +61,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         super.init()
 
         displayLayer.videoGravity = .resizeAspect
+        displayLayer.contentsScale = 1
         var timebase: CMTimebase?
         if CMTimebaseCreateWithSourceClock(
             allocator: kCFAllocatorDefault,
@@ -376,7 +378,10 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
     ) {
         guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
-        pipRenderSize = newRenderSize
+        pipRenderSize = CMVideoDimensions(
+            width: min(newRenderSize.width, maxPiPRenderSize.width),
+            height: min(newRenderSize.height, maxPiPRenderSize.height)
+        )
     }
 
     func pictureInPictureController(
