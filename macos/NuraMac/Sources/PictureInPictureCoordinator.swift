@@ -42,8 +42,11 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var captureStartTime: CFTimeInterval?
     private var loggedFirstFrame = false
     private var controlTimebase: CMTimebase?
-    private var pipRenderSize = CMVideoDimensions(width: 480, height: 270)
-    private let maxPiPRenderSize = CMVideoDimensions(width: 480, height: 270)
+    // macOS mirrors AVSampleBufferDisplayLayer at 1:1 pixels in PiP. Keep the
+    // source below the smallest standard PiP container to avoid CALayerHost
+    // cropping on Retina systems.
+    private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
+    private let maxPiPRenderSize = CMVideoDimensions(width: 320, height: 180)
     private(set) var isActive = false
 
     init(
