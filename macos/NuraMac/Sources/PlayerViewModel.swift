@@ -1075,12 +1075,11 @@ final class PlayerViewModel {
 
     private static func expandMediaURL(_ url: URL) -> [URL] {
         if url.hasDirectoryPath {
-            let keys: Set<String> = ["mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg"]
             guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return [] }
             return enumerator.compactMap { item in
                 guard let candidate = item as? URL,
                       (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-                      keys.contains(candidate.pathExtension.lowercased()) else { return nil }
+                      mediaExtensions.contains(candidate.pathExtension.lowercased()) else { return nil }
                 return candidate
             }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
         }
@@ -1088,12 +1087,39 @@ final class PlayerViewModel {
         switch url.pathExtension.lowercased() {
         case "m3u", "m3u8":
             return parsePlaylist(url)
-        case "mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg":
+        case let ext where videoExtensions.contains(ext):
+            return expandVideoFileAndSiblings(url)
+        case let ext where mediaExtensions.contains(ext):
             return [url]
         default:
             return []
         }
     }
+
+    private static func expandVideoFileAndSiblings(_ url: URL) -> [URL] {
+        let fileURL = url.standardizedFileURL
+        let folderURL = fileURL.deletingLastPathComponent()
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: folderURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return [url]
+        }
+
+        let videos = contents.filter { candidate in
+            guard (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                return false
+            }
+            return videoExtensions.contains(candidate.pathExtension.lowercased())
+        }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+
+        guard !videos.isEmpty else { return [url] }
+        return [fileURL] + videos.filter { $0.standardizedFileURL != fileURL }
+    }
+
+    private static let videoExtensions: Set<String> = ["mp4", "m4v", "mov", "mkv", "avi", "webm"]
+    private static let mediaExtensions: Set<String> = videoExtensions.union(["mp3", "m4a", "aac", "flac", "wav", "ogg"])
 
     private static func parsePlaylist(_ url: URL) -> [URL] {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
