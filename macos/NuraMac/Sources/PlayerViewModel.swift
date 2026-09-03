@@ -1118,7 +1118,11 @@ final class PlayerViewModel {
         return [fileURL] + videos.filter { $0.standardizedFileURL != fileURL }
     }
 
-    private static let videoExtensions: Set<String> = ["mp4", "m4v", "mov", "mkv", "avi", "webm"]
+    private static let videoExtensions: Set<String> = [
+        "mp4", "m4v", "mov", "mkv", "avi", "webm",
+        "mpg", "mpeg", "ts", "m2ts", "mts", "flv",
+        "wmv", "asf", "3gp", "3g2", "ogv", "vob", "rm", "rmvb"
+    ]
     private static let mediaExtensions: Set<String> = videoExtensions.union(["mp3", "m4a", "aac", "flac", "wav", "ogg"])
 
     private static func parsePlaylist(_ url: URL) -> [URL] {
