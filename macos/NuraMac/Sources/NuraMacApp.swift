@@ -94,9 +94,9 @@ private struct NuraPlayerCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Open…", action: playerWindows.openPanel)
+            Button(playerWindows.openMenuTitle, action: playerWindows.openPanel)
                 .keyboardShortcut("o", modifiers: [.command])
-            Button("Open URL…") {
+            Button(playerWindows.openURLMenuTitle) {
                 showOpenURLPanel(open: playerWindows.openURL)
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])

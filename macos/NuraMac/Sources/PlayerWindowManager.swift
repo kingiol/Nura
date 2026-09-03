@@ -23,6 +23,14 @@ final class PlayerWindowManager {
         activeModel?.snapshot.recentItems ?? []
     }
 
+    var openMenuTitle: String {
+        activeModel?.snapshot.item == nil ? "Open…" : "Open in New Window…"
+    }
+
+    var openURLMenuTitle: String {
+        activeModel?.snapshot.item == nil ? "Open URL…" : "Open URL in New Window…"
+    }
+
     func makeInitialModel() -> PlayerViewModel {
         PlayerViewModel(launchConfiguration: launchConfiguration, settings: settings)
     }
