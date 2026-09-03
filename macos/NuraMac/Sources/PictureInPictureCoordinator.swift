@@ -40,6 +40,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var lastFrameTime: CFTimeInterval = 0
     private var captureStartTime: CFTimeInterval?
     private var loggedFirstFrame = false
+    private var controlTimebase: CMTimebase?
     private(set) var isActive = false
 
     init(
@@ -63,6 +64,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         ) == noErr, let timebase {
             CMTimebaseSetTime(timebase, time: .zero)
             CMTimebaseSetRate(timebase, rate: 1)
+            controlTimebase = timebase
             displayLayer.controlTimebase = timebase
         }
     }
@@ -81,6 +83,10 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         captureStartTime = nil
         lastFrameTime = 0
         loggedFirstFrame = false
+        if let controlTimebase {
+            CMTimebaseSetTime(controlTimebase, time: .zero)
+            CMTimebaseSetRate(controlTimebase, rate: 1)
+        }
         startIfPossible()
     }
 
