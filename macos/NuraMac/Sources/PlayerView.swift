@@ -473,6 +473,7 @@ private struct MiniPlayerView: View {
                     Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                 }
                 .buttonStyle(.borderless)
+                .help(model.isPlaying ? "Pause" : "Play")
                 Text(model.title)
                     .font(.caption)
                     .lineLimit(1)
@@ -1048,6 +1049,7 @@ private struct SidebarView: View {
                                         Image(systemName: "ellipsis.circle")
                                     }
                                     .menuStyle(.borderlessButton)
+                                    .help("Playlist item actions")
                                     .fixedSize()
                                 }
                             }
