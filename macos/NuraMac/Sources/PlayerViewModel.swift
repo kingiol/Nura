@@ -21,6 +21,18 @@ private enum PendingOpenRequest {
     case url(String)
 }
 
+enum PlaylistSortKey {
+    case title
+    case locator
+
+    func value(for item: MediaItem) -> String {
+        switch self {
+        case .title: return item.title
+        case .locator: return item.locator
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class PlayerViewModel {
@@ -182,19 +194,15 @@ final class PlayerViewModel {
     func open(_ url: URL) {
         invalidateSeekPreview()
         requestedMediaIdentity = Self.mediaIdentity(for: url)
-        if Self.isSupportedLocalMediaFile(url) {
-            openExpandedMediaURLs(Self.expandSingleMediaURL(url))
+        if Self.isSupportedLocalVideoFile(url) {
+            openExpandedMediaURLs(Self.expandVideoFileAndSiblings(url))
         } else {
             requestOpen(.media([url]))
         }
     }
 
     func open(_ urls: [URL]) {
-        if urls.count == 1, let url = urls.first, Self.isSupportedLocalMediaFile(url) {
-            openExpandedMediaURLs(Self.expandSingleMediaURL(url))
-        } else {
-            openExpandedMediaURLs(Self.expandMediaURLs(urls))
-        }
+        openExpandedMediaURLs(Self.expandMediaURLs(urls))
     }
 
     func openExpandedMediaURLs(_ expanded: [URL]) {
@@ -311,6 +319,52 @@ final class PlayerViewModel {
         }
     }
 
+    func addPlaylistPanel() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        addPlaylistURLs(panel.urls)
+    }
+
+    func addPlaylistURLs(_ urls: [URL]) {
+        let expanded = Self.expandMediaURLs(urls)
+        guard !expanded.isEmpty else {
+            showError("No supported media files were found")
+            return
+        }
+        if snapshot.item == nil {
+            openExpandedMediaURLs(expanded)
+            return
+        }
+        do {
+            for url in expanded {
+                if url.isFileURL {
+                    try bridge?.enqueue(url)
+                } else {
+                    try bridge?.enqueueURL(url.absoluteString)
+                }
+            }
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func addPlaylistURLPrompt() {
+        showOpenURLPanel { [weak self] value in
+            guard let self else { return }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if self.snapshot.item == nil {
+                self.openURL(trimmed)
+            } else {
+                self.enqueueURL(trimmed)
+            }
+        }
+    }
+
     func removePlaylistIndex(_ index: Int) {
         do {
             try bridge?.removePlaylistIndex(index)
@@ -326,6 +380,40 @@ final class PlayerViewModel {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    func clearPlaylist() {
+        do {
+            try bridge?.clearPlaylist()
+            loopEnabled = false
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func playPlaylistItemNext(_ index: Int) {
+        guard let current = snapshot.playlistIndex,
+              index != current,
+              !snapshot.playlist.isEmpty else { return }
+        let destination = index < current ? current : min(current + 1, snapshot.playlist.count - 1)
+        movePlaylistItem(from: index, to: destination)
+    }
+
+    func sortPlaylist(by key: PlaylistSortKey, ascending: Bool) {
+        guard snapshot.playlist.count > 1 else { return }
+        let sortedIDs = snapshot.playlist.enumerated().sorted { lhs, rhs in
+            let left = key.value(for: lhs.element)
+            let right = key.value(for: rhs.element)
+            return ascending ? left.localizedStandardCompare(right) == .orderedAscending : left.localizedStandardCompare(right) == .orderedDescending
+        }.map(\.offset)
+        var currentOrder = Array(snapshot.playlist.indices)
+        for target in sortedIDs.indices {
+            guard let from = currentOrder.firstIndex(of: sortedIDs[target]), from != target else { continue }
+            let itemID = currentOrder.remove(at: from)
+            currentOrder.insert(itemID, at: target)
+            movePlaylistItem(from: from, to: target)
         }
     }
 
@@ -525,6 +613,46 @@ final class PlayerViewModel {
             lastError = nil
         } catch {
             showError(error.localizedDescription)
+        }
+    }
+
+    var playlistLoopLabel: String {
+        if loopEnabled { return "Loop Current Item" }
+        if snapshot.playlistLoop { return "Loop Playlist" }
+        return "Loop Off"
+    }
+
+    var playlistLoopSymbol: String {
+        if loopEnabled { return "repeat.1" }
+        if snapshot.playlistLoop { return "repeat" }
+        return "repeat"
+    }
+
+    func cyclePlaylistLoopMode() {
+        if loopEnabled {
+            do {
+                try bridge?.setLoop(false)
+                try bridge?.setPlaylistLoop(true)
+                loopEnabled = false
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
+        } else if snapshot.playlistLoop {
+            do {
+                try bridge?.setPlaylistLoop(false)
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
+        } else {
+            do {
+                try bridge?.setLoop(true)
+                loopEnabled = true
+                lastError = nil
+            } catch {
+                showError(error.localizedDescription)
+            }
         }
     }
 
@@ -1094,35 +1222,8 @@ final class PlayerViewModel {
         return result
     }
 
-    static func isSupportedLocalMediaFile(_ url: URL) -> Bool {
-        url.isFileURL && !url.hasDirectoryPath && supportedMediaExtensions.contains(url.pathExtension.lowercased())
-    }
-
-    static func expandSingleMediaURL(_ url: URL) -> [URL] {
-        guard isSupportedLocalMediaFile(url) else { return [] }
-
-        let requested = url.standardizedFileURL
-        let parent = requested.deletingLastPathComponent()
-        let candidates = (try? FileManager.default.contentsOfDirectory(
-            at: parent,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-
-        var files = candidates.compactMap { candidate -> URL? in
-            guard isSupportedLocalMediaFile(candidate),
-                  (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
-                return nil
-            }
-            return candidate.standardizedFileURL
-        }
-        if !files.contains(requested) {
-            files.append(requested)
-        }
-        files.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
-        files.removeAll { $0 == requested }
-        files.insert(requested, at: 0)
-        return files
+    static func isSupportedLocalVideoFile(_ url: URL) -> Bool {
+        url.isFileURL && !url.hasDirectoryPath && videoExtensions.contains(url.pathExtension.lowercased())
     }
 
     private static func expandMediaURL(_ url: URL) -> [URL] {
@@ -1131,7 +1232,7 @@ final class PlayerViewModel {
             return enumerator.compactMap { item in
                 guard let candidate = item as? URL,
                       (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-                      supportedMediaExtensions.contains(candidate.pathExtension.lowercased()) else { return nil }
+                      mediaExtensions.contains(candidate.pathExtension.lowercased()) else { return nil }
                 return candidate
             }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
         }
@@ -1139,14 +1240,43 @@ final class PlayerViewModel {
         switch url.pathExtension.lowercased() {
         case "m3u", "m3u8":
             return parsePlaylist(url)
+        case let ext where videoExtensions.contains(ext):
+            return expandVideoFileAndSiblings(url)
+        case let ext where mediaExtensions.contains(ext):
+            return [url]
         default:
-            return supportedMediaExtensions.contains(url.pathExtension.lowercased()) ? [url] : []
+            return []
         }
     }
 
-    private static let supportedMediaExtensions: Set<String> = [
-        "mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg"
+    private static func expandVideoFileAndSiblings(_ url: URL) -> [URL] {
+        let fileURL = url.standardizedFileURL
+        let folderURL = fileURL.deletingLastPathComponent()
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: folderURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return [url]
+        }
+
+        let videos = contents.filter { candidate in
+            guard (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                return false
+            }
+            return videoExtensions.contains(candidate.pathExtension.lowercased())
+        }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+
+        guard !videos.isEmpty else { return [url] }
+        return [fileURL] + videos.filter { $0.standardizedFileURL != fileURL }
+    }
+
+    private static let videoExtensions: Set<String> = [
+        "mp4", "m4v", "mov", "mkv", "avi", "webm",
+        "mpg", "mpeg", "ts", "m2ts", "mts", "flv",
+        "wmv", "asf", "3gp", "3g2", "ogv", "vob", "rm", "rmvb"
     ]
+    private static let mediaExtensions: Set<String> = videoExtensions.union(["mp3", "m4a", "aac", "flac", "wav", "ogg"])
 
     private static func parsePlaylist(_ url: URL) -> [URL] {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }

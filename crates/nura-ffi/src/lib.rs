@@ -18,6 +18,7 @@ const NURA_RENDER_SKIPPED: c_int = 1;
 enum Command {
     Open(PathBuf, Reply),
     Enqueue(PathBuf, Reply),
+    ClearPlaylist(Reply),
     RemoveIndex(usize, Reply),
     MoveIndex {
         from: usize,
@@ -57,6 +58,7 @@ enum Command {
 enum AsyncCommand {
     Open(PathBuf),
     Enqueue(PathBuf),
+    ClearPlaylist,
     RemoveIndex(usize),
     MoveIndex {
         from: usize,
@@ -174,6 +176,7 @@ fn handle_async_command(
                     .and_then(|item| session.enqueue_item(item))
             }
         }
+        AsyncCommand::ClearPlaylist => session.clear_playlist(),
         AsyncCommand::RemoveIndex(index) => session.remove_playlist_index(index),
         AsyncCommand::MoveIndex { from, to } => session.move_playlist_item(from, to),
         AsyncCommand::PlayIndex(index) => session.play_playlist_index(index),
@@ -266,6 +269,7 @@ fn handle_command(
             };
             (result, reply)
         }
+        Command::ClearPlaylist(reply) => (session.clear_playlist(), reply),
         Command::RemoveIndex(index, reply) => (session.remove_playlist_index(index), reply),
         Command::MoveIndex { from, to, reply } => (session.move_playlist_item(from, to), reply),
         Command::PlayIndex(index, reply) => (session.play_playlist_index(index), reply),
@@ -520,6 +524,15 @@ pub unsafe extern "C" fn nura_player_enqueue_async(
         return -1;
     };
     async_command_result(player, AsyncCommand::Enqueue(PathBuf::from(locator)))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_clear_playlist_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::ClearPlaylist)
 }
 
 #[unsafe(no_mangle)]

@@ -89,18 +89,21 @@ final class PlayerWindowManager {
         destination.openRecent(item)
     }
 
+    func openInNewWindow(_ item: MediaItem) {
+        guard let newModel = makePlayerWindow() else { return }
+        switch item.source {
+        case .localFile(let path): newModel.open(URL(fileURLWithPath: path))
+        case .publicURL(let value): newModel.openURL(value)
+        }
+    }
+
     private var targetModel: PlayerViewModel? {
         activeModel ?? models.values.first
     }
 
     private func open(_ urls: [URL], from model: PlayerViewModel) {
         let requestedURL = urls.count == 1 ? urls[0] : nil
-        let expandedURLs: [URL]
-        if let requestedURL, PlayerViewModel.isSupportedLocalMediaFile(requestedURL) {
-            expandedURLs = PlayerViewModel.expandSingleMediaURL(requestedURL)
-        } else {
-            expandedURLs = PlayerViewModel.expandMediaURLs(urls)
-        }
+        let expandedURLs = PlayerViewModel.expandMediaURLs(urls)
         guard let first = expandedURLs.first else {
             model.openExpandedMediaURLs([])
             return
