@@ -36,7 +36,7 @@ final class PlayerWindowManager {
     }
 
     func makePlayerModel(for sessionID: String?) -> PlayerViewModel {
-        guard let sessionID, let model = pendingModels.removeValue(forKey: sessionID) else {
+        guard let sessionID, let model = pendingModels[sessionID] else {
             return PlayerViewModel(
                 launchConfiguration: launchConfiguration.withoutInitialMedia,
                 settings: settings
@@ -151,6 +151,9 @@ final class PlayerWindowManager {
     private func unregister(window: NSWindow) {
         let identifier = ObjectIdentifier(window)
         let model = models.removeValue(forKey: identifier)
+        if let model {
+            pendingModels = pendingModels.filter { $0.value !== model }
+        }
         model?.detachWindow()
         for observer in windowObservers.removeValue(forKey: identifier) ?? [] {
             NotificationCenter.default.removeObserver(observer)

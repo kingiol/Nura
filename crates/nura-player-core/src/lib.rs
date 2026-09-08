@@ -318,8 +318,27 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
     }
 
     pub fn seek_relative(&mut self, offset_seconds: f64) -> Result<(), PlayerError> {
-        self.engine.seek_relative(offset_seconds)?;
-        self.snapshot.position_seconds = (self.snapshot.position_seconds + offset_seconds).max(0.0);
+        if !offset_seconds.is_finite() || offset_seconds == 0.0 {
+            return Ok(());
+        }
+        let current_position = match self.snapshot.duration_seconds {
+            Some(duration) if duration.is_finite() && duration >= 0.0 => {
+                self.snapshot.position_seconds.clamp(0.0, duration)
+            }
+            _ => self.snapshot.position_seconds.max(0.0),
+        };
+        let target_position = match self.snapshot.duration_seconds {
+            Some(duration) if duration.is_finite() && duration >= 0.0 => {
+                (current_position + offset_seconds).clamp(0.0, duration)
+            }
+            _ => (current_position + offset_seconds).max(0.0),
+        };
+        let effective_offset = target_position - current_position;
+        if effective_offset.abs() <= f64::EPSILON {
+            return Ok(());
+        }
+        self.engine.seek_relative(effective_offset)?;
+        self.snapshot.position_seconds = target_position;
         self.emit_state();
         Ok(())
     }
@@ -1006,6 +1025,26 @@ mod tests {
         session.set_subtitle_delay(0.5).unwrap();
         assert_eq!(session.snapshot.subtitle_delay_seconds, 0.5);
         assert_eq!(session.engine.subtitle_delay, 0.5);
+    }
+
+    #[test]
+    fn relative_seek_clamps_to_video_boundaries() {
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        session.snapshot.duration_seconds = Some(120.0);
+
+        session.snapshot.position_seconds = 118.0;
+        session.seek_relative(5.0).unwrap();
+        assert_eq!(session.snapshot.position_seconds, 120.0);
+        assert_eq!(session.engine.relative_seek, 2.0);
+
+        session.snapshot.position_seconds = 2.0;
+        session.seek_relative(-5.0).unwrap();
+        assert_eq!(session.snapshot.position_seconds, 0.0);
+        assert_eq!(session.engine.relative_seek, -2.0);
+
+        session.seek_relative(-5.0).unwrap();
+        assert_eq!(session.snapshot.position_seconds, 0.0);
+        assert_eq!(session.engine.relative_seek, -2.0);
     }
 
     #[test]

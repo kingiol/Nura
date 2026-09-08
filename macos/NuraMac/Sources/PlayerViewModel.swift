@@ -648,12 +648,25 @@ final class PlayerViewModel {
         thumbnailRequest = nil
     }
 
-    func seekRelative(_ seconds: Double) {
+    @discardableResult
+    func seekRelative(_ seconds: Double) -> Bool {
+        guard seconds.isFinite, seconds != 0 else { return false }
+        let currentPosition = max(snapshot.positionSeconds, 0)
+        let targetPosition: Double
+        if let duration = snapshot.durationSeconds, duration.isFinite, duration >= 0 {
+            targetPosition = min(max(currentPosition + seconds, 0), duration)
+        } else {
+            targetPosition = max(currentPosition + seconds, 0)
+        }
+        let effectiveOffset = targetPosition - currentPosition
+        guard abs(effectiveOffset) > 0.000_001 else { return false }
         do {
-            try bridge?.seekRelative(seconds)
+            try bridge?.seekRelative(effectiveOffset)
             lastError = nil
+            return true
         } catch {
             showError(error.localizedDescription)
+            return false
         }
     }
 

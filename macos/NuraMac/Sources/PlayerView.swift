@@ -224,11 +224,15 @@ struct PlayerView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 12) {
-                    Button(action: model.previous) {
-                        Image(systemName: "backward.end.fill")
+                    if model.snapshot.playlist.count > 1 {
+                        Button(action: model.previous) {
+                            Image(systemName: "backward.end.fill")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Previous item")
                     }
-                    .buttonStyle(.borderless)
-                    .help("Previous")
+
+                    SeekButton(model: model, direction: -1)
 
                     Button(action: { model.togglePlayback() }) {
                         Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
@@ -240,11 +244,15 @@ struct PlayerView: View {
                     .accessibilityValue(model.isPlaying ? "playing" : "paused")
                     .keyboardShortcut(.space, modifiers: [])
 
-                    Button(action: model.next) {
-                        Image(systemName: "forward.end.fill")
+                    SeekButton(model: model, direction: 1)
+
+                    if model.snapshot.playlist.count > 1 {
+                        Button(action: model.next) {
+                            Image(systemName: "forward.end.fill")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Next item")
                     }
-                    .buttonStyle(.borderless)
-                    .help("Next")
 
                 }
 
@@ -371,6 +379,82 @@ struct PlayerView: View {
         let minutes = (total / 60) % 60
         let remaining = total % 60
         return hours > 0 ? String(format: "%02d:%02d:%02d", hours, minutes, remaining) : String(format: "%02d:%02d", minutes, remaining)
+    }
+}
+
+private struct SeekButton: View {
+    let model: PlayerViewModel
+    let direction: Double
+
+    @State private var holdTask: Task<Void, Never>?
+    @State private var didLongPress = false
+    @State private var heldPosition: Double?
+
+    private var shortSeekSeconds: Double { model.settings.shortSeekSeconds }
+    private var longSeekSeconds: Double { model.settings.longSeekSeconds }
+
+    var body: some View {
+        Button {
+            if !didLongPress {
+                _ = seek(direction * shortSeekSeconds)
+            }
+            didLongPress = false
+            heldPosition = nil
+        } label: {
+            Image(systemName: direction < 0 ? "gobackward" : "goforward")
+        }
+        .buttonStyle(.borderless)
+        .help(helpText)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .onEnded { _ in
+                    didLongPress = true
+                    heldPosition = model.snapshot.positionSeconds
+                    guard seek(direction * longSeekSeconds) else { return }
+                    holdTask = Task { @MainActor in
+                        while !Task.isCancelled {
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            guard !Task.isCancelled,
+                                  seek(direction * longSeekSeconds) else { return }
+                        }
+                    }
+                }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { _ in
+                    holdTask?.cancel()
+                    holdTask = nil
+                    heldPosition = nil
+                }
+        )
+        .onDisappear {
+            holdTask?.cancel()
+            holdTask = nil
+            heldPosition = nil
+        }
+    }
+
+    private func seek(_ offset: Double) -> Bool {
+        let currentPosition = heldPosition ?? model.snapshot.positionSeconds
+        let targetPosition: Double
+        if let duration = model.snapshot.durationSeconds, duration.isFinite, duration >= 0 {
+            targetPosition = min(max(currentPosition + offset, 0), duration)
+        } else {
+            targetPosition = max(currentPosition + offset, 0)
+        }
+        let effectiveOffset = targetPosition - currentPosition
+        guard abs(effectiveOffset) > 0.000_001 else { return false }
+        guard model.seekRelative(effectiveOffset) else { return false }
+        heldPosition = targetPosition
+        return true
+    }
+
+    private var helpText: String {
+        let short = Int(shortSeekSeconds)
+        let long = Int(longSeekSeconds)
+        let action = direction < 0 ? "backward" : "forward"
+        return "Seek \(action) \(short) seconds; hold to seek continuously by \(long) seconds"
     }
 }
 
