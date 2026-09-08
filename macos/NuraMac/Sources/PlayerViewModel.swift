@@ -182,11 +182,19 @@ final class PlayerViewModel {
     func open(_ url: URL) {
         invalidateSeekPreview()
         requestedMediaIdentity = Self.mediaIdentity(for: url)
-        requestOpen(.media([url]))
+        if Self.isSupportedLocalMediaFile(url) {
+            openExpandedMediaURLs(Self.expandSingleMediaURL(url))
+        } else {
+            requestOpen(.media([url]))
+        }
     }
 
     func open(_ urls: [URL]) {
-        openExpandedMediaURLs(Self.expandMediaURLs(urls))
+        if urls.count == 1, let url = urls.first, Self.isSupportedLocalMediaFile(url) {
+            openExpandedMediaURLs(Self.expandSingleMediaURL(url))
+        } else {
+            openExpandedMediaURLs(Self.expandMediaURLs(urls))
+        }
     }
 
     func openExpandedMediaURLs(_ expanded: [URL]) {
@@ -1086,14 +1094,44 @@ final class PlayerViewModel {
         return result
     }
 
+    static func isSupportedLocalMediaFile(_ url: URL) -> Bool {
+        url.isFileURL && !url.hasDirectoryPath && supportedMediaExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func expandSingleMediaURL(_ url: URL) -> [URL] {
+        guard isSupportedLocalMediaFile(url) else { return [] }
+
+        let requested = url.standardizedFileURL
+        let parent = requested.deletingLastPathComponent()
+        let candidates = (try? FileManager.default.contentsOfDirectory(
+            at: parent,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        var files = candidates.compactMap { candidate -> URL? in
+            guard isSupportedLocalMediaFile(candidate),
+                  (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                return nil
+            }
+            return candidate.standardizedFileURL
+        }
+        if !files.contains(requested) {
+            files.append(requested)
+        }
+        files.sort { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+        files.removeAll { $0 == requested }
+        files.insert(requested, at: 0)
+        return files
+    }
+
     private static func expandMediaURL(_ url: URL) -> [URL] {
         if url.hasDirectoryPath {
-            let keys: Set<String> = ["mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg"]
             guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return [] }
             return enumerator.compactMap { item in
                 guard let candidate = item as? URL,
                       (try? candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-                      keys.contains(candidate.pathExtension.lowercased()) else { return nil }
+                      supportedMediaExtensions.contains(candidate.pathExtension.lowercased()) else { return nil }
                 return candidate
             }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
         }
@@ -1101,12 +1139,14 @@ final class PlayerViewModel {
         switch url.pathExtension.lowercased() {
         case "m3u", "m3u8":
             return parsePlaylist(url)
-        case "mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg":
-            return [url]
         default:
-            return []
+            return supportedMediaExtensions.contains(url.pathExtension.lowercased()) ? [url] : []
         }
     }
+
+    private static let supportedMediaExtensions: Set<String> = [
+        "mp4", "m4v", "mov", "mkv", "avi", "webm", "mp3", "m4a", "aac", "flac", "wav", "ogg"
+    ]
 
     private static func parsePlaylist(_ url: URL) -> [URL] {
         guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }

@@ -94,14 +94,20 @@ final class PlayerWindowManager {
     }
 
     private func open(_ urls: [URL], from model: PlayerViewModel) {
-        let expandedURLs = PlayerViewModel.expandMediaURLs(urls)
+        let requestedURL = urls.count == 1 ? urls[0] : nil
+        let expandedURLs: [URL]
+        if let requestedURL, PlayerViewModel.isSupportedLocalMediaFile(requestedURL) {
+            expandedURLs = PlayerViewModel.expandSingleMediaURL(requestedURL)
+        } else {
+            expandedURLs = PlayerViewModel.expandMediaURLs(urls)
+        }
         guard let first = expandedURLs.first else {
             model.openExpandedMediaURLs([])
             return
         }
         let destination = destination(
             from: model,
-            opensDifferentMedia: model.shouldOpenInNewWindow(for: first)
+            opensDifferentMedia: model.shouldOpenInNewWindow(for: requestedURL ?? first)
         )
         destination.openExpandedMediaURLs(expandedURLs)
     }
