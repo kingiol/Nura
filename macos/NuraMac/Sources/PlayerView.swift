@@ -401,6 +401,7 @@ private struct SeekButton: View {
 
     @State private var holdTask: Task<Void, Never>?
     @State private var didLongPress = false
+    @State private var isLongPressActive = false
     @State private var heldPosition: Double?
 
     private var shortSeekSeconds: Double { model.settings.shortSeekSeconds }
@@ -412,16 +413,28 @@ private struct SeekButton: View {
                 _ = seek(direction * shortSeekSeconds)
             }
             didLongPress = false
+            isLongPressActive = false
             heldPosition = nil
         } label: {
-            Image(systemName: direction < 0 ? "gobackward" : "goforward")
+            ZStack {
+                Image(systemName: direction < 0 ? "gobackward" : "goforward")
+                Text("\(Int(isLongPressActive ? longSeekSeconds : shortSeekSeconds))")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .allowsHitTesting(false)
+            }
+            .frame(width: 24, height: 24)
         }
         .buttonStyle(.borderless)
         .help(helpText)
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.45)
+                .onChanged { isPressing in
+                    isLongPressActive = isPressing
+                }
                 .onEnded { _ in
                     didLongPress = true
+                    isLongPressActive = false
                     heldPosition = model.snapshot.positionSeconds
                     guard seek(direction * longSeekSeconds) else { return }
                     holdTask = Task { @MainActor in
@@ -438,12 +451,14 @@ private struct SeekButton: View {
                 .onEnded { _ in
                     holdTask?.cancel()
                     holdTask = nil
+                    isLongPressActive = false
                     heldPosition = nil
                 }
         )
         .onDisappear {
             holdTask?.cancel()
             holdTask = nil
+            isLongPressActive = false
             heldPosition = nil
         }
     }
@@ -466,8 +481,8 @@ private struct SeekButton: View {
     private var helpText: String {
         let short = Int(shortSeekSeconds)
         let long = Int(longSeekSeconds)
-        let action = direction < 0 ? "backward" : "forward"
-        return "Seek \(action) \(short) seconds; hold to seek continuously by \(long) seconds"
+        let action = direction < 0 ? "后退" : "前进"
+        return "短按\(action) \(short) 秒；长按\(action) \(long) 秒"
     }
 }
 
