@@ -780,10 +780,6 @@ private struct SettingsSidebarView: View {
     @ViewBuilder
     private var generalContent: some View {
         settingsSection("Playback") {
-            Button { model.seekRelative(-5) } label: { Label("Back 5 Seconds", systemImage: "gobackward.5") }
-            Button { model.seekRelative(5) } label: { Label("Forward 5 Seconds", systemImage: "goforward.5") }
-            Button { model.seekRelative(-30) } label: { Label("Back 30 Seconds", systemImage: "gobackward.30") }
-            Button { model.seekRelative(30) } label: { Label("Forward 30 Seconds", systemImage: "goforward.30") }
             Button(action: model.frameStep) { Label("Next Frame", systemImage: "forward.frame") }
             SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
         }
