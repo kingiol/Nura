@@ -1,218 +1,2332 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "About" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关于" } } } },
-    "Add File" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加文件" } } } },
-    "Add File…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加文件…" } } } },
-    "Add Option" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加选项" } } } },
-    "Add OpenSubtitles API key in Settings before searching." : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "搜索前请在设置中添加 OpenSubtitles API 密钥。" } } } },
-    "Add URL" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加 URL" } } } },
-    "Add URL…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "添加 URL…" } } } },
-    "Add an OpenSubtitles API key in Settings before searching." : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "搜索前请在设置中添加 OpenSubtitles API 密钥。" } } } },
-    "Appearance" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "外观" } } } },
-    "Ascending" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "升序" } } } },
-    "Aspect Ratio" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "宽高比" } } } },
-    "Aspect ratio" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "宽高比" } } } },
-    "Audio delay" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "音频延迟" } } } },
-    "Audio track" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "音频轨道" } } } },
-    "Audio" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "音频" } } } },
-    "Auto" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自动" } } } },
-    "Back 30 Seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "后退 30 秒" } } } },
-    "Back 5 Seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "后退 5 秒" } } } },
-    "Buffering…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缓冲中…" } } } },
-    "Cancel" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消" } } } },
-    "Chapters" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "章节" } } } },
-    "Choose Screenshot Folder" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "选择截图文件夹" } } } },
-    "Choose a destination from the player settings when saving screenshots." : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存截图时，请在播放器设置中选择目标位置。" } } } },
-    "Clear A-B loop" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清除 A-B 循环" } } } },
-    "Clear History" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清除历史记录" } } } },
-    "Clear Playback History?" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清除播放历史记录？" } } } },
-    "Clear Playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "清空播放列表" } } } },
-    "Close settings" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭设置" } } } },
-    "Close sidebar" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭侧栏" } } } },
-    "Command" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Command" } } } },
-    "Copy Screenshot" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制截图" } } } },
-    "Controls" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "控制" } } } },
-    "Current Playback" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当前播放" } } } },
-    "Current Video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当前视频" } } } },
-    "Current time" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当前时间" } } } },
-    "Default" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "默认" } } } },
-    "Default Output" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "默认输出" } } } },
-    "Defaults" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "默认值" } } } },
-    "Delay" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "延迟" } } } },
-    "Descending" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "降序" } } } },
-    "Disable Loop" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭循环" } } } },
-    "Disable Playlist Loop" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭播放列表循环" } } } },
-    "Display information is unavailable" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示器信息不可用" } } } },
-    "Duration" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "时长" } } } },
-    "Enable cache" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用缓存" } } } },
-    "Enable yt-dlp for public video URLs" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "为公开视频 URL 启用 yt-dlp" } } } },
-    "Enter a public media URL, YouTube link, or Bilibili link." : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输入公开视频 URL、YouTube 链接或 Bilibili 链接。" } } } },
-    "Enter fullscreen" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "进入全屏" } } } },
-    "External subtitles" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "外部字幕" } } } },
-    "Fit Window to Video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "窗口适配视频" } } } },
-    "Fit to Video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "适配视频" } } } },
-    "Flip Video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "翻转视频" } } } },
-    "Flip" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "翻转" } } } },
-    "Forward 30 Seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "前进 30 秒" } } } },
-    "Forward 5 Seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "前进 5 秒" } } } },
-    "General" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "通用" } } } },
-    "Hide Subtitles" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "隐藏字幕" } } } },
-    "HTTP proxy" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "HTTP 代理" } } } },
-    "Idle" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "空闲" } } } },
-    "Keep Window on Top" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "窗口置顶" } } } },
-    "Keyboard Shortcuts" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "键盘快捷键" } } } },
-    "Language" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "语言" } } } },
-    "libmpv Options" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "libmpv 选项" } } } },
-    "Load External Subtitle" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加载外部字幕" } } } },
-    "Load" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加载" } } } },
-    "Loading…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加载中…" } } } },
-    "Loop Current Item" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "循环当前项目" } } } },
-    "Loop Off" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭循环" } } } },
-    "Loop Playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "循环播放列表" } } } },
-    "Looping" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "循环" } } } },
-    "Mute" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "静音" } } } },
-    "Next Frame" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "下一帧" } } } },
-    "Next Item" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "下一项" } } } },
-    "Next item" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "下一项" } } } },
-    "Next" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "下一项" } } } },
-    "No Playback History" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有播放历史" } } } },
-    "No Recent Media" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有最近播放的媒体" } } } },
-    "No chapters" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有章节" } } } },
-    "No items in playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放列表中没有项目" } } } },
-    "No modifier" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无修饰键" } } } },
-    "No supported media files were found" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未找到受支持的媒体文件" } } } },
-    "None" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无" } } } },
-    "Off" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭" } } } },
-    "Open URL" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开 URL" } } } },
-    "Open URL…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开 URL…" } } } },
-    "Open URL in New Window…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在新窗口打开 URL…" } } } },
-    "Open a media file to begin" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开媒体文件以开始" } } } },
-    "Open in New Window…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在新窗口打开…" } } } },
-    "Open" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开" } } } },
-    "Open media before copying a screenshot" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "请先打开媒体，再复制截图" } } } },
-    "Open media before searching for subtitles" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "请先打开媒体，再搜索字幕" } } } },
-    "Open a video before starting Picture in Picture" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "请先打开视频，再启动画中画" } } } },
-    "OpenSubtitles request failed (HTTP %d)." : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "OpenSubtitles 请求失败（HTTP %d）。" } } } },
-    "OpenSubtitles returned an unexpected response." : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "OpenSubtitles 返回了意外的响应。" } } } },
-    "Nura" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Nura" } } } },
-    "Open Recent" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开最近项目" } } } },
-    "Output device" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输出设备" } } } },
-    "Output" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输出" } } } },
-    "Pause" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "暂停" } } } },
-    "Paused" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已暂停" } } } },
-    "Picture in Picture" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "画中画" } } } },
-    "Play Next" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放下一项" } } } },
-    "Play" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放" } } } },
-    "Play or Pause" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放或暂停" } } } },
-    "Play in New Window" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在新窗口播放" } } } },
-    "Play/Pause" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放/暂停" } } } },
-    "Playing" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放中" } } } },
-    "Playback engine" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放引擎" } } } },
-    "Playback speed" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放速度" } } } },
-    "Playback" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放" } } } },
-    "Playback position" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放位置" } } } },
-    "Playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放列表" } } } },
-    "Position" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "位置" } } } },
-    "Previous Item" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "上一项" } } } },
-    "Previous item" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "上一项" } } } },
-    "Previous" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "上一项" } } } },
-    "Release Window" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消窗口置顶" } } } },
-    "Remove Selected" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "移除选中项" } } } },
-    "Remove option" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "移除选项" } } } },
-    "Remove" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "移除" } } } },
-    "Restore Defaults" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "恢复默认值" } } } },
-    "Rotate 90°" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旋转 90°" } } } },
-    "Rotation" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旋转" } } } },
-    "Scale" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缩放" } } } },
-    "Screenshots" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "截图" } } } },
-    "Search Current Media" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "搜索当前媒体" } } } },
-    "Seek Backward" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "后退" } } } },
-    "Seek Forward" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "前进" } } } },
-    "Seeking" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "跳转" } } } },
-    "Select Track" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "选择轨道" } } } },
-    "Set A-B loop end" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "设置 A-B 循环终点" } } } },
-    "Set A-B loop start" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "设置 A-B 循环起点" } } } },
-    "Settings" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "设置" } } } },
-    "Short press %@ %d seconds; long press %@ %d seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "短按%@ %d 秒；长按%@ %d 秒" } } } },
-    "Show Now Playing controls" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示正在播放控制" } } } },
-    "Show Subtitles" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示字幕" } } } },
-    "Show playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示播放列表" } } } },
-    "Shuffle Playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "随机播放列表" } } } },
-    "Size" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "大小" } } } },
-    "Sort Playlist" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "排序播放列表" } } } },
-    "Sort by Location" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "按位置排序" } } } },
-    "Sort by Title" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "按标题排序" } } } },
-    "Speed" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "速度" } } } },
-    "Subtitle delay" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "字幕延迟" } } } },
-    "Subtitle" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "字幕" } } } },
-    "Subtitles" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "字幕" } } } },
-    "System" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "系统" } } } },
-    "Take Screenshot" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "截图" } } } },
-    "This video is playing in picture in picture" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "此视频正在画中画模式播放" } } } },
-    "Toggle Full Screen" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "切换全屏" } } } },
-    "Toggle Fullscreen" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "切换全屏" } } } },
-    "Track" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "轨道" } } } },
-    "Track %d" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "轨道 %d" } } } },
-    "Transform" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "变换" } } } },
-    "Unable to fit the video on this display" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法将视频适配到此显示器" } } } },
-    "Unavailable" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "不可用" } } } },
-    "Unflip Video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消翻转视频" } } } },
-    "Unflip" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消翻转" } } } },
-    "Unmute" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消静音" } } } },
-    "User agent" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用户代理" } } } },
-    "Version" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "版本" } } } },
-    "Video dimensions are not available yet" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "视频尺寸暂不可用" } } } },
-    "Video track" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "视频轨道" } } } },
-    "Video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "视频" } } } },
-    "Window & Tools" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "窗口与工具" } } } },
-    "Window" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "窗口" } } } },
-    "backward" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "后退" } } } },
-    "forward" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "前进" } } } },
-    "items" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "项" } } } },
-    "muted" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已静音" } } } },
-    "playing" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放中" } } } },
-    "selected" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已选中" } } } },
-    "unmuted" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未静音" } } } },
-    "unselected" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未选中" } } } },
-    "%@ %@" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ %@" } } } },
-    "%@ (external)" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@（外部）" } } } },
-    "%@ of %@" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ / 共 %@" } } } },
-    "%@x" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@x" } } } },
-    "%d items" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%d 项" } } } },
-    "%d%%" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%d%%" } } } },
-    "API key" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "API 密钥" } } } },
-    "Cache" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缓存" } } } },
-    "History" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "历史记录" } } } },
-    "Maximum cache: %d KiB" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "最大缓存：%d KiB" } } } },
-    "Maximum cache: Automatic" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "最大缓存：自动" } } } },
-    "Modifier" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "修饰键" } } } },
-    "Network" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "网络" } } } },
-    "Online Media" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在线媒体" } } } },
-    "Online search language" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在线搜索语言" } } } },
-    "Option" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "选项" } } } },
-    "Picture in Picture is not supported on this Mac" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "此 Mac 不支持画中画" } } } },
-    "Preferred audio languages" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "首选音频语言" } } } },
-    "Preferred subtitle languages" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "首选字幕语言" } } } },
-    "Short seek: %d seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "短跳转：%d 秒" } } } },
-    "Long seek: %d seconds" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "长跳转：%d 秒" } } } },
-    "Value" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "值" } } } },
-    "Volume" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "音量" } } } },
-    "Short seek" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "短跳转" } } } },
-    "Long seek" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "长跳转" } } } },
-    "Sub" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "字幕" } } } },
-    "Rotation: %d°" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旋转：%d°" } } } },
-    "Unable to start Picture in Picture: %@" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法启动画中画：%@" } } } },
-    "Unable to copy the screenshot" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法复制截图" } } } },
-    "Unable to write the screenshot to the clipboard" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法将截图写入剪贴板" } } } },
-    "Unsupported subtitle format" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "不支持的字幕格式" } } } },
-    "Player is unavailable" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放器不可用" } } } },
-    "Player window is unavailable" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "播放器窗口不可用" } } } },
-    "Open…" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开…" } } } },
-    "Flip video" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "翻转视频" } } } },
-    "Unknown media source" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未知媒体来源" } } } },
-    "Unknown player error" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未知播放器错误" } } } },
-    "Unknown player event" : { "localizations" : { "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未知播放器事件" } } } }
+    "%@" : {
+
+    },
+    "%@ (external)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（外部）"
+          }
+        }
+      }
+    },
+    "%@ %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ %@"
+          }
+        }
+      }
+    },
+    "%@ of %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ / 共 %@"
+          }
+        }
+      }
+    },
+    "%@x" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@x"
+          }
+        }
+      }
+    },
+    "%d items" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 项"
+          }
+        }
+      }
+    },
+    "%d%%" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d%%"
+          }
+        }
+      }
+    },
+    "About" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于"
+          }
+        }
+      }
+    },
+    "Add an OpenSubtitles API key in Settings before searching." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索前请在设置中添加 OpenSubtitles API 密钥。"
+          }
+        }
+      }
+    },
+    "Add File" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加文件"
+          }
+        }
+      }
+    },
+    "Add File…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加文件…"
+          }
+        }
+      }
+    },
+    "Add OpenSubtitles API key in Settings before searching." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索前请在设置中添加 OpenSubtitles API 密钥。"
+          }
+        }
+      }
+    },
+    "Add Option" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加选项"
+          }
+        }
+      }
+    },
+    "Add URL" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 URL"
+          }
+        }
+      }
+    },
+    "Add URL…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 URL…"
+          }
+        }
+      }
+    },
+    "API key" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥"
+          }
+        }
+      }
+    },
+    "Appearance" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外观"
+          }
+        }
+      }
+    },
+    "Ascending" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "升序"
+          }
+        }
+      }
+    },
+    "Aspect ratio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽高比"
+          }
+        }
+      }
+    },
+    "Aspect Ratio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽高比"
+          }
+        }
+      }
+    },
+    "Audio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频"
+          }
+        }
+      }
+    },
+    "Audio delay" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频延迟"
+          }
+        }
+      }
+    },
+    "Audio track" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频轨道"
+          }
+        }
+      }
+    },
+    "Auto" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动"
+          }
+        }
+      }
+    },
+    "Back 5 Seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退 5 秒"
+          }
+        }
+      }
+    },
+    "Back 30 Seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退 30 秒"
+          }
+        }
+      }
+    },
+    "backward" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退"
+          }
+        }
+      }
+    },
+    "Buffering…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓冲中…"
+          }
+        }
+      }
+    },
+    "Cache" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
+          }
+        }
+      }
+    },
+    "Chapters" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "章节"
+          }
+        }
+      }
+    },
+    "Choose a destination from the player settings when saving screenshots." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存截图时，请在播放器设置中选择目标位置。"
+          }
+        }
+      }
+    },
+    "Choose Screenshot Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择截图文件夹"
+          }
+        }
+      }
+    },
+    "Clear A-B loop" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除 A-B 循环"
+          }
+        }
+      }
+    },
+    "Clear History" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除历史记录"
+          }
+        }
+      }
+    },
+    "Clear Playback History?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除播放历史记录？"
+          }
+        }
+      }
+    },
+    "Clear Playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清空播放列表"
+          }
+        }
+      }
+    },
+    "Close settings" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭设置"
+          }
+        }
+      }
+    },
+    "Close sidebar" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭侧栏"
+          }
+        }
+      }
+    },
+    "Command" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command"
+          }
+        }
+      }
+    },
+    "Controls" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制"
+          }
+        }
+      }
+    },
+    "Copy Screenshot" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制截图"
+          }
+        }
+      }
+    },
+    "Current Playback" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前播放"
+          }
+        }
+      }
+    },
+    "Current time" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前时间"
+          }
+        }
+      }
+    },
+    "Current Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前视频"
+          }
+        }
+      }
+    },
+    "Default" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认"
+          }
+        }
+      }
+    },
+    "Default Output" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认输出"
+          }
+        }
+      }
+    },
+    "Defaults" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认值"
+          }
+        }
+      }
+    },
+    "Delay" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "延迟"
+          }
+        }
+      }
+    },
+    "Descending" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "降序"
+          }
+        }
+      }
+    },
+    "Disable Loop" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭循环"
+          }
+        }
+      }
+    },
+    "Disable Playlist Loop" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭播放列表循环"
+          }
+        }
+      }
+    },
+    "Display information is unavailable" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示器信息不可用"
+          }
+        }
+      }
+    },
+    "Duration" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时长"
+          }
+        }
+      }
+    },
+    "Enable cache" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用缓存"
+          }
+        }
+      }
+    },
+    "Enable yt-dlp for public video URLs" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为公开视频 URL 启用 yt-dlp"
+          }
+        }
+      }
+    },
+    "Enter a public media URL, YouTube link, or Bilibili link." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入公开视频 URL、YouTube 链接或 Bilibili 链接。"
+          }
+        }
+      }
+    },
+    "Enter fullscreen" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进入全屏"
+          }
+        }
+      }
+    },
+    "External subtitles" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外部字幕"
+          }
+        }
+      }
+    },
+    "Fit to Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "适配视频"
+          }
+        }
+      }
+    },
+    "Fit Window to Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口适配视频"
+          }
+        }
+      }
+    },
+    "Flip" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻转"
+          }
+        }
+      }
+    },
+    "Flip video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻转视频"
+          }
+        }
+      }
+    },
+    "Flip Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻转视频"
+          }
+        }
+      }
+    },
+    "forward" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前进"
+          }
+        }
+      }
+    },
+    "Forward 5 Seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前进 5 秒"
+          }
+        }
+      }
+    },
+    "Forward 30 Seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前进 30 秒"
+          }
+        }
+      }
+    },
+    "General" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用"
+          }
+        }
+      }
+    },
+    "Hide Subtitles" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏字幕"
+          }
+        }
+      }
+    },
+    "History" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "历史记录"
+          }
+        }
+      }
+    },
+    "HTTP proxy" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP 代理"
+          }
+        }
+      }
+    },
+    "Idle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "空闲"
+          }
+        }
+      }
+    },
+    "items" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项"
+          }
+        }
+      }
+    },
+    "Keep Window on Top" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口置顶"
+          }
+        }
+      }
+    },
+    "Keyboard Shortcuts" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "键盘快捷键"
+          }
+        }
+      }
+    },
+    "Language" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语言"
+          }
+        }
+      }
+    },
+    "libmpv Options" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "libmpv 选项"
+          }
+        }
+      }
+    },
+    "Load" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载"
+          }
+        }
+      }
+    },
+    "Load External Subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载外部字幕"
+          }
+        }
+      }
+    },
+    "Loading…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载中…"
+          }
+        }
+      }
+    },
+    "Long seek" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "长跳转"
+          }
+        }
+      }
+    },
+    "Long seek: %d seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "长跳转：%d 秒"
+          }
+        }
+      }
+    },
+    "Loop Current Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "循环当前项目"
+          }
+        }
+      }
+    },
+    "Loop Off" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭循环"
+          }
+        }
+      }
+    },
+    "Loop Playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "循环播放列表"
+          }
+        }
+      }
+    },
+    "Looping" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "循环"
+          }
+        }
+      }
+    },
+    "Maximum cache: %d KiB" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最大缓存：%d KiB"
+          }
+        }
+      }
+    },
+    "Maximum cache: Automatic" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最大缓存：自动"
+          }
+        }
+      }
+    },
+    "Modifier" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修饰键"
+          }
+        }
+      }
+    },
+    "Mute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "静音"
+          }
+        }
+      }
+    },
+    "muted" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已静音"
+          }
+        }
+      }
+    },
+    "Network" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络"
+          }
+        }
+      }
+    },
+    "Next" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一项"
+          }
+        }
+      }
+    },
+    "Next Frame" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一帧"
+          }
+        }
+      }
+    },
+    "Next item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一项"
+          }
+        }
+      }
+    },
+    "Next Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一项"
+          }
+        }
+      }
+    },
+    "No chapters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有章节"
+          }
+        }
+      }
+    },
+    "No items in playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放列表中没有项目"
+          }
+        }
+      }
+    },
+    "No modifier" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无修饰键"
+          }
+        }
+      }
+    },
+    "No Playback History" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有播放历史"
+          }
+        }
+      }
+    },
+    "No Recent Media" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有最近播放的媒体"
+          }
+        }
+      }
+    },
+    "No supported media files were found" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未找到受支持的媒体文件"
+          }
+        }
+      }
+    },
+    "None" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无"
+          }
+        }
+      }
+    },
+    "Nura" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nura"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
+    "Online Media" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在线媒体"
+          }
+        }
+      }
+    },
+    "Online search language" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在线搜索语言"
+          }
+        }
+      }
+    },
+    "Open" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开"
+          }
+        }
+      }
+    },
+    "Open a media file to begin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开媒体文件以开始"
+          }
+        }
+      }
+    },
+    "Open a video before starting Picture in Picture" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先打开视频，再启动画中画"
+          }
+        }
+      }
+    },
+    "Open in New Window…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新窗口打开…"
+          }
+        }
+      }
+    },
+    "Open media before copying a screenshot" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先打开媒体，再复制截图"
+          }
+        }
+      }
+    },
+    "Open media before searching for subtitles" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先打开媒体，再搜索字幕"
+          }
+        }
+      }
+    },
+    "Open Recent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开最近项目"
+          }
+        }
+      }
+    },
+    "Open URL" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 URL"
+          }
+        }
+      }
+    },
+    "Open URL in New Window…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新窗口打开 URL…"
+          }
+        }
+      }
+    },
+    "Open URL…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 URL…"
+          }
+        }
+      }
+    },
+    "Open…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开…"
+          }
+        }
+      }
+    },
+    "OpenSubtitles request failed (HTTP %d)." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles 请求失败（HTTP %d）。"
+          }
+        }
+      }
+    },
+    "OpenSubtitles returned an unexpected response." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles 返回了意外的响应。"
+          }
+        }
+      }
+    },
+    "Option" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选项"
+          }
+        }
+      }
+    },
+    "Output" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输出"
+          }
+        }
+      }
+    },
+    "Output device" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输出设备"
+          }
+        }
+      }
+    },
+    "Pause" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停"
+          }
+        }
+      }
+    },
+    "Paused" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已暂停"
+          }
+        }
+      }
+    },
+    "Picture in Picture" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画中画"
+          }
+        }
+      }
+    },
+    "Picture in Picture is not supported on this Mac" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 Mac 不支持画中画"
+          }
+        }
+      }
+    },
+    "Play" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放"
+          }
+        }
+      }
+    },
+    "Play in New Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在新窗口播放"
+          }
+        }
+      }
+    },
+    "Play Next" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放下一项"
+          }
+        }
+      }
+    },
+    "Play or Pause" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放或暂停"
+          }
+        }
+      }
+    },
+    "Play/Pause" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放/暂停"
+          }
+        }
+      }
+    },
+    "Playback" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放"
+          }
+        }
+      }
+    },
+    "Playback engine" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放引擎"
+          }
+        }
+      }
+    },
+    "Playback position" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放位置"
+          }
+        }
+      }
+    },
+    "Playback speed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放速度"
+          }
+        }
+      }
+    },
+    "Player is unavailable" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器不可用"
+          }
+        }
+      }
+    },
+    "Player window is unavailable" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器窗口不可用"
+          }
+        }
+      }
+    },
+    "playing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放中"
+          }
+        }
+      }
+    },
+    "Playing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放中"
+          }
+        }
+      }
+    },
+    "Playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放列表"
+          }
+        }
+      }
+    },
+    "Position" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位置"
+          }
+        }
+      }
+    },
+    "Preferred audio languages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首选音频语言"
+          }
+        }
+      }
+    },
+    "Preferred subtitle languages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首选字幕语言"
+          }
+        }
+      }
+    },
+    "Previous" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一项"
+          }
+        }
+      }
+    },
+    "Previous item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一项"
+          }
+        }
+      }
+    },
+    "Previous Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一项"
+          }
+        }
+      }
+    },
+    "Release Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消窗口置顶"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除"
+          }
+        }
+      }
+    },
+    "Remove option" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除选项"
+          }
+        }
+      }
+    },
+    "Remove Selected" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除选中项"
+          }
+        }
+      }
+    },
+    "Restore Defaults" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复默认值"
+          }
+        }
+      }
+    },
+    "Rotate 90°" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旋转 90°"
+          }
+        }
+      }
+    },
+    "Rotation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旋转"
+          }
+        }
+      }
+    },
+    "Rotation: %d°" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旋转：%d°"
+          }
+        }
+      }
+    },
+    "Scale" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩放"
+          }
+        }
+      }
+    },
+    "Screenshots" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截图"
+          }
+        }
+      }
+    },
+    "Search Current Media" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索当前媒体"
+          }
+        }
+      }
+    },
+    "Seek Backward" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退"
+          }
+        }
+      }
+    },
+    "Seek Forward" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前进"
+          }
+        }
+      }
+    },
+    "Seeking" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳转"
+          }
+        }
+      }
+    },
+    "Select Track" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择轨道"
+          }
+        }
+      }
+    },
+    "selected" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已选中"
+          }
+        }
+      }
+    },
+    "Set A-B loop end" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置 A-B 循环终点"
+          }
+        }
+      }
+    },
+    "Set A-B loop start" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置 A-B 循环起点"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置"
+          }
+        }
+      }
+    },
+    "Short press %@ %d seconds; long press %@ %d seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "短按%@ %d 秒；长按%@ %d 秒"
+          }
+        }
+      }
+    },
+    "Short seek" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "短跳转"
+          }
+        }
+      }
+    },
+    "Short seek: %d seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "短跳转：%d 秒"
+          }
+        }
+      }
+    },
+    "Show Now Playing controls" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示正在播放控制"
+          }
+        }
+      }
+    },
+    "Show playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示播放列表"
+          }
+        }
+      }
+    },
+    "Show Subtitles" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示字幕"
+          }
+        }
+      }
+    },
+    "Shuffle Playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "随机播放列表"
+          }
+        }
+      }
+    },
+    "Size" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "大小"
+          }
+        }
+      }
+    },
+    "Sort by Location" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按位置排序"
+          }
+        }
+      }
+    },
+    "Sort by Title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按标题排序"
+          }
+        }
+      }
+    },
+    "Sort Playlist" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排序播放列表"
+          }
+        }
+      }
+    },
+    "Speed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "速度"
+          }
+        }
+      }
+    },
+    "Sub" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕"
+          }
+        }
+      }
+    },
+    "Subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕"
+          }
+        }
+      }
+    },
+    "Subtitle delay" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕延迟"
+          }
+        }
+      }
+    },
+    "Subtitles" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕"
+          }
+        }
+      }
+    },
+    "System" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统"
+          }
+        }
+      }
+    },
+    "Take Screenshot" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截图"
+          }
+        }
+      }
+    },
+    "This video is playing in picture in picture" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此视频正在画中画模式播放"
+          }
+        }
+      }
+    },
+    "Toggle Full Screen" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换全屏"
+          }
+        }
+      }
+    },
+    "Toggle Fullscreen" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换全屏"
+          }
+        }
+      }
+    },
+    "Track" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轨道"
+          }
+        }
+      }
+    },
+    "Track %d" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轨道 %d"
+          }
+        }
+      }
+    },
+    "Transform" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "变换"
+          }
+        }
+      }
+    },
+    "Unable to copy the screenshot" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法复制截图"
+          }
+        }
+      }
+    },
+    "Unable to fit the video on this display" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法将视频适配到此显示器"
+          }
+        }
+      }
+    },
+    "Unable to start Picture in Picture: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法启动画中画：%@"
+          }
+        }
+      }
+    },
+    "Unable to write the screenshot to the clipboard" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法将截图写入剪贴板"
+          }
+        }
+      }
+    },
+    "Unavailable" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不可用"
+          }
+        }
+      }
+    },
+    "Unflip" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消翻转"
+          }
+        }
+      }
+    },
+    "Unflip Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消翻转视频"
+          }
+        }
+      }
+    },
+    "Unknown media source" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知媒体来源"
+          }
+        }
+      }
+    },
+    "Unknown player error" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知播放器错误"
+          }
+        }
+      }
+    },
+    "Unknown player event" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知播放器事件"
+          }
+        }
+      }
+    },
+    "Unmute" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消静音"
+          }
+        }
+      }
+    },
+    "unmuted" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未静音"
+          }
+        }
+      }
+    },
+    "unselected" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选中"
+          }
+        }
+      }
+    },
+    "Unsupported subtitle format" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持的字幕格式"
+          }
+        }
+      }
+    },
+    "User agent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户代理"
+          }
+        }
+      }
+    },
+    "Value" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "值"
+          }
+        }
+      }
+    },
+    "Version" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本"
+          }
+        }
+      }
+    },
+    "Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频"
+          }
+        }
+      }
+    },
+    "Video dimensions are not available yet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频尺寸暂不可用"
+          }
+        }
+      }
+    },
+    "Video track" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频轨道"
+          }
+        }
+      }
+    },
+    "Volume" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音量"
+          }
+        }
+      }
+    },
+    "Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口"
+          }
+        }
+      }
+    },
+    "Window & Tools" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口与工具"
+          }
+        }
+      }
+    }
   },
   "version" : "1.0"
 }
