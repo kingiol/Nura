@@ -317,7 +317,7 @@ struct PlayerView: View {
     }
 
     private var currentTimeText: String {
-        format(model.isSeeking ? model.seekPosition : model.snapshot.positionSeconds)
+        format(model.seekPosition)
     }
 
     private var durationText: String {
@@ -400,6 +400,7 @@ private struct SeekButton: View {
     let direction: Double
 
     @State private var holdTask: Task<Void, Never>?
+    @State private var longPressActivationTask: Task<Void, Never>?
     @State private var didLongPress = false
     @State private var isLongPressActive = false
     @State private var heldPosition: Double?
@@ -413,6 +414,8 @@ private struct SeekButton: View {
                 _ = seek(direction * shortSeekSeconds)
             }
             didLongPress = false
+            longPressActivationTask?.cancel()
+            longPressActivationTask = nil
             isLongPressActive = false
             heldPosition = nil
         } label: {
@@ -430,11 +433,16 @@ private struct SeekButton: View {
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.45)
                 .onChanged { isPressing in
-                    isLongPressActive = isPressing
+                    guard isPressing, !isLongPressActive else { return }
+                    longPressActivationTask?.cancel()
+                    longPressActivationTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 450_000_000)
+                        guard !Task.isCancelled else { return }
+                        isLongPressActive = true
+                    }
                 }
                 .onEnded { _ in
                     didLongPress = true
-                    isLongPressActive = false
                     heldPosition = model.snapshot.positionSeconds
                     guard seek(direction * longSeekSeconds) else { return }
                     holdTask = Task { @MainActor in
@@ -451,6 +459,8 @@ private struct SeekButton: View {
                 .onEnded { _ in
                     holdTask?.cancel()
                     holdTask = nil
+                    longPressActivationTask?.cancel()
+                    longPressActivationTask = nil
                     isLongPressActive = false
                     heldPosition = nil
                 }
@@ -458,6 +468,8 @@ private struct SeekButton: View {
         .onDisappear {
             holdTask?.cancel()
             holdTask = nil
+            longPressActivationTask?.cancel()
+            longPressActivationTask = nil
             isLongPressActive = false
             heldPosition = nil
         }

@@ -803,6 +803,7 @@ final class PlayerViewModel {
         guard abs(effectiveOffset) > 0.000_001 else { return false }
         do {
             try bridge?.seekRelative(effectiveOffset)
+            seekPosition = targetPosition
             lastError = nil
             return true
         } catch {
