@@ -31,6 +31,8 @@ targets:
       - path: Sources
       - path: Assets.xcassets
         buildPhase: resources
+      - path: Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: Nura

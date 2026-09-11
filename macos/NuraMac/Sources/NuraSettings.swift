@@ -16,13 +16,13 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
 
     var title: String {
         switch self {
-        case .togglePlayback: "Play or Pause"
-        case .previousItem: "Previous Item"
-        case .nextItem: "Next Item"
-        case .seekBackward: "Seek Backward"
-        case .seekForward: "Seek Forward"
-        case .screenshot: "Take Screenshot"
-        case .toggleFullscreen: "Toggle Full Screen"
+        case .togglePlayback: L10n.text("Play or Pause")
+        case .previousItem: L10n.text("Previous Item")
+        case .nextItem: L10n.text("Next Item")
+        case .seekBackward: L10n.text("Seek Backward")
+        case .seekForward: L10n.text("Seek Forward")
+        case .screenshot: L10n.text("Take Screenshot")
+        case .toggleFullscreen: L10n.text("Toggle Full Screen")
         }
     }
 }
@@ -35,7 +35,15 @@ enum ShortcutModifier: String, CaseIterable, Codable, Identifiable {
     case control
 
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String {
+        switch self {
+        case .none: L10n.text("No modifier")
+        case .command: L10n.text("Command")
+        case .option: L10n.text("Option")
+        case .shift: L10n.text("Shift")
+        case .control: L10n.text("Control")
+        }
+    }
 
     var eventModifiers: EventModifiers {
         switch self {

@@ -16,8 +16,8 @@ enum OpenSubtitlesError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey: "Add an OpenSubtitles API key in Settings before searching."
-        case .invalidResponse: "OpenSubtitles returned an unexpected response."
+        case .missingAPIKey: L10n.text("Add an OpenSubtitles API key in Settings before searching.")
+        case .invalidResponse: L10n.text("OpenSubtitles returned an unexpected response.")
         case .server(let message): message
         }
     }
@@ -81,7 +81,7 @@ struct OpenSubtitlesClient {
         }
         guard (200..<300).contains(response.statusCode) else {
             let message = (try? decoder().decode(ErrorResponse.self, from: data).message)
-                ?? "OpenSubtitles request failed (HTTP \(response.statusCode))."
+                ?? L10n.format("OpenSubtitles request failed (HTTP %d).", response.statusCode)
             throw OpenSubtitlesError.server(message)
         }
     }

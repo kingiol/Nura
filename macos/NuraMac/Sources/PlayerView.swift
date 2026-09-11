@@ -481,8 +481,8 @@ private struct SeekButton: View {
     private var helpText: String {
         let short = Int(shortSeekSeconds)
         let long = Int(longSeekSeconds)
-        let action = direction < 0 ? "后退" : "前进"
-        return "短按\(action) \(short) 秒；长按\(action) \(long) 秒"
+        let action = direction < 0 ? L10n.text("backward") : L10n.text("forward")
+        return L10n.format("Short press %@ %d seconds; long press %@ %d seconds", action, short, action, long)
     }
 }
 
@@ -607,6 +607,8 @@ private enum SidebarTab: String, CaseIterable, Identifiable {
     case subtitles = "Subtitles"
 
     var id: String { rawValue }
+
+    var title: String { L10n.text(rawValue) }
     var symbol: String {
         switch self {
         case .settings: return "gearshape"
@@ -627,6 +629,8 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var title: String { L10n.text(rawValue) }
+
     var symbol: String {
         switch self {
         case .general: return "gearshape"
@@ -644,14 +648,14 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
 @MainActor
 func showOpenURLPanel(open: @escaping (String) -> Void) {
     let alert = NSAlert()
-    alert.messageText = "Open URL"
-    alert.informativeText = "Enter a public media URL, YouTube link, or Bilibili link."
+    alert.messageText = L10n.text("Open URL")
+    alert.informativeText = L10n.text("Enter a public media URL, YouTube link, or Bilibili link.")
     let field = NSTextField(string: "")
     field.placeholderString = "https://..."
     field.frame = NSRect(x: 0, y: 0, width: 360, height: 24)
     alert.accessoryView = field
-    alert.addButton(withTitle: "Open")
-    alert.addButton(withTitle: "Cancel")
+    alert.addButton(withTitle: L10n.text("Open"))
+    alert.addButton(withTitle: L10n.text("Cancel"))
     guard alert.runModal() == .alertFirstButtonReturn else { return }
     open(field.stringValue)
 }
@@ -684,7 +688,7 @@ private struct SettingsSidebarView: View {
                     Button {
                         selectedTab = tab
                     } label: {
-                        Label(tab.rawValue, systemImage: tab.symbol)
+                        Label(tab.title, systemImage: tab.symbol)
                             .font(.caption.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
@@ -697,7 +701,7 @@ private struct SettingsSidebarView: View {
                             .fill(selectedTab == tab ? Color.accentColor : Color.clear)
                             .frame(height: 2)
                     }
-                    .accessibilityLabel(tab.rawValue)
+                    .accessibilityLabel(tab.title)
                     .accessibilityValue(selectedTab == tab ? "selected" : "unselected")
                     .accessibilityIdentifier(tab.accessibilityIdentifier)
                 }
@@ -1127,7 +1131,7 @@ private struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Label(tab.rawValue, systemImage: tab.symbol)
+                Label(tab.title, systemImage: tab.symbol)
                     .font(.headline)
                 Spacer()
                 Button(action: onClose) { Image(systemName: "xmark") }
@@ -1395,8 +1399,8 @@ private struct TrackMenu: View {
     }
 
     private func trackLabel(_ track: Track) -> String {
-        let label = track.title ?? track.language ?? "Track \(track.id)"
-        return track.external ? "\(label) (external)" : label
+        let label = track.title ?? track.language ?? L10n.format("Track %d", track.id)
+        return track.external ? L10n.format("%@ (external)", label) : label
     }
 }
 
@@ -1506,7 +1510,7 @@ private struct VideoMenu: View {
             Button("Fit to Video", action: onFitToVideo)
             Button("Rotate 90°") { onRotate() }
             Button(flipped ? "Unflip Video" : "Flip Video") { onToggleFlip() }
-            Text("Rotation: \(rotation)°")
+            Text(L10n.format("Rotation: %d°", rotation))
         } label: {
             Label("Video", systemImage: "rectangle.on.rectangle")
         }
@@ -1527,8 +1531,13 @@ private func checkedLabel(_ title: String, selected: Bool) -> some View {
 @MainActor
 @ViewBuilder
 private func delayButtons(current: Double, onSelect: @escaping (Double) -> Void, prefix: String) -> some View {
+    let localizedPrefix = L10n.text(prefix)
     settingButtons(values: [-1.0, -0.5, 0.0, 0.5, 1.0], current: current, onSelect: onSelect, label: { value in
-        value == 0 ? "\(prefix) 0s" : value > 0 ? "\(prefix) +\(value)s" : "\(prefix) \(value)s"
+        value == 0
+            ? L10n.format("%@ 0s", localizedPrefix)
+            : value > 0
+                ? L10n.format("%@ +%gs", localizedPrefix, value)
+                : L10n.format("%@ %gs", localizedPrefix, value)
     })
 }
 
@@ -1600,7 +1609,8 @@ private struct SubtitleDelayMenu: View {
     }
 
     private func label(for value: Double) -> String {
-        if abs(value) < 0.001 { return "Sub 0s" }
-        return value > 0 ? "Sub +\(value)s" : "Sub \(value)s"
+        let prefix = L10n.text("Sub")
+        if abs(value) < 0.001 { return L10n.format("%@ 0s", prefix) }
+        return value > 0 ? L10n.format("%@ +%gs", prefix, value) : L10n.format("%@ %gs", prefix, value)
     }
 }

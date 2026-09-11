@@ -146,15 +146,20 @@ final class PlayerViewModel {
     }
 
     var title: String {
-        snapshot.item?.title ?? "Open a media file to begin"
+        snapshot.item?.title ?? L10n.text("Open a media file to begin")
     }
 
     var statusText: String {
         if let lastError { return lastError }
         if let error = snapshot.error { return error }
-        if snapshot.status == "buffering" { return "Buffering…" }
-        if snapshot.status == "loading" { return "Loading…" }
-        return snapshot.status.capitalized
+        switch snapshot.status {
+        case "buffering": return L10n.text("Buffering…")
+        case "loading": return L10n.text("Loading…")
+        case "playing": return L10n.text("Playing")
+        case "paused": return L10n.text("Paused")
+        case "idle": return L10n.text("Idle")
+        default: return snapshot.status.capitalized
+        }
     }
 
     var hasError: Bool {
@@ -207,7 +212,7 @@ final class PlayerViewModel {
 
     func openExpandedMediaURLs(_ expanded: [URL]) {
         guard !expanded.isEmpty else {
-            showError("No supported media files were found")
+            showError(L10n.text("No supported media files were found"))
             return
         }
         invalidateSeekPreview()
@@ -331,7 +336,7 @@ final class PlayerViewModel {
     func addPlaylistURLs(_ urls: [URL]) {
         let expanded = Self.expandMediaURLs(urls)
         guard !expanded.isEmpty else {
-            showError("No supported media files were found")
+            showError(L10n.text("No supported media files were found"))
             return
         }
         if snapshot.item == nil {
@@ -425,7 +430,7 @@ final class PlayerViewModel {
         if panel.runModal() == .OK, let url = panel.url {
             let supported = ["srt", "ass", "ssa", "vtt", "sup"].contains(url.pathExtension.lowercased())
             guard supported else {
-                showError("Unsupported subtitle format")
+                showError(L10n.text("Unsupported subtitle format"))
                 return
             }
             do {
@@ -439,7 +444,7 @@ final class PlayerViewModel {
 
     func searchOnlineSubtitles() {
         guard let item = snapshot.item else {
-            showError("Open media before searching for subtitles")
+            showError(L10n.text("Open media before searching for subtitles"))
             return
         }
         isSearchingOnlineSubtitles = true
@@ -554,11 +559,11 @@ final class PlayerViewModel {
 
     func copyScreenshot() {
         guard snapshot.item != nil else {
-            showError("Open media before copying a screenshot")
+            showError(L10n.text("Open media before copying a screenshot"))
             return
         }
         guard let bridge else {
-            showError("Player is unavailable")
+            showError(L10n.text("Player is unavailable"))
             return
         }
 
@@ -617,9 +622,9 @@ final class PlayerViewModel {
     }
 
     var playlistLoopLabel: String {
-        if loopEnabled { return "Loop Current Item" }
-        if snapshot.playlistLoop { return "Loop Playlist" }
-        return "Loop Off"
+        if loopEnabled { return L10n.text("Loop Current Item") }
+        if snapshot.playlistLoop { return L10n.text("Loop Playlist") }
+        return L10n.text("Loop Off")
     }
 
     var playlistLoopSymbol: String {
@@ -682,9 +687,9 @@ final class PlayerViewModel {
     }
 
     var abLoopLabel: String {
-        if snapshot.abLoopStartSeconds == nil { return "Set A-B loop start" }
-        if snapshot.abLoopEndSeconds == nil { return "Set A-B loop end" }
-        return "Clear A-B loop"
+        if snapshot.abLoopStartSeconds == nil { return L10n.text("Set A-B loop start") }
+        if snapshot.abLoopEndSeconds == nil { return L10n.text("Set A-B loop end") }
+        return L10n.text("Clear A-B loop")
     }
 
     var abLoopSymbol: String {
@@ -969,7 +974,7 @@ final class PlayerViewModel {
 
     func togglePiP() {
         guard snapshot.item != nil, snapshot.videoWidth != nil, snapshot.videoHeight != nil else {
-            showError("Open a video before starting Picture in Picture")
+            showError(L10n.text("Open a video before starting Picture in Picture"))
             return
         }
         pictureInPicture.toggle()
@@ -991,15 +996,15 @@ final class PlayerViewModel {
 
     func fitWindowToVideo() {
         guard let geometry = currentVideoGeometry else {
-            showError("Video dimensions are not available yet")
+            showError(L10n.text("Video dimensions are not available yet"))
             return
         }
         guard let window = playerWindow else {
-            showError("Player window is unavailable")
+            showError(L10n.text("Player window is unavailable"))
             return
         }
         guard let screen = window.screen ?? NSScreen.main else {
-            showError("Display information is unavailable")
+            showError(L10n.text("Display information is unavailable"))
             return
         }
 
@@ -1182,7 +1187,7 @@ final class PlayerViewModel {
         let maximumSize = NSSize(width: visibleFrame.width * 0.9, height: visibleFrame.height * 0.9)
         let maximumScale = min(maximumSize.width / contentSize.width, maximumSize.height / contentSize.height)
         guard maximumScale > 0 else {
-            showError("Unable to fit the video on this display")
+            showError(L10n.text("Unable to fit the video on this display"))
             return
         }
 

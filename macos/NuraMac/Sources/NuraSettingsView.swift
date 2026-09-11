@@ -16,16 +16,16 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .general: "General"
-        case .playback: "Playback"
-        case .controls: "Controls"
-        case .video: "Video"
-        case .audio: "Audio"
-        case .subtitles: "Subtitles"
-        case .network: "Network"
-        case .advanced: "Advanced"
-        case .history: "History"
-        case .about: "About"
+        case .general: L10n.text("General")
+        case .playback: L10n.text("Playback")
+        case .controls: L10n.text("Controls")
+        case .video: L10n.text("Video")
+        case .audio: L10n.text("Audio")
+        case .subtitles: L10n.text("Subtitles")
+        case .network: L10n.text("Network")
+        case .advanced: L10n.text("Advanced")
+        case .history: L10n.text("History")
+        case .about: L10n.text("About")
         }
     }
 
@@ -130,7 +130,7 @@ private struct PlaybackSettingsPage: View {
                     HStack {
                         Slider(value: $settings.defaultPlaybackSpeed, in: 0.25...4, step: 0.25)
                             .frame(width: 220)
-                        Text("\(settings.defaultPlaybackSpeed.formatted(.number.precision(.fractionLength(2))))x")
+                        Text(L10n.format("%@x", settings.defaultPlaybackSpeed.formatted(.number.precision(.fractionLength(2)))))
                             .monospacedDigit()
                             .frame(width: 48, alignment: .trailing)
                     }
@@ -139,15 +139,19 @@ private struct PlaybackSettingsPage: View {
                     HStack {
                         Slider(value: $settings.defaultVolume, in: 0...100, step: 1)
                             .frame(width: 220)
-                        Text("\(Int(settings.defaultVolume))%")
+                        Text(L10n.format("%d%%", Int(settings.defaultVolume)))
                             .monospacedDigit()
                             .frame(width: 48, alignment: .trailing)
                     }
                 }
             }
             Section("Seeking") {
-                Stepper("Short seek: \(Int(settings.shortSeekSeconds)) seconds", value: $settings.shortSeekSeconds, in: 1...60, step: 1)
-                Stepper("Long seek: \(Int(settings.longSeekSeconds)) seconds", value: $settings.longSeekSeconds, in: 5...300, step: 5)
+                Stepper(value: $settings.shortSeekSeconds, in: 1...60, step: 1) {
+                    Text(L10n.format("Short seek: %d seconds", Int(settings.shortSeekSeconds)))
+                }
+                Stepper(value: $settings.longSeekSeconds, in: 5...300, step: 5) {
+                    Text(L10n.format("Long seek: %d seconds", Int(settings.longSeekSeconds)))
+                }
             }
         }
         .formStyle(.grouped)
@@ -204,7 +208,7 @@ private struct ShortcutEditor: View {
                 .labelsHidden()
                 .frame(width: 132)
             }
-            .accessibilityValue("\(binding.modifier.title) \(binding.key)")
+            .accessibilityValue(L10n.format("%@ %@", binding.modifier.title, binding.key))
         }
     }
 }
@@ -317,7 +321,11 @@ private struct NetworkSettingsPage: View {
             }
             Section("Cache") {
                 Toggle("Enable cache", isOn: $settings.cacheEnabled)
-                Stepper("Maximum cache: \(settings.cacheSizeKiB == 0 ? "Automatic" : "\(settings.cacheSizeKiB) KiB")", value: $settings.cacheSizeKiB, in: 0...1_048_576, step: 16_384)
+                Stepper(value: $settings.cacheSizeKiB, in: 0...1_048_576, step: 16_384) {
+                    Text(settings.cacheSizeKiB == 0
+                        ? L10n.text("Maximum cache: Automatic")
+                        : L10n.format("Maximum cache: %d KiB", settings.cacheSizeKiB))
+                }
             }
         }
         .formStyle(.grouped)
@@ -418,7 +426,7 @@ private struct HistorySettingsPage: View {
             }
             Divider()
             HStack {
-                Text("\(model.snapshot.historyItems.count) items")
+                Text(L10n.format("%d items", model.snapshot.historyItems.count))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Clear History", role: .destructive) { confirmClear = true }

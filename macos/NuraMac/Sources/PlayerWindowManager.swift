@@ -24,11 +24,11 @@ final class PlayerWindowManager {
     }
 
     var openMenuTitle: String {
-        activeModel?.snapshot.item == nil ? "Open…" : "Open in New Window…"
+        activeModel?.snapshot.item == nil ? L10n.text("Open…") : L10n.text("Open in New Window…")
     }
 
     var openURLMenuTitle: String {
-        activeModel?.snapshot.item == nil ? "Open URL…" : "Open URL in New Window…"
+        activeModel?.snapshot.item == nil ? L10n.text("Open URL…") : L10n.text("Open URL in New Window…")
     }
 
     func makeInitialModel() -> PlayerViewModel {

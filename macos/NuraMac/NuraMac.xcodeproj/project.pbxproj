@@ -13,6 +13,7 @@
 		1A9520FBB1D1088D370268AF /* PlayerLaunchConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */; };
 		1B62F18B94FA9203BA96AADB /* SeekPreviewSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3E876C301B5FCE6665A4E2 /* SeekPreviewSlider.swift */; };
 		21132ABCF28D052736AEEB74 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FE2A47AE5ADF946B23611A0 /* Assets.xcassets */; };
+		2DAD40262158B4F3F798D544 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CC7FCC3AA321E879F5D0A8E7 /* Localizable.xcstrings */; };
 		43D4883C9BC9C43E71ABFDB3 /* RenderSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A5BC1F00095D48321E4DE1 /* RenderSurface.swift */; };
 		49BBBC195A91F4216CB8FD6D /* NuraSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2C48DCCB5B322F66E4198E /* NuraSettings.swift */; };
 		4E85D6467D81430C5A33424F /* RenderSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24F0E5F48DB3AC6919307B8 /* RenderSurfaceView.swift */; };
@@ -23,6 +24,7 @@
 		7EDE4B4FE32E716C17733169 /* PictureInPictureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516691B759ABC0A323D38C6 /* PictureInPictureCoordinator.swift */; };
 		B69A4EAC4EB74771821BDBBD /* SeekThumbnailGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7014F3F30A07D117AED39DA /* SeekThumbnailGenerator.swift */; };
 		E512619560D8D7E75B875F0E /* NuraSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C15E9369ECED1A9DCC789C /* NuraSettingsView.swift */; };
+		F1A7E8E250A3B04B1CBCAAF2 /* NuraLocalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443E733149ECDCA15898AF24 /* NuraLocalizer.swift */; };
 		F1DFBA08559FE631AAEB68AF /* PlayerWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 632E770F0F6F4FBEA327B8BE /* PlayerWindowManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +40,7 @@
 
 /* Begin PBXFileReference section */
 		3E2C48DCCB5B322F66E4198E /* NuraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraSettings.swift; sourceTree = "<group>"; };
+		443E733149ECDCA15898AF24 /* NuraLocalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraLocalizer.swift; sourceTree = "<group>"; };
 		46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacUITests.swift; sourceTree = "<group>"; };
 		4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NuraMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacApp.swift; sourceTree = "<group>"; };
@@ -53,6 +56,7 @@
 		B0CC00722A2F2EDCA7630766 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
 		C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerLaunchConfiguration.swift; sourceTree = "<group>"; };
 		CC3E876C301B5FCE6665A4E2 /* SeekPreviewSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeekPreviewSlider.swift; sourceTree = "<group>"; };
+		CC7FCC3AA321E879F5D0A8E7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D6D5FA583A78B02F836AA677 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		F7014F3F30A07D117AED39DA /* SeekThumbnailGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeekThumbnailGenerator.swift; sourceTree = "<group>"; };
 		FBC9393F86D70B4FA0F60E97 /* NowPlayingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCoordinator.swift; sourceTree = "<group>"; };
@@ -63,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				FBC9393F86D70B4FA0F60E97 /* NowPlayingCoordinator.swift */,
+				443E733149ECDCA15898AF24 /* NuraLocalizer.swift */,
 				5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */,
 				3E2C48DCCB5B322F66E4198E /* NuraSettings.swift */,
 				56C15E9369ECED1A9DCC789C /* NuraSettingsView.swift */,
@@ -98,9 +103,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		BBF9E8D9B93F71E064E354FC /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				CC7FCC3AA321E879F5D0A8E7 /* Localizable.xcstrings */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		C4EE2BAF72572AECC327F966 = {
 			isa = PBXGroup;
 			children = (
+				BBF9E8D9B93F71E064E354FC /* Resources */,
 				486DAAF646F4471D3D8B01C2 /* Sources */,
 				4EB4A60FBE02C040923E6601 /* UITests */,
 				6FE2A47AE5ADF946B23611A0 /* Assets.xcassets */,
@@ -173,6 +187,7 @@
 			knownRegions = (
 				Base,
 				en,
+				"zh-Hans",
 			);
 			mainGroup = C4EE2BAF72572AECC327F966;
 			minimizedProjectReferenceProxies = 1;
@@ -193,6 +208,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				21132ABCF28D052736AEEB74 /* Assets.xcassets in Resources */,
+				2DAD40262158B4F3F798D544 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,6 +261,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A493FF18EDDEAC89D433CFC /* NowPlayingCoordinator.swift in Sources */,
+				F1A7E8E250A3B04B1CBCAAF2 /* NuraLocalizer.swift in Sources */,
 				024B7BA0DB49D518847C569F /* NuraMacApp.swift in Sources */,
 				49BBBC195A91F4216CB8FD6D /* NuraSettings.swift in Sources */,
 				E512619560D8D7E75B875F0E /* NuraSettingsView.swift in Sources */,

@@ -44,6 +44,42 @@ final class NuraMacUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Open a media file to begin"].exists)
     }
 
+    func testUsesSimplifiedChineseForChineseSystemLanguage() throws {
+        try launch(loadsFixture: false, language: "zh-Hans")
+
+        let settingsToggle = app.buttons["player.settings-toggle"]
+        XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
+        settingsToggle.click()
+
+        let general = app.buttons["player.settings-tab-general"]
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        XCTAssertEqual(general.label, "通用")
+    }
+
+    func testUsesEnglishForEnglishSystemLanguage() throws {
+        try launch(loadsFixture: false, language: "en")
+
+        let settingsToggle = app.buttons["player.settings-toggle"]
+        XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
+        settingsToggle.click()
+
+        let general = app.buttons["player.settings-tab-general"]
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        XCTAssertEqual(general.label, "General")
+    }
+
+    func testFallsBackToEnglishForUnsupportedSystemLanguage() throws {
+        try launch(loadsFixture: false, language: "fr")
+
+        let settingsToggle = app.buttons["player.settings-toggle"]
+        XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
+        settingsToggle.click()
+
+        let general = app.buttons["player.settings-tab-general"]
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        XCTAssertEqual(general.label, "General")
+    }
+
     func testCanPauseAndResumePlayback() throws {
         try launch(loadsFixture: true)
 
@@ -118,7 +154,7 @@ final class NuraMacUITests: XCTestCase {
         waitForExpectations(timeout: timeout)
     }
 
-    private func launch(loadsFixture: Bool) throws {
+    private func launch(loadsFixture: Bool, language: String? = nil) throws {
         let stateDirectory = try XCTUnwrap(stateDirectory)
         let defaultsSuiteName = try XCTUnwrap(defaultsSuiteName)
         var arguments: [String] = [
@@ -131,6 +167,10 @@ final class NuraMacUITests: XCTestCase {
 
         if loadsFixture {
             arguments.insert(contentsOf: ["-e2e-media-path", try requiredFixturePath()], at: 0)
+        }
+
+        if let language {
+            arguments.append(contentsOf: ["-AppleLanguages", "(\(language))", "-AppleLocale", language == "zh-Hans" ? "zh_CN" : "\(language)_US"])
         }
 
         app.launchArguments = arguments

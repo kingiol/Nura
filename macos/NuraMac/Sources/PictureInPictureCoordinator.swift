@@ -84,7 +84,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
 
     func start() {
         guard AVPictureInPictureController.isPictureInPictureSupported() else {
-            reportError("Picture in Picture is not supported on this Mac")
+            reportError(L10n.text("Picture in Picture is not supported on this Mac"))
             return
         }
         captureEnabled = true
@@ -340,7 +340,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         loggedFirstFrame = false
         isActive = false
         onActiveChange(false)
-        reportError("Unable to start Picture in Picture: \(error.localizedDescription)")
+        reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
     }
 
     func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}

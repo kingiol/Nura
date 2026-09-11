@@ -40,8 +40,8 @@ struct SeekPreviewSlider: View {
                 .controlSize(.small)
                 .frame(height: 24)
                 .accessibilityIdentifier("player.seek-slider")
-                .accessibilityLabel("Playback position")
-                .accessibilityValue("\(formatTime(previewPosition ?? value)) of \(formatTime(duration))")
+                .accessibilityLabel(L10n.text("Playback position"))
+                .accessibilityValue(L10n.format("%@ of %@", formatTime(previewPosition ?? value), formatTime(duration)))
 
                 if previewVisible, previewImage != nil {
                     previewBubble
