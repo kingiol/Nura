@@ -421,12 +421,13 @@ private struct SeekButton: View {
         } label: {
             ZStack {
                 Image(systemName: direction < 0 ? "gobackward" : "goforward")
+                    .font(.system(size: 21, weight: .regular))
                 Text("\(Int(isLongPressActive ? longSeekSeconds : shortSeekSeconds))")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .allowsHitTesting(false)
             }
-            .frame(width: 24, height: 24)
+            .frame(width: 30, height: 30)
         }
         .buttonStyle(.borderless)
         .help(helpText)
