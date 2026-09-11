@@ -445,15 +445,9 @@ private struct SeekButton: View {
             isLongPressActive = false
             heldPosition = nil
         } label: {
-            ZStack {
-                Image(systemName: direction < 0 ? "gobackward" : "goforward")
-                    .font(.system(size: 21, weight: .regular))
-                Text("\(Int(isLongPressActive ? longSeekSeconds : shortSeekSeconds))")
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .allowsHitTesting(false)
-            }
-            .frame(width: 30, height: 30)
+            Image(systemName: seekSymbol)
+                .font(.system(size: 21, weight: .regular))
+                .frame(width: 30, height: 30)
         }
         .buttonStyle(ControlButtonStyle())
         .help(helpText)
@@ -515,6 +509,14 @@ private struct SeekButton: View {
         guard model.seekRelative(effectiveOffset) else { return false }
         heldPosition = targetPosition
         return true
+    }
+
+    private var seekSymbol: String {
+        let seconds = Int((isLongPressActive ? longSeekSeconds : shortSeekSeconds).rounded())
+        if direction < 0 {
+            return seconds == 5 ? "gobackward.5" : seconds == 30 ? "gobackward.30" : "gobackward"
+        }
+        return seconds == 5 ? "goforward.5" : seconds == 30 ? "goforward.30" : "goforward"
     }
 
     private var helpText: String {
