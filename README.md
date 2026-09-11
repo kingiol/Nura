@@ -81,6 +81,27 @@ After changing Homebrew or runtime dependencies, validate the bundled runtime:
 For Xcode-based debugging and native UI test notes, see
 [`macos/NuraMac/README.md`](macos/NuraMac/README.md).
 
+### GitHub Release
+
+Pushing a tag such as `v0.1.0` starts `.github/workflows/release-macos.yml`.
+The workflow builds the arm64 DMG and ZIP, checks that the tag matches
+`MARKETING_VERSION`, and creates a GitHub Release with the artifacts and SHA-256
+files.
+
+Tag releases use Apple signing and notarization. Configure these repository
+secrets before pushing a release tag:
+
+- `APPLE_CERTIFICATE_BASE64`: base64-encoded Developer ID Application `.p12`.
+- `APPLE_CERTIFICATE_PASSWORD`: password for the `.p12` file.
+- `APPLE_CERTIFICATE_KEYCHAIN_PASSWORD`: temporary CI keychain password.
+- `APPLE_SIGNING_IDENTITY`: full Developer ID Application identity.
+- `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`: Apple notarization credentials.
+
+The workflow can also be started from the Actions page. Set `publish_signed` to
+`false` to validate the build without Apple credentials; those artifacts are
+intentionally named with a `-local` suffix and must not be distributed as a
+production release.
+
 ## Project Structure
 
 - `crates/` contains the Rust domain, player core, media library, libmpv, and FFI crates.

@@ -1,0 +1,161 @@
+name: macOS Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example v0.1.0'
+        required: true
+        default: 'v0.1.0'
+        type: string
+      publish_signed:
+        description: 'Sign and notarize the release with Apple credentials'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-14
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Install native dependencies
+        run: brew bundle --file=Brewfile
+
+      - name: Resolve release mode
+        id: mode
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" || "${{ inputs.publish_signed }}" == "true" ]]; then
+            echo "publish=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=0" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.mode.outputs.tag }}
+        run: |
+          case "$RELEASE_TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "release tag must look like v0.1.0: $RELEASE_TAG" >&2; exit 1 ;;
+          esac
+
+      - name: Prepare Apple signing and notarization
+        if: steps.mode.outputs.publish == '1'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_CERTIFICATE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          required=(APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_CERTIFICATE_KEYCHAIN_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD APPLE_SIGNING_IDENTITY)
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "missing GitHub secret: $name" >&2
+              exit 1
+            fi
+          done
+
+          CERTIFICATE_PATH="$RUNNER_TEMP/nura-developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/nura-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+
+          security create-keychain -p "$APPLE_CERTIFICATE_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$APPLE_CERTIFICATE_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$APPLE_CERTIFICATE_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          xcrun notarytool store-credentials NuraNotary \
+            --keychain "$KEYCHAIN_PATH" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD"
+
+      - name: Build release artifacts
+        shell: bash
+        env:
+          RELEASE_MODE: ${{ steps.mode.outputs.publish }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_MODE" == "1" ]]; then
+            NURA_PUBLISH=1 \
+            NURA_SIGNING_IDENTITY="$APPLE_SIGNING_IDENTITY" \
+            NURA_NOTARY_PROFILE=NuraNotary \
+            ./scripts/release-macos.sh
+          else
+            NURA_SKIP_SIGNING=1 ./scripts/release-macos.sh
+          fi
+
+      - name: Verify tag matches app version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.mode.outputs.tag }}
+        run: |
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Nura.app/Contents/Info.plist)
+          TAG_VERSION="${RELEASE_TAG#v}"
+          if [[ "$APP_VERSION" != "$TAG_VERSION" ]]; then
+            echo "tag $RELEASE_TAG does not match app version $APP_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.mode.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Nura $RELEASE_TAG" \
+            --generate-notes \
+            dist/Nura-*.dmg \
+            dist/Nura-*.zip \
+            dist/Nura-*.sha256
