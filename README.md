@@ -97,6 +97,53 @@ secrets before pushing a release tag:
 - `APPLE_SIGNING_IDENTITY`: full Developer ID Application identity.
 - `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`: Apple notarization credentials.
 
+#### How to obtain the Secrets
+
+1. Create a `Developer ID Application` certificate in Apple Developer under
+   **Certificates, Identifiers & Profiles > Certificates**. Download it,
+   install it in Keychain Access, then export the certificate from
+   **Keychain Access > My Certificates** as a password-protected `.p12` file.
+
+2. Set `APPLE_CERTIFICATE_BASE64` to the Base64 content of that `.p12` file:
+
+   ```sh
+   base64 -i ~/Desktop/NuraDeveloperID.p12 | tr -d '\n' | pbcopy
+   ```
+
+   Paste the clipboard value into the GitHub secret. `APPLE_CERTIFICATE_PASSWORD`
+   is the password chosen when exporting the `.p12` file.
+
+3. Generate a temporary CI keychain password for `APPLE_CERTIFICATE_KEYCHAIN_PASSWORD`:
+
+   ```sh
+   openssl rand -base64 24
+   ```
+
+   This password is created by you; it does not come from Apple.
+
+4. Find the exact signing identity for `APPLE_SIGNING_IDENTITY`:
+
+   ```sh
+   security find-identity -v -p codesigning
+   ```
+
+   Copy the complete `Developer ID Application: ... (TEAMID)` name from the
+   output.
+
+5. Set `APPLE_ID` to the Apple Developer account email. Find `APPLE_TEAM_ID`
+   in the Apple Developer account's Membership details.
+
+6. Create `APPLE_APP_PASSWORD` at the Apple Account website under
+   **Sign-In and Security > App-Specific Passwords**. This is separate from
+   your normal Apple Account password.
+
+7. Add all seven values in the GitHub repository under
+   **Settings > Secrets and variables > Actions > New repository secret**.
+
+Never commit the `.p12` file or any of these values to the repository. If a
+secret is exposed, revoke the certificate or app-specific password and replace
+the GitHub secret immediately.
+
 The workflow can also be started from the Actions page. Set `publish_signed` to
 `false` to validate the build without Apple credentials; those artifacts are
 intentionally named with a `-local` suffix and must not be distributed as a
