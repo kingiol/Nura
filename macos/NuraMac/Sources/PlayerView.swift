@@ -403,6 +403,7 @@ private struct SeekButton: View {
     @State private var longPressActivationTask: Task<Void, Never>?
     @State private var didLongPress = false
     @State private var isLongPressActive = false
+    @State private var isHovered = false
     @State private var heldPosition: Double?
 
     private var shortSeekSeconds: Double { model.settings.shortSeekSeconds }
@@ -430,6 +431,16 @@ private struct SeekButton: View {
             .frame(width: 30, height: 30)
         }
         .buttonStyle(.borderless)
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.white.opacity(isHovered ? 0.14 : 0))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
         .help(helpText)
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.45)
