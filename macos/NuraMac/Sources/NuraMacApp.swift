@@ -119,10 +119,13 @@ private struct NuraPlayerCommands: Commands {
         }
         CommandMenu("Playback") {
             Button("Play/Pause", action: { playerWindows.activeModel?.togglePlayback() })
+                .disabled(!(playerWindows.activeModel?.canPlaybackControl ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .togglePlayback), modifiers: settings.modifiers(for: .togglePlayback))
             Button("Previous Item", action: { playerWindows.activeModel?.previous() })
+                .disabled(!(playerWindows.activeModel?.canNavigateItems ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .previousItem), modifiers: settings.modifiers(for: .previousItem))
             Button("Next Item", action: { playerWindows.activeModel?.next() })
+                .disabled(!(playerWindows.activeModel?.canNavigateItems ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .nextItem), modifiers: settings.modifiers(for: .nextItem))
             Divider()
             Button("Next Frame", action: { playerWindows.activeModel?.frameStep() })
@@ -132,18 +135,22 @@ private struct NuraPlayerCommands: Commands {
                 .disabled(!(playerWindows.activeModel?.canFrameStep ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .frameBackStep), modifiers: settings.modifiers(for: .frameBackStep))
             Divider()
-            Button("Seek Backward") { playerWindows.activeModel?.seekRelative(-settings.shortSeekSeconds) }
+            Button(L10n.format("Seek Backward %d Seconds", Int(settings.shortSeekSeconds))) { playerWindows.activeModel?.seekRelative(-settings.shortSeekSeconds) }
+                .disabled(!(playerWindows.activeModel?.canSeek ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .seekBackward), modifiers: settings.modifiers(for: .seekBackward))
-            Button("Seek Forward") { playerWindows.activeModel?.seekRelative(settings.shortSeekSeconds) }
+            Button(L10n.format("Seek Forward %d Seconds", Int(settings.shortSeekSeconds))) { playerWindows.activeModel?.seekRelative(settings.shortSeekSeconds) }
+                .disabled(!(playerWindows.activeModel?.canSeek ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .seekForward), modifiers: settings.modifiers(for: .seekForward))
             Divider()
             Button("Take Screenshot", action: { playerWindows.activeModel?.screenshot() })
+                .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .screenshot), modifiers: settings.modifiers(for: .screenshot))
             Button("Toggle Full Screen", action: { playerWindows.activeModel?.toggleFullscreen() })
                 .keyboardShortcut(settings.keyEquivalent(for: .toggleFullscreen), modifiers: settings.modifiers(for: .toggleFullscreen))
         }
         CommandMenu("Window") {
             Button("Picture in Picture", action: { playerWindows.activeModel?.togglePiP() })
+                .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
         }
     }
 }

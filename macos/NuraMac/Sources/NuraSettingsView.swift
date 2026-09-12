@@ -189,7 +189,7 @@ private struct ShortcutEditor: View {
                 TextField(
                     "Key",
                     text: Binding(
-                        get: { settings.binding(for: action).key == " " ? "Space" : settings.binding(for: action).key.uppercased() },
+                        get: { NuraSettings.shortcutDisplayName(settings.binding(for: action).key) },
                         set: { value in
                             settings.updateShortcut(action, key: value.lowercased() == "space" ? " " : value)
                         }

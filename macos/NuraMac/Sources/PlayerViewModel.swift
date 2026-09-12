@@ -178,6 +178,22 @@ final class PlayerViewModel {
         snapshot.status == "paused" && snapshot.videoWidth != nil && snapshot.videoHeight != nil
     }
 
+    var canPlaybackControl: Bool {
+        snapshot.item != nil && snapshot.status != "loading" && snapshot.status != "failed"
+    }
+
+    var canSeek: Bool {
+        snapshot.item != nil && snapshot.status != "loading" && snapshot.status != "failed"
+    }
+
+    var canNavigateItems: Bool {
+        canPlaybackControl && snapshot.playlist.count > 1
+    }
+
+    var canScreenshot: Bool {
+        snapshot.item != nil && snapshot.videoWidth != nil && snapshot.videoHeight != nil
+    }
+
     var isMuted: Bool {
         pendingMutedState ?? snapshot.muted
     }

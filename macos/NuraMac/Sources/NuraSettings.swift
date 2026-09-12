@@ -70,8 +70,8 @@ struct ShortcutBinding: Codable, Equatable {
         .nextItem: ShortcutBinding(key: "n", modifier: .none),
         .frameStep: ShortcutBinding(key: ".", modifier: .none),
         .frameBackStep: ShortcutBinding(key: ",", modifier: .none),
-        .seekBackward: ShortcutBinding(key: "j", modifier: .none),
-        .seekForward: ShortcutBinding(key: "l", modifier: .none),
+        .seekBackward: ShortcutBinding(key: "leftArrow", modifier: .none),
+        .seekForward: ShortcutBinding(key: "rightArrow", modifier: .none),
         .screenshot: ShortcutBinding(key: "s", modifier: .none),
         .toggleFullscreen: ShortcutBinding(key: "f", modifier: .none),
     ]
@@ -190,7 +190,7 @@ final class NuraSettings {
     func updateShortcut(_ action: ShortcutAction, key: String? = nil, modifier: ShortcutModifier? = nil) {
         var binding = binding(for: action)
         if let key {
-            let normalized = key == " " ? " " : String(key.lowercased().prefix(1))
+            let normalized = Self.normalizeShortcutKey(key, fallback: ShortcutBinding.defaults[action]!.key)
             binding.key = normalized.isEmpty ? ShortcutBinding.defaults[action]!.key : normalized
         }
         if let modifier { binding.modifier = modifier }
@@ -202,8 +202,50 @@ final class NuraSettings {
     }
 
     func keyEquivalent(for action: ShortcutAction) -> KeyEquivalent {
-        let key = binding(for: action).key.first ?? " "
-        return KeyEquivalent(key)
+        switch binding(for: action).key {
+        case "leftArrow": return .leftArrow
+        case "rightArrow": return .rightArrow
+        case "upArrow": return .upArrow
+        case "downArrow": return .downArrow
+        case "delete": return .delete
+        case "escape": return .escape
+        case "return": return .return
+        case "tab": return .tab
+        case " ", "space": return .space
+        default: return KeyEquivalent(binding(for: action).key.first ?? " ")
+        }
+    }
+
+    static func shortcutDisplayName(_ key: String) -> String {
+        switch key {
+        case "leftArrow": return "Left Arrow"
+        case "rightArrow": return "Right Arrow"
+        case "upArrow": return "Up Arrow"
+        case "downArrow": return "Down Arrow"
+        case "delete": return "Delete"
+        case "escape": return "Escape"
+        case "return": return "Return"
+        case "tab": return "Tab"
+        case " ", "space": return "Space"
+        default: return key.uppercased()
+        }
+    }
+
+    private static func normalizeShortcutKey(_ key: String, fallback: String) -> String {
+        if key == " " { return " " }
+        let value = key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch value {
+        case "", "space": return value.isEmpty ? fallback : " "
+        case "left", "left arrow", "leftarrow", "←": return "leftArrow"
+        case "right", "right arrow", "rightarrow", "→": return "rightArrow"
+        case "up", "up arrow", "uparrow", "↑": return "upArrow"
+        case "down", "down arrow", "downarrow", "↓": return "downArrow"
+        case "delete": return "delete"
+        case "escape", "esc": return "escape"
+        case "return", "enter": return "return"
+        case "tab": return "tab"
+        default: return String(value.prefix(1))
+        }
     }
 
     func modifiers(for action: ShortcutAction) -> EventModifiers {

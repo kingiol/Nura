@@ -1025,6 +1025,26 @@
         }
       }
     },
+    "Seek Backward %d Seconds" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退 %d 秒"
+          }
+        }
+      }
+    },
+    "Seek Forward %d Seconds" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前进 %d 秒"
+          }
+        }
+      }
+    },
     "Next item" : {
       "extractionState" : "stale",
       "localizations" : {
