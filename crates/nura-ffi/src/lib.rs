@@ -34,6 +34,7 @@ enum Command {
     Seek(f64, Reply),
     SeekRelative(f64, Reply),
     FrameStep(Reply),
+    FrameBackStep(Reply),
     Volume(f64, Reply),
     Mute(bool, Reply),
     Speed(f64, Reply),
@@ -71,6 +72,7 @@ enum AsyncCommand {
     Seek(f64),
     SeekRelative(f64),
     FrameStep,
+    FrameBackStep,
     Mute(bool),
     Speed(f64),
     Loop(bool),
@@ -186,6 +188,7 @@ fn handle_async_command(
         AsyncCommand::Seek(position) => session.seek(position),
         AsyncCommand::SeekRelative(offset) => session.seek_relative(offset),
         AsyncCommand::FrameStep => session.frame_step(),
+        AsyncCommand::FrameBackStep => session.frame_back_step(),
         AsyncCommand::Mute(muted) => session.set_mute(muted),
         AsyncCommand::Speed(speed) => session.set_speed(speed),
         AsyncCommand::Loop(enabled) => session.set_loop(enabled),
@@ -285,6 +288,7 @@ fn handle_command(
         Command::Seek(position, reply) => (session.seek(position), reply),
         Command::SeekRelative(offset, reply) => (session.seek_relative(offset), reply),
         Command::FrameStep(reply) => (session.frame_step(), reply),
+        Command::FrameBackStep(reply) => (session.frame_back_step(), reply),
         Command::Volume(volume, reply) => (session.set_volume(volume), reply),
         Command::Mute(muted, reply) => (session.set_mute(muted), reply),
         Command::Speed(speed, reply) => (session.set_speed(speed), reply),
@@ -640,6 +644,14 @@ pub unsafe extern "C" fn nura_player_frame_step_async(player: *mut NuraPlayer) -
         return -1;
     };
     async_command_result(player, AsyncCommand::FrameStep)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_frame_back_step_async(player: *mut NuraPlayer) -> c_int {
+    let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
+        return -1;
+    };
+    async_command_result(player, AsyncCommand::FrameBackStep)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_volume(player: *mut NuraPlayer, volume: f64) -> c_int {

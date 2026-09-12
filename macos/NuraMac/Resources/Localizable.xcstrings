@@ -1604,6 +1604,16 @@
         }
       }
     },
+    "Previous Frame" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一帧"
+          }
+        }
+      }
+    },
     "Release Window" : {
       "extractionState" : "stale",
       "localizations" : {

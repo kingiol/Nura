@@ -40,6 +40,8 @@ private func nura_player_seek_async(_ player: NuraHandle?, _ position: Double) -
 private func nura_player_seek_relative_async(_ player: NuraHandle?, _ offset: Double) -> Int32
 @_silgen_name("nura_player_frame_step_async")
 private func nura_player_frame_step_async(_ player: NuraHandle?) -> Int32
+@_silgen_name("nura_player_frame_back_step_async")
+private func nura_player_frame_back_step_async(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_set_volume_async")
 private func nura_player_set_volume_async(_ player: NuraHandle?, _ volume: Double) -> Int32
 @_silgen_name("nura_player_set_mute_async")
@@ -291,6 +293,7 @@ final class PlayerBridge {
     func seek(_ position: Double) throws { try command { nura_player_seek_async(handle, position) } }
     func seekRelative(_ offset: Double) throws { try command { nura_player_seek_relative_async(handle, offset) } }
     func frameStep() throws { try command { nura_player_frame_step_async(handle) } }
+    func frameBackStep() throws { try command { nura_player_frame_back_step_async(handle) } }
     func setVolume(_ volume: Double) throws { try command { nura_player_set_volume_async(handle, volume) } }
     func setMuted(_ muted: Bool) throws { try command { nura_player_set_mute_async(handle, muted ? 1 : 0) } }
     func setSpeed(_ speed: Double) throws { try command { nura_player_set_speed_async(handle, speed) } }

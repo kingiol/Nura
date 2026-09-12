@@ -7,6 +7,8 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case togglePlayback
     case previousItem
     case nextItem
+    case frameStep
+    case frameBackStep
     case seekBackward
     case seekForward
     case screenshot
@@ -19,6 +21,8 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
         case .togglePlayback: L10n.text("Play or Pause")
         case .previousItem: L10n.text("Previous Item")
         case .nextItem: L10n.text("Next Item")
+        case .frameStep: L10n.text("Next Frame")
+        case .frameBackStep: L10n.text("Previous Frame")
         case .seekBackward: L10n.text("Seek Backward")
         case .seekForward: L10n.text("Seek Forward")
         case .screenshot: L10n.text("Take Screenshot")
@@ -64,6 +68,8 @@ struct ShortcutBinding: Codable, Equatable {
         .togglePlayback: ShortcutBinding(key: " ", modifier: .none),
         .previousItem: ShortcutBinding(key: "p", modifier: .none),
         .nextItem: ShortcutBinding(key: "n", modifier: .none),
+        .frameStep: ShortcutBinding(key: ".", modifier: .none),
+        .frameBackStep: ShortcutBinding(key: ",", modifier: .none),
         .seekBackward: ShortcutBinding(key: "j", modifier: .none),
         .seekForward: ShortcutBinding(key: "l", modifier: .none),
         .screenshot: ShortcutBinding(key: "s", modifier: .none),

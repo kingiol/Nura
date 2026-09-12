@@ -604,6 +604,9 @@ impl PlaybackEngine for MpvEngine {
     fn frame_step(&mut self) -> Result<(), EngineError> {
         self.command(&["frame-step"])
     }
+    fn frame_back_step(&mut self) -> Result<(), EngineError> {
+        self.command(&["frame-back-step"])
+    }
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError> {
         self.command(&["set", "volume", &volume.to_string()])
     }
@@ -809,6 +812,12 @@ impl PlaybackEngine for SharedMpvEngine {
             .lock()
             .map_err(|_| EngineError::Message("player lock poisoned".into()))?
             .frame_step()
+    }
+    fn frame_back_step(&mut self) -> Result<(), EngineError> {
+        self.0
+            .lock()
+            .map_err(|_| EngineError::Message("player lock poisoned".into()))?
+            .frame_back_step()
     }
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError> {
         self.0

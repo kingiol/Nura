@@ -16,6 +16,7 @@ pub trait PlaybackEngine: Send {
     fn seek(&mut self, position_seconds: f64) -> Result<(), EngineError>;
     fn seek_relative(&mut self, offset_seconds: f64) -> Result<(), EngineError>;
     fn frame_step(&mut self) -> Result<(), EngineError>;
+    fn frame_back_step(&mut self) -> Result<(), EngineError>;
     fn set_volume(&mut self, volume: f64) -> Result<(), EngineError>;
     fn set_mute(&mut self, muted: bool) -> Result<(), EngineError>;
     fn set_speed(&mut self, speed: f64) -> Result<(), EngineError>;
@@ -362,6 +363,11 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
 
     pub fn frame_step(&mut self) -> Result<(), PlayerError> {
         self.engine.frame_step()?;
+        Ok(())
+    }
+
+    pub fn frame_back_step(&mut self) -> Result<(), PlayerError> {
+        self.engine.frame_back_step()?;
         Ok(())
     }
 
@@ -745,6 +751,7 @@ mod tests {
         ab_loop: (Option<f64>, Option<f64>),
         relative_seek: f64,
         frame_steps: usize,
+        frame_back_steps: usize,
         subtitle_delay: f64,
         screenshot_path: Option<std::path::PathBuf>,
     }
@@ -768,6 +775,10 @@ mod tests {
         }
         fn frame_step(&mut self) -> Result<(), EngineError> {
             self.frame_steps += 1;
+            Ok(())
+        }
+        fn frame_back_step(&mut self) -> Result<(), EngineError> {
+            self.frame_back_steps += 1;
             Ok(())
         }
         fn set_volume(&mut self, _: f64) -> Result<(), EngineError> {
@@ -1065,6 +1076,8 @@ mod tests {
         assert_eq!(session.engine.relative_seek, -5.0);
         session.frame_step().unwrap();
         assert_eq!(session.engine.frame_steps, 1);
+        session.frame_back_step().unwrap();
+        assert_eq!(session.engine.frame_back_steps, 1);
         session.set_subtitle_delay(0.5).unwrap();
         assert_eq!(session.snapshot.subtitle_delay_seconds, 0.5);
         assert_eq!(session.engine.subtitle_delay, 0.5);

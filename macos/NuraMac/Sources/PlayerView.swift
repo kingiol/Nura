@@ -783,6 +783,9 @@ private struct SettingsSidebarView: View {
     private var generalContent: some View {
         settingsSection("Playback") {
             Button(action: model.frameStep) { Label("Next Frame", systemImage: "forward.frame") }
+                .disabled(!model.canFrameStep)
+            Button(action: model.frameBackStep) { Label("Previous Frame", systemImage: "backward.frame") }
+                .disabled(!model.canFrameStep)
             SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
         }
 

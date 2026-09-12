@@ -125,6 +125,13 @@ private struct NuraPlayerCommands: Commands {
             Button("Next Item", action: { playerWindows.activeModel?.next() })
                 .keyboardShortcut(settings.keyEquivalent(for: .nextItem), modifiers: settings.modifiers(for: .nextItem))
             Divider()
+            Button("Next Frame", action: { playerWindows.activeModel?.frameStep() })
+                .disabled(!(playerWindows.activeModel?.canFrameStep ?? false))
+                .keyboardShortcut(settings.keyEquivalent(for: .frameStep), modifiers: settings.modifiers(for: .frameStep))
+            Button("Previous Frame", action: { playerWindows.activeModel?.frameBackStep() })
+                .disabled(!(playerWindows.activeModel?.canFrameStep ?? false))
+                .keyboardShortcut(settings.keyEquivalent(for: .frameBackStep), modifiers: settings.modifiers(for: .frameBackStep))
+            Divider()
             Button("Seek Backward") { playerWindows.activeModel?.seekRelative(-settings.shortSeekSeconds) }
                 .keyboardShortcut(settings.keyEquivalent(for: .seekBackward), modifiers: settings.modifiers(for: .seekBackward))
             Button("Seek Forward") { playerWindows.activeModel?.seekRelative(settings.shortSeekSeconds) }

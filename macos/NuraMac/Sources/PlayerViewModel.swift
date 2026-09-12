@@ -174,6 +174,10 @@ final class PlayerViewModel {
         pendingPlaybackState ?? (snapshot.status == "playing")
     }
 
+    var canFrameStep: Bool {
+        snapshot.status == "paused" && snapshot.videoWidth != nil && snapshot.videoHeight != nil
+    }
+
     var isMuted: Bool {
         pendingMutedState ?? snapshot.muted
     }
@@ -813,8 +817,19 @@ final class PlayerViewModel {
     }
 
     func frameStep() {
+        guard canFrameStep else { return }
         do {
             try bridge?.frameStep()
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func frameBackStep() {
+        guard canFrameStep else { return }
+        do {
+            try bridge?.frameBackStep()
             lastError = nil
         } catch {
             showError(error.localizedDescription)
