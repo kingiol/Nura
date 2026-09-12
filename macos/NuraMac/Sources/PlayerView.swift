@@ -514,9 +514,9 @@ private struct SeekButton: View {
     private var seekSymbol: String {
         let seconds = Int((isLongPressActive ? longSeekSeconds : shortSeekSeconds).rounded())
         if direction < 0 {
-            return seconds == 5 ? "gobackward.5" : seconds == 30 ? "gobackward.30" : "gobackward"
+            return seconds == 5 ? "5.arrow.trianglehead.counterclockwise" : seconds == 30 ? "30.arrow.trianglehead.counterclockwise" : "arrow.trianglehead.counterclockwise"
         }
-        return seconds == 5 ? "goforward.5" : seconds == 30 ? "goforward.30" : "goforward"
+        return seconds == 5 ? "5.arrow.trianglehead.clockwise" : seconds == 30 ? "30.arrow.trianglehead.clockwise" : "arrow.trianglehead.clockwise"
     }
 
     private var helpText: String {

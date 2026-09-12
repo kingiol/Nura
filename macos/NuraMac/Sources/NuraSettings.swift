@@ -168,7 +168,12 @@ final class NuraSettings {
         nowPlayingEnabled = defaults.object(forKey: Key.nowPlayingEnabled) as? Bool ?? true
         defaultPlaybackSpeed = defaults.object(forKey: Key.defaultPlaybackSpeed) as? Double ?? 1
         defaultVolume = defaults.object(forKey: Key.defaultVolume) as? Double ?? 100
-        shortSeekSeconds = defaults.object(forKey: Key.shortSeekSeconds) as? Double ?? 5
+        let storedShortSeekSeconds = defaults.object(forKey: Key.shortSeekSeconds) as? Double
+        let resolvedShortSeekSeconds = storedShortSeekSeconds == 4 ? 5 : (storedShortSeekSeconds ?? 5)
+        shortSeekSeconds = resolvedShortSeekSeconds
+        if storedShortSeekSeconds == 4 {
+            defaults.set(resolvedShortSeekSeconds, forKey: Key.shortSeekSeconds)
+        }
         longSeekSeconds = defaults.object(forKey: Key.longSeekSeconds) as? Double ?? 30
         preferredAudioLanguages = defaults.string(forKey: Key.preferredAudioLanguages) ?? ""
         preferredSubtitleLanguages = defaults.string(forKey: Key.preferredSubtitleLanguages) ?? ""

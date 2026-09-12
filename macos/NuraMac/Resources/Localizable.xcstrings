@@ -1,9 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
-
-    },
     "%@ (external)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1025,26 +1022,6 @@
         }
       }
     },
-    "Seek Backward %d Seconds" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后退 %d 秒"
-          }
-        }
-      }
-    },
-    "Seek Forward %d Seconds" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前进 %d 秒"
-          }
-        }
-      }
-    },
     "Next item" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1602,6 +1579,17 @@
         }
       }
     },
+    "Previous Frame" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一帧"
+          }
+        }
+      }
+    },
     "Previous item" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1620,16 +1608,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一项"
-          }
-        }
-      }
-    },
-    "Previous Frame" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上一帧"
           }
         }
       }
@@ -1765,6 +1743,17 @@
         }
       }
     },
+    "Seek Backward %d Seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退 %d 秒"
+          }
+        }
+      }
+    },
     "Seek Forward" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1772,6 +1761,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前进"
+          }
+        }
+      }
+    },
+    "Seek Forward %d Seconds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前进 %d 秒"
           }
         }
       }
