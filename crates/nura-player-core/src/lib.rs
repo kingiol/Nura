@@ -697,7 +697,24 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
     }
 
     fn refresh_history_items(&mut self) -> Result<(), PlayerError> {
-        self.snapshot.history_items = self.history.history_items(250)?;
+        let history_items = self.history.history_items(250)?;
+        let unavailable_path_keys = history_items
+            .iter()
+            .filter_map(|entry| {
+                entry
+                    .item
+                    .local_path()
+                    .filter(|path| !path.is_file())
+                    .map(|_| entry.item.path_key())
+            })
+            .collect::<Vec<_>>();
+        for path_key in &unavailable_path_keys {
+            self.history.remove_history_item(path_key)?;
+        }
+        self.snapshot.history_items = history_items
+            .into_iter()
+            .filter(|entry| !unavailable_path_keys.contains(&entry.item.path_key()))
+            .collect();
         self.snapshot.recent_items = self
             .snapshot
             .history_items
@@ -741,6 +758,7 @@ pub enum PlayerError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nura_domain::{HistoryEntry, MediaSource};
     use std::collections::VecDeque;
     use std::fs;
 
@@ -886,6 +904,104 @@ mod tests {
         fn clear_history(&mut self) -> Result<(), nura_library::HistoryError> {
             Ok(())
         }
+    }
+
+    struct TrackingHistory {
+        entries: Vec<HistoryEntry>,
+        removed_path_keys: Vec<String>,
+    }
+
+    impl HistoryRepository for TrackingHistory {
+        fn resume_position(
+            &mut self,
+            _: &MediaItem,
+        ) -> Result<Option<f64>, nura_library::HistoryError> {
+            Ok(None)
+        }
+
+        fn remember(
+            &mut self,
+            _: &MediaItem,
+            _: Option<f64>,
+        ) -> Result<(), nura_library::HistoryError> {
+            Ok(())
+        }
+
+        fn clear_resume(&mut self, _: &MediaItem) -> Result<(), nura_library::HistoryError> {
+            Ok(())
+        }
+
+        fn recent_items(&mut self, _: usize) -> Result<Vec<MediaItem>, nura_library::HistoryError> {
+            Ok(vec![])
+        }
+
+        fn history_items(
+            &mut self,
+            limit: usize,
+        ) -> Result<Vec<HistoryEntry>, nura_library::HistoryError> {
+            Ok(self.entries.iter().take(limit).cloned().collect())
+        }
+
+        fn remove_history_item(
+            &mut self,
+            path_key: &str,
+        ) -> Result<(), nura_library::HistoryError> {
+            self.removed_path_keys.push(path_key.to_owned());
+            self.entries
+                .retain(|entry| entry.item.path_key() != path_key);
+            Ok(())
+        }
+
+        fn clear_history(&mut self) -> Result<(), nura_library::HistoryError> {
+            self.entries.clear();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn refresh_history_prunes_unavailable_local_entries() {
+        let root = std::env::temp_dir().join(format!("nura-history-prune-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let existing = root.join("existing.mp4");
+        let missing = root.join("missing.mp4");
+        fs::write(&existing, []).unwrap();
+        let existing_item = MediaItem::from_path(&existing).unwrap();
+        let remote_item = MediaItem::from_url("https://example.com/media.mp4").unwrap();
+        let missing_item = MediaItem {
+            source: MediaSource::LocalFile(missing),
+            title: "missing.mp4".to_owned(),
+        };
+        let missing_key = missing_item.path_key();
+        let history = TrackingHistory {
+            entries: vec![
+                HistoryEntry {
+                    item: existing_item.clone(),
+                    resume_seconds: Some(24.0),
+                    opened_at_seconds: 2,
+                },
+                HistoryEntry {
+                    item: missing_item,
+                    resume_seconds: None,
+                    opened_at_seconds: 1,
+                },
+                HistoryEntry {
+                    item: remote_item.clone(),
+                    resume_seconds: None,
+                    opened_at_seconds: 0,
+                },
+            ],
+            removed_path_keys: vec![],
+        };
+
+        let session = PlayerSession::new(FakeEngine::default(), history);
+
+        assert_eq!(session.snapshot.history_items.len(), 2);
+        assert_eq!(
+            session.snapshot.recent_items,
+            vec![existing_item, remote_item]
+        );
+        assert_eq!(session.history.removed_path_keys, vec![missing_key]);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
