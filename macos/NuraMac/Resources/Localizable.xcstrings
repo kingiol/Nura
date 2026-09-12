@@ -342,6 +342,7 @@
       }
     },
     "Choose a file or drop it anywhere here" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -582,6 +583,7 @@
       }
     },
     "Drop your media file to begin" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1292,6 +1294,7 @@
       }
     },
     "Open Video" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1643,6 +1646,7 @@
       }
     },
     "Recent" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1653,6 +1657,7 @@
       }
     },
     "Release to Open" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1706,16 +1711,6 @@
         }
       }
     },
-    "Resume %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从 %@ 继续"
-          }
-        }
-      }
-    },
     "Restore Defaults" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1723,6 +1718,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "恢复默认值"
+          }
+        }
+      }
+    },
+    "Resume %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 %@ 继续"
           }
         }
       }
@@ -1859,6 +1865,7 @@
       }
     },
     "Select Video" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2045,6 +2052,7 @@
       }
     },
     "Start" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
