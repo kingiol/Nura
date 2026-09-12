@@ -5,6 +5,7 @@ final class NuraMacUITests: XCTestCase {
     private var app: XCUIApplication!
     private var stateDirectory: URL!
     private var defaultsSuiteName: String!
+    private var mediaServer: MediaFixtureServer?
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -18,6 +19,7 @@ final class NuraMacUITests: XCTestCase {
 
     override func tearDownWithError() throws {
         app?.terminate()
+        mediaServer?.stop()
         if let stateDirectory, FileManager.default.fileExists(atPath: stateDirectory.path) {
             try FileManager.default.removeItem(at: stateDirectory)
         }
@@ -148,10 +150,130 @@ final class NuraMacUITests: XCTestCase {
         assertValue(settingsToggle, becomes: "closed")
     }
 
+    func testOpenURLAfterLastWindowClosedCreatesNewWindowAndLoadsMedia() async throws {
+        try launch(loadsFixture: true)
+
+        let title = app.staticTexts["player.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertEqual(title.value as? String, "oceans.mp4")
+        closeLastPlayerWindow()
+        XCTAssertFalse(title.waitForExistence(timeout: 2))
+
+        let openURLItem = app.menuBars.menuItems["Open URL…"]
+        XCTAssertTrue(openURLItem.waitForExistence(timeout: 5))
+        openURLItem.click()
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.click()
+        let mediaURL = try await startMediaServer().appendingPathComponent("oceans.mp4").absoluteString
+        field.typeText(mediaURL)
+        app.buttons["Open"].click()
+
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertEqual(title.value as? String, "oceans.mp4")
+    }
+
+    func testOpenFileAfterLastWindowClosedCreatesNewWindowAndLoadsMedia() throws {
+        try launch(loadsFixture: true)
+
+        let title = app.staticTexts["player.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        closeLastPlayerWindow()
+        XCTAssertFalse(title.waitForExistence(timeout: 2))
+
+        let openItem = app.menuBars.menuItems["Open…"]
+        XCTAssertTrue(openItem.waitForExistence(timeout: 5))
+        openItem.click()
+
+        chooseFileInOpenPanel(try requiredFixturePath())
+
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertEqual(title.value as? String, "oceans.mp4")
+    }
+
+    func testOpenRecentAfterLastWindowClosedCreatesNewWindowAndLoadsMedia() throws {
+        try launch(loadsFixture: true)
+
+        let title = app.staticTexts["player.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        closeLastPlayerWindow()
+        XCTAssertFalse(title.waitForExistence(timeout: 2))
+
+        let recentMenu = app.menuBars.menuItems["Open Recent"]
+        XCTAssertTrue(recentMenu.waitForExistence(timeout: 5))
+        recentMenu.click()
+        let recentItem = app.menuBars.menuItems["oceans.mp4"]
+        XCTAssertTrue(recentItem.waitForExistence(timeout: 5))
+        recentItem.click()
+
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertEqual(title.value as? String, "oceans.mp4")
+    }
+
+    func testCancelOpenFileAfterLastWindowClosedDoesNotCreateWindow() throws {
+        try launch(loadsFixture: false)
+
+        let openItem = app.menuBars.menuItems["Open…"]
+        XCTAssertTrue(openItem.waitForExistence(timeout: 5))
+        openItem.click()
+
+        dismissOpenPanel()
+
+        XCTAssertFalse(app.windows.firstMatch.waitForExistence(timeout: 2))
+    }
+
+    func testUnsupportedOpenFileAfterLastWindowClosedDoesNotCreateWindow() throws {
+        try launch(loadsFixture: false)
+
+        let unsupported = stateDirectory.appendingPathComponent("unsupported.txt")
+        try Data("not media".utf8).write(to: unsupported)
+
+        let openItem = app.menuBars.menuItems["Open…"]
+        XCTAssertTrue(openItem.waitForExistence(timeout: 5))
+        openItem.click()
+
+        chooseFileInOpenPanel(unsupported.path)
+
+        XCTAssertFalse(app.windows.firstMatch.waitForExistence(timeout: 2))
+    }
+
     private func assertValue(_ element: XCUIElement, becomes expected: String, timeout: TimeInterval = 10) {
         let predicate = NSPredicate(format: "value == %@", expected)
         expectation(for: predicate, evaluatedWith: element)
         waitForExpectations(timeout: timeout)
+    }
+
+    private func closeLastPlayerWindow() {
+        let closeButton = app.windows.firstMatch.buttons["_XCUI:CloseWindow"]
+        XCTAssertTrue(closeButton.waitForExistence(timeout: 5))
+        closeButton.click()
+    }
+
+    private func startMediaServer() async throws -> URL {
+        if let mediaServer { return mediaServer.baseURL }
+        let server = MediaFixtureServer(fixtureURL: try requiredFixtureURL())
+        try await server.start()
+        mediaServer = server
+        return server.baseURL
+    }
+
+    private func requiredFixtureURL() throws -> URL {
+        URL(fileURLWithPath: try requiredFixturePath())
+    }
+
+    private func chooseFileInOpenPanel(_ path: String) {
+        let openPanel = app.sheets.firstMatch
+        XCTAssertTrue(openPanel.waitForExistence(timeout: 5))
+        openPanel.textFields["Name"].click()
+        openPanel.textFields["Name"].typeText(path)
+        openPanel.buttons["Open"].click()
+    }
+
+    private func dismissOpenPanel() {
+        let openPanel = app.sheets.firstMatch
+        XCTAssertTrue(openPanel.waitForExistence(timeout: 5))
+        openPanel.buttons["Cancel"].click()
     }
 
     private func launch(loadsFixture: Bool, language: String? = nil) throws {

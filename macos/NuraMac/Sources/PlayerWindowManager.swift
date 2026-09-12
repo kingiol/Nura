@@ -13,6 +13,7 @@ final class PlayerWindowManager {
     private var windowObservers: [ObjectIdentifier: [NSObjectProtocol]] = [:]
     private var openedSecondaryMediaForTesting = false
     private var openPlayerWindow: ((String) -> Void)?
+    private var cachedRecentItems: [MediaItem] = []
 
     init(launchConfiguration: PlayerLaunchConfiguration, settings: NuraSettings) {
         self.launchConfiguration = launchConfiguration
@@ -20,7 +21,7 @@ final class PlayerWindowManager {
     }
 
     var recentItems: [MediaItem] {
-        activeModel?.snapshot.recentItems ?? []
+        activeModel?.snapshot.recentItems ?? cachedRecentItems
     }
 
     var openMenuTitle: String {
@@ -61,31 +62,35 @@ final class PlayerWindowManager {
     }
 
     func openPanel() {
-        guard let model = targetModel else { return }
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
-        if panel.runModal() == .OK, !panel.urls.isEmpty {
-            open(panel.urls, from: model)
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+
+        let expandedURLs = PlayerViewModel.expandMediaURLs(panel.urls)
+        guard let first = expandedURLs.first else {
+            targetModel?.openExpandedMediaURLs([])
+            return
         }
+        let requestedURL = panel.urls.count == 1 ? panel.urls[0] : nil
+        guard let destination = resolveDestination(
+            opensDifferentMedia: targetModel?.shouldOpenInNewWindow(for: requestedURL ?? first) ?? false
+        ) else { return }
+        destination.openExpandedMediaURLs(expandedURLs)
     }
 
     func openURL(_ value: String) {
-        guard let model = targetModel else { return }
-        let destination = destination(
-            from: model,
-            opensDifferentMedia: model.shouldOpenInNewWindow(forURL: value)
-        )
+        guard let destination = resolveDestination(
+            opensDifferentMedia: targetModel?.shouldOpenInNewWindow(forURL: value) ?? false
+        ) else { return }
         destination.openURL(value)
     }
 
     func openRecent(_ item: MediaItem) {
-        guard let model = targetModel else { return }
-        let destination = destination(
-            from: model,
-            opensDifferentMedia: model.shouldOpenInNewWindow(for: item)
-        )
+        guard let destination = resolveDestination(
+            opensDifferentMedia: targetModel?.shouldOpenInNewWindow(for: item) ?? false
+        ) else { return }
         destination.openRecent(item)
     }
 
@@ -101,23 +106,14 @@ final class PlayerWindowManager {
         activeModel ?? models.values.first
     }
 
-    private func open(_ urls: [URL], from model: PlayerViewModel) {
-        let requestedURL = urls.count == 1 ? urls[0] : nil
-        let expandedURLs = PlayerViewModel.expandMediaURLs(urls)
-        guard let first = expandedURLs.first else {
-            model.openExpandedMediaURLs([])
-            return
+    private func resolveDestination(opensDifferentMedia: Bool) -> PlayerViewModel? {
+        if opensDifferentMedia, let newModel = makePlayerWindow() {
+            return newModel
         }
-        let destination = destination(
-            from: model,
-            opensDifferentMedia: model.shouldOpenInNewWindow(for: requestedURL ?? first)
-        )
-        destination.openExpandedMediaURLs(expandedURLs)
-    }
-
-    private func destination(from model: PlayerViewModel, opensDifferentMedia: Bool) -> PlayerViewModel {
-        guard opensDifferentMedia, let newModel = makePlayerWindow() else { return model }
-        return newModel
+        if let model = targetModel {
+            return model
+        }
+        return makePlayerWindow()
     }
 
     private func makePlayerWindow() -> PlayerViewModel? {
@@ -162,6 +158,7 @@ final class PlayerWindowManager {
         let model = models.removeValue(forKey: identifier)
         if let model {
             pendingModels = pendingModels.filter { $0.value !== model }
+            cachedRecentItems = model.snapshot.recentItems
         }
         model?.detachWindow()
         for observer in windowObservers.removeValue(forKey: identifier) ?? [] {

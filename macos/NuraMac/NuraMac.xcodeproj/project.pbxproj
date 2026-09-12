@@ -26,6 +26,7 @@
 		E512619560D8D7E75B875F0E /* NuraSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C15E9369ECED1A9DCC789C /* NuraSettingsView.swift */; };
 		F1A7E8E250A3B04B1CBCAAF2 /* NuraLocalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443E733149ECDCA15898AF24 /* NuraLocalizer.swift */; };
 		F1DFBA08559FE631AAEB68AF /* PlayerWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 632E770F0F6F4FBEA327B8BE /* PlayerWindowManager.swift */; };
+		F2362AA96EF4BA2F4ED9B197 /* MediaFixtureServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8065A71B130F67FC26C63C /* MediaFixtureServer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,6 +46,7 @@
 		4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NuraMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacApp.swift; sourceTree = "<group>"; };
 		56C15E9369ECED1A9DCC789C /* NuraSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraSettingsView.swift; sourceTree = "<group>"; };
+		5E8065A71B130F67FC26C63C /* MediaFixtureServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFixtureServer.swift; sourceTree = "<group>"; };
 		632E770F0F6F4FBEA327B8BE /* PlayerWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerWindowManager.swift; sourceTree = "<group>"; };
 		63A5BC1F00095D48321E4DE1 /* RenderSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderSurface.swift; sourceTree = "<group>"; };
 		6A9CD6C77A742F3A33A77F12 /* NuraMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NuraMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -89,6 +91,7 @@
 		4EB4A60FBE02C040923E6601 /* UITests */ = {
 			isa = PBXGroup;
 			children = (
+				5E8065A71B130F67FC26C63C /* MediaFixtureServer.swift */,
 				46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */,
 			);
 			path = UITests;
@@ -283,6 +286,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F2362AA96EF4BA2F4ED9B197 /* MediaFixtureServer.swift in Sources */,
 				55F81B2CAE3EE8D4F4990057 /* NuraMacUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -513,6 +517,10 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"-framework",
+					Network,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.nura.player.uitests;
 				PRODUCT_NAME = NuraMacUITests;
 				SDKROOT = macosx;
@@ -529,6 +537,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"-framework",
+					Network,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.nura.player.uitests;
 				PRODUCT_NAME = NuraMacUITests;
