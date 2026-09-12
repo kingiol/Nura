@@ -23,6 +23,7 @@
 		7C98667F3F1365B0EBE3F613 /* PlayerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FA942E24C35E04BDA160156 /* PlayerBridge.swift */; };
 		7EDE4B4FE32E716C17733169 /* PictureInPictureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516691B759ABC0A323D38C6 /* PictureInPictureCoordinator.swift */; };
 		B69A4EAC4EB74771821BDBBD /* SeekThumbnailGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7014F3F30A07D117AED39DA /* SeekThumbnailGenerator.swift */; };
+		D47C57D006865AADC759D28C /* EmptyWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D91635DCD45B61873093CD7 /* EmptyWelcomeView.swift */; };
 		E512619560D8D7E75B875F0E /* NuraSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C15E9369ECED1A9DCC789C /* NuraSettingsView.swift */; };
 		F1A7E8E250A3B04B1CBCAAF2 /* NuraLocalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443E733149ECDCA15898AF24 /* NuraLocalizer.swift */; };
 		F1DFBA08559FE631AAEB68AF /* PlayerWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 632E770F0F6F4FBEA327B8BE /* PlayerWindowManager.swift */; };
@@ -40,6 +41,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		3D91635DCD45B61873093CD7 /* EmptyWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyWelcomeView.swift; sourceTree = "<group>"; };
 		3E2C48DCCB5B322F66E4198E /* NuraSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraSettings.swift; sourceTree = "<group>"; };
 		443E733149ECDCA15898AF24 /* NuraLocalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraLocalizer.swift; sourceTree = "<group>"; };
 		46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacUITests.swift; sourceTree = "<group>"; };
@@ -68,6 +70,7 @@
 		486DAAF646F4471D3D8B01C2 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				3D91635DCD45B61873093CD7 /* EmptyWelcomeView.swift */,
 				FBC9393F86D70B4FA0F60E97 /* NowPlayingCoordinator.swift */,
 				443E733149ECDCA15898AF24 /* NuraLocalizer.swift */,
 				5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */,
@@ -263,6 +266,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D47C57D006865AADC759D28C /* EmptyWelcomeView.swift in Sources */,
 				0A493FF18EDDEAC89D433CFC /* NowPlayingCoordinator.swift in Sources */,
 				F1A7E8E250A3B04B1CBCAAF2 /* NuraLocalizer.swift in Sources */,
 				024B7BA0DB49D518847C569F /* NuraMacApp.swift in Sources */,

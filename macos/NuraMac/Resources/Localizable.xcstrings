@@ -341,6 +341,16 @@
         }
       }
     },
+    "Choose a file or drop it anywhere here" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择文件，或将文件拖到此处"
+          }
+        }
+      }
+    },
     "Choose Screenshot Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -567,6 +577,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示器信息不可用"
+          }
+        }
+      }
+    },
+    "Drop your media file to begin" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放下媒体文件以开始"
           }
         }
       }
@@ -1271,6 +1291,16 @@
         }
       }
     },
+    "Open Video" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开视频"
+          }
+        }
+      }
+    },
     "Open…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1612,6 +1642,26 @@
         }
       }
     },
+    "Recent" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近播放"
+          }
+        }
+      }
+    },
+    "Release to Open" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "松开以打开"
+          }
+        }
+      }
+    },
     "Release Window" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1652,6 +1702,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移除选中项"
+          }
+        }
+      }
+    },
+    "Resume %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 %@ 继续"
           }
         }
       }
@@ -1794,6 +1854,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择轨道"
+          }
+        }
+      }
+    },
+    "Select Video" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择视频"
           }
         }
       }
@@ -1970,6 +2040,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "速度"
+          }
+        }
+      }
+    },
+    "Start" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从头播放"
           }
         }
       }

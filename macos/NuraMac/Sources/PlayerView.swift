@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct PlayerView: View {
     @Bindable var model: PlayerViewModel
     private let keepControlsVisible: Bool
+    private let onOpenPanel: () -> Void
     private let onOpenInNewWindow: (MediaItem) -> Void
     private let onWindowAvailable: (NSWindow) -> Void
     @State private var isDropTargeted = false
@@ -17,11 +18,13 @@ struct PlayerView: View {
     init(
         model: PlayerViewModel,
         keepControlsVisible: Bool,
+        onOpenPanel: @escaping () -> Void = {},
         onOpenInNewWindow: @escaping (MediaItem) -> Void = { _ in },
         onWindowAvailable: @escaping (NSWindow) -> Void = { _ in }
     ) {
         self.model = model
         self.keepControlsVisible = keepControlsVisible
+        self.onOpenPanel = onOpenPanel
         self.onOpenInNewWindow = onOpenInNewWindow
         self.onWindowAvailable = onWindowAvailable
     }
@@ -35,27 +38,21 @@ struct PlayerView: View {
                     .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
                     .onTapGesture { revealControls() }
                     .contextMenu {
-                        Button(model.isPlaying ? "Pause" : "Play", action: model.togglePlayback)
-                        Divider()
-                        Button("Previous", action: model.previous)
-                        Button("Next", action: model.next)
-                        Button("Back 5 Seconds") { model.seekRelative(-5) }
-                        Button("Forward 5 Seconds") { model.seekRelative(5) }
-                        Button("Back 30 Seconds") { model.seekRelative(-30) }
-                        Button("Forward 30 Seconds") { model.seekRelative(30) }
-                        Button("Next Frame", action: model.frameStep)
-                        Button(model.loopEnabled ? "Disable Loop" : "Loop Current Item", action: model.toggleLoop)
-                        Button(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", action: model.togglePlaylistLoop)
-                        Button("Shuffle Playlist", action: model.shufflePlaylist)
-                        Button(model.abLoopLabel, action: model.advanceABLoop)
-                        Divider()
-                        Button("Load External Subtitle", action: model.openExternalSubtitle)
-                        Button("Take Screenshot", action: model.screenshot)
-                        Button("Copy Screenshot", action: model.copyScreenshot)
-                        Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
-                        Button("Picture in Picture", action: model.togglePiP)
-                        Button("Toggle Fullscreen", action: model.toggleFullscreen)
+                        if !model.showsWelcomeScreen {
+                            playbackContextMenu
+                        }
                     }
+
+                if model.showsWelcomeScreen {
+                    EmptyWelcomeView(
+                        recentItems: model.welcomeHistoryItems,
+                        isDropTargeted: isDropTargeted,
+                        errorMessage: model.welcomeErrorMessage,
+                        onOpen: onOpenPanel,
+                        onOpenRecent: model.openRecent
+                    )
+                    .transition(.opacity)
+                }
 
                 if model.isPictureInPictureActive {
                     PiPPlaceholderView()
@@ -63,7 +60,7 @@ struct PlayerView: View {
                 }
 
                 VStack(spacing: 0) {
-                    if controlsVisible {
+                    if !model.showsWelcomeScreen, controlsVisible {
                         Spacer()
                         controlBar
                             .frame(width: controlBarWidth(in: container.size))
@@ -73,7 +70,7 @@ struct PlayerView: View {
                     }
                 }
 
-                if let sidebar {
+                if !model.showsWelcomeScreen, let sidebar {
                     Group {
                         if sidebar == .settings {
                             SettingsSidebarView(
@@ -119,6 +116,7 @@ struct PlayerView: View {
             .background(WindowButtonVisibility(isVisible: controlsVisible, onWindowAvailable: onWindowAvailable))
             .animation(.easeOut(duration: 0.18), value: controlsVisible)
             .animation(.easeOut(duration: 0.18), value: sidebar)
+            .animation(.easeOut(duration: 0.18), value: model.showsWelcomeScreen)
             .onHover { hovering in
                 if hovering, !controlBarHovered, !sidebarHovered { revealControls() }
             }
@@ -136,6 +134,30 @@ struct PlayerView: View {
                 model.stopPiP()
             }
         }
+    }
+
+    @ViewBuilder
+    private var playbackContextMenu: some View {
+        Button(model.isPlaying ? "Pause" : "Play", action: model.togglePlayback)
+        Divider()
+        Button("Previous", action: model.previous)
+        Button("Next", action: model.next)
+        Button("Back 5 Seconds") { model.seekRelative(-5) }
+        Button("Forward 5 Seconds") { model.seekRelative(5) }
+        Button("Back 30 Seconds") { model.seekRelative(-30) }
+        Button("Forward 30 Seconds") { model.seekRelative(30) }
+        Button("Next Frame", action: model.frameStep)
+        Button(model.loopEnabled ? "Disable Loop" : "Loop Current Item", action: model.toggleLoop)
+        Button(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", action: model.togglePlaylistLoop)
+        Button("Shuffle Playlist", action: model.shufflePlaylist)
+        Button(model.abLoopLabel, action: model.advanceABLoop)
+        Divider()
+        Button("Load External Subtitle", action: model.openExternalSubtitle)
+        Button("Take Screenshot", action: model.screenshot)
+        Button("Copy Screenshot", action: model.copyScreenshot)
+        Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
+        Button("Picture in Picture", action: model.togglePiP)
+        Button("Toggle Fullscreen", action: model.toggleFullscreen)
     }
 
     private func controlBarWidth(in containerSize: CGSize) -> CGFloat {

@@ -56,6 +56,7 @@ private struct MainPlayerWindow: View {
         PlayerView(
             model: model,
             keepControlsVisible: keepControlsVisible,
+            onOpenPanel: playerWindows.openPanel,
             onOpenInNewWindow: playerWindows.openInNewWindow,
             onWindowAvailable: { window in
                 playerWindows.configure { sessionID in
@@ -82,6 +83,7 @@ private struct AdditionalPlayerWindow: View {
         PlayerView(
             model: model,
             keepControlsVisible: keepControlsVisible,
+            onOpenPanel: playerWindows.openPanel,
             onOpenInNewWindow: playerWindows.openInNewWindow,
             onWindowAvailable: { window in
                 playerWindows.register(window: window, model: model)

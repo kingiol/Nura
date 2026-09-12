@@ -39,15 +39,45 @@ final class NuraMacUITests: XCTestCase {
         XCTAssertLessThan(title.frame.maxY, slider.frame.minY)
     }
 
-    func testDoesNotShowTitleOrEmptyStateWithoutMedia() throws {
+    func testShowsWelcomeScreenWithoutMedia() throws {
         try launch(loadsFixture: false)
 
-        XCTAssertFalse(app.staticTexts["player.title"].waitForExistence(timeout: 2))
-        XCTAssertFalse(app.staticTexts["Open a media file to begin"].exists)
+        XCTAssertTrue(app.buttons["welcome.select-video"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["player.title"].exists)
+        XCTAssertFalse(app.buttons["player.playback-toggle"].exists)
+        XCTAssertFalse(app.buttons["player.sidebar-toggle"].exists)
+    }
+
+    func testWelcomeSelectVideoLoadsMediaInTheCurrentWindow() throws {
+        try launch(loadsFixture: false)
+
+        let selectVideo = app.buttons["welcome.select-video"]
+        XCTAssertTrue(selectVideo.waitForExistence(timeout: 15))
+        selectVideo.click()
+        chooseFileInOpenPanel(try requiredFixturePath())
+
+        let title = app.staticTexts["player.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        XCTAssertEqual(title.value as? String, "oceans.mp4")
+        XCTAssertFalse(selectVideo.exists)
+    }
+
+    func testWelcomeShowsAndOpensRecentMedia() throws {
+        try launch(loadsFixture: true)
+        XCTAssertTrue(app.staticTexts["player.title"].waitForExistence(timeout: 15))
+        app.terminate()
+
+        try launch(loadsFixture: false)
+
+        let recent = app.buttons["welcome.recent.0"]
+        XCTAssertTrue(recent.waitForExistence(timeout: 15))
+        XCTAssertEqual(recent.value as? String, "Start")
+        recent.click()
+        XCTAssertTrue(app.staticTexts["player.title"].waitForExistence(timeout: 15))
     }
 
     func testUsesSimplifiedChineseForChineseSystemLanguage() throws {
-        try launch(loadsFixture: false, language: "zh-Hans")
+        try launch(loadsFixture: true, language: "zh-Hans")
 
         let settingsToggle = app.buttons["player.settings-toggle"]
         XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
@@ -59,7 +89,7 @@ final class NuraMacUITests: XCTestCase {
     }
 
     func testUsesEnglishForEnglishSystemLanguage() throws {
-        try launch(loadsFixture: false, language: "en")
+        try launch(loadsFixture: true, language: "en")
 
         let settingsToggle = app.buttons["player.settings-toggle"]
         XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
@@ -71,7 +101,7 @@ final class NuraMacUITests: XCTestCase {
     }
 
     func testFallsBackToEnglishForUnsupportedSystemLanguage() throws {
-        try launch(loadsFixture: false, language: "fr")
+        try launch(loadsFixture: true, language: "fr")
 
         let settingsToggle = app.buttons["player.settings-toggle"]
         XCTAssertTrue(settingsToggle.waitForExistence(timeout: 15))
@@ -211,7 +241,7 @@ final class NuraMacUITests: XCTestCase {
         XCTAssertEqual(title.value as? String, "oceans.mp4")
     }
 
-    func testCancelOpenFileAfterLastWindowClosedDoesNotCreateWindow() throws {
+    func testCancelOpenFileKeepsWelcomeScreen() throws {
         try launch(loadsFixture: false)
 
         let openItem = app.menuBars.menuItems["Open…"]
@@ -220,10 +250,11 @@ final class NuraMacUITests: XCTestCase {
 
         dismissOpenPanel()
 
-        XCTAssertFalse(app.windows.firstMatch.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["welcome.select-video"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["player.title"].exists)
     }
 
-    func testUnsupportedOpenFileAfterLastWindowClosedDoesNotCreateWindow() throws {
+    func testUnsupportedOpenFileKeepsWelcomeScreen() throws {
         try launch(loadsFixture: false)
 
         let unsupported = stateDirectory.appendingPathComponent("unsupported.txt")
@@ -235,7 +266,8 @@ final class NuraMacUITests: XCTestCase {
 
         chooseFileInOpenPanel(unsupported.path)
 
-        XCTAssertFalse(app.windows.firstMatch.waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["welcome.select-video"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["player.title"].exists)
     }
 
     private func assertValue(_ element: XCUIElement, becomes expected: String, timeout: TimeInterval = 10) {
@@ -263,15 +295,16 @@ final class NuraMacUITests: XCTestCase {
     }
 
     private func chooseFileInOpenPanel(_ path: String) {
-        let openPanel = app.sheets.firstMatch
+        let openPanel = app.dialogs.firstMatch
         XCTAssertTrue(openPanel.waitForExistence(timeout: 5))
-        openPanel.textFields["Name"].click()
-        openPanel.textFields["Name"].typeText(path)
+        openPanel.typeKey("g", modifierFlags: [.command, .shift])
+        openPanel.typeText(path)
+        openPanel.typeKey(.return, modifierFlags: [])
         openPanel.buttons["Open"].click()
     }
 
     private func dismissOpenPanel() {
-        let openPanel = app.sheets.firstMatch
+        let openPanel = app.dialogs.firstMatch
         XCTAssertTrue(openPanel.waitForExistence(timeout: 5))
         openPanel.buttons["Cancel"].click()
     }

@@ -166,6 +166,18 @@ final class PlayerViewModel {
         lastError != nil || snapshot.error != nil
     }
 
+    var showsWelcomeScreen: Bool {
+        snapshot.status == "failed" || (snapshot.item == nil && requestedMediaIdentity == nil)
+    }
+
+    var welcomeHistoryItems: [HistoryEntry] {
+        Array(snapshot.historyItems.prefix(3))
+    }
+
+    var welcomeErrorMessage: String? {
+        hasError ? statusText : nil
+    }
+
     var duration: Double {
         max(snapshot.durationSeconds ?? 1, 1)
     }
