@@ -78,6 +78,13 @@ struct PlayerView: View {
                                 onClose: { self.sidebar = nil },
                                 onTogglePiP: togglePiP
                             )
+                        } else if sidebar == .transcript || sidebar == .notes {
+                            AnalysisSidebarView(
+                                model: model,
+                                tab: sidebar ?? .transcript,
+                                onSelectTab: { self.sidebar = $0 },
+                                onClose: { self.sidebar = nil }
+                            )
                         } else {
                             SidebarView(
                                 tab: sidebar,
@@ -106,7 +113,7 @@ struct PlayerView: View {
                         sidebarHovered = hovering
                         updateControlsVisibility()
                     }
-                        .frame(width: sidebar == .settings ? 360 : 300)
+                        .frame(width: sidebar == .settings || sidebar == .transcript || sidebar == .notes ? 360 : 300)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -128,6 +135,11 @@ struct PlayerView: View {
                 if active {
                     revealControls()
                 }
+            }
+            .onChange(of: model.noteCaptureRequestID) {
+                guard model.noteDraft != nil else { return }
+                sidebar = .notes
+                revealControls()
             }
             .onDisappear {
                 hideControlsTask?.cancel()
@@ -324,6 +336,25 @@ struct PlayerView: View {
                         .accessibilityIdentifier("player.sidebar-toggle")
                         .accessibilityLabel("Playlist")
                         .accessibilityValue(sidebar == .playlist ? "open" : "closed")
+
+                    Button {
+                        sidebar = sidebar == .transcript ? nil : .transcript
+                        revealControls()
+                    } label: { Image(systemName: "text.magnifyingglass") }
+                        .buttonStyle(ControlButtonStyle())
+                        .help("Transcript search")
+                        .accessibilityIdentifier("player.transcript-toggle")
+                        .accessibilityLabel("Transcript")
+                        .accessibilityValue(sidebar == .transcript ? "open" : "closed")
+
+                    Button {
+                        model.beginNoteCapture()
+                    } label: { Image(systemName: "note.text.badge.plus") }
+                        .buttonStyle(ControlButtonStyle())
+                        .help("New note")
+                        .disabled(!model.canUseLocalTranscriptTools)
+                        .accessibilityIdentifier("player.note-capture")
+                        .accessibilityLabel("New note")
 
                     Button(action: model.toggleFullscreen) {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -673,6 +704,8 @@ private enum SidebarTab: String, CaseIterable, Identifiable {
     case video = "Video"
     case audio = "Audio"
     case subtitles = "Subtitles"
+    case transcript = "Transcript"
+    case notes = "Notes"
 
     var id: String { rawValue }
 
@@ -685,6 +718,8 @@ private enum SidebarTab: String, CaseIterable, Identifiable {
         case .video: return "slider.horizontal.3"
         case .audio: return "waveform"
         case .subtitles: return "captions.bubble"
+        case .transcript: return "text.magnifyingglass"
+        case .notes: return "note.text"
         }
     }
 }
@@ -1166,6 +1201,304 @@ private func formatDecimal(_ value: Double) -> String {
         .replacingOccurrences(of: #"\.?0+$"#, with: "", options: .regularExpression)
 }
 
+private struct AnalysisSidebarView: View {
+    @Bindable var model: PlayerViewModel
+    let tab: SidebarTab
+    let onSelectTab: (SidebarTab) -> Void
+    let onClose: () -> Void
+
+    @State private var isChoosingEmbeddedTrack = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label(tab.title, systemImage: tab.symbol)
+                    .font(.headline)
+                Spacer()
+                Button(action: onClose) { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .help("Close sidebar")
+                    .accessibilityIdentifier("player.sidebar-close")
+            }
+            .padding(12)
+
+            Picker("Analysis", selection: Binding(
+                get: { tab },
+                set: onSelectTab
+            )) {
+                Label("Transcript", systemImage: "text.magnifyingglass").tag(SidebarTab.transcript)
+                Label("Notes", systemImage: "note.text").tag(SidebarTab.notes)
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if tab == .transcript {
+                        transcriptContent
+                    } else {
+                        notesContent
+                    }
+                }
+                .padding(14)
+            }
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .leading) { Divider() }
+        .sheet(isPresented: $isChoosingEmbeddedTrack) {
+            embeddedTrackPicker
+        }
+        .accessibilityIdentifier("player.analysis-sidebar")
+    }
+
+    @ViewBuilder
+    private var transcriptContent: some View {
+        if !model.canUseLocalTranscriptTools {
+            Text("Transcript tools are available for local media.")
+                .foregroundStyle(.secondary)
+        } else if let document = model.transcriptDocument {
+            Label(model.localTranscriptState.message, systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+
+            HStack(spacing: 8) {
+                TextField("Search transcript", text: $searchQuery)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { model.searchTranscript(query: searchQuery) }
+                .accessibilityIdentifier("player.transcript-search")
+
+                Button(action: { model.searchTranscript(query: searchQuery) }) {
+                    Image(systemName: "magnifyingglass")
+                }
+                .buttonStyle(.borderless)
+                .help("Search transcript")
+                .disabled(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if model.transcriptSearchResults.isEmpty {
+                transcriptOutline(document)
+            } else {
+                ForEach(Array(model.transcriptSearchResults.enumerated()), id: \.offset) { _, result in
+                    transcriptResult(result)
+                }
+            }
+
+            Divider()
+            subtitleActions
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(model.localTranscriptState.message)
+                    .font(.headline)
+                if let explanation = model.noContentExplanation, !explanation.isEmpty {
+                    Text(explanation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if model.isDiscoveringEmbeddedSubtitles {
+                    Text("Checking local subtitle tracks…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                subtitleActions
+                if let message = model.embeddedSubtitleMessage, !message.isEmpty {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @State private var searchQuery = ""
+
+    @ViewBuilder
+    private func transcriptOutline(_ document: TranscriptDocument) -> some View {
+        ForEach(Array(document.segments.prefix(80).enumerated()), id: \.offset) { _, segment in
+            Button {
+                model.seek(to: Double(segment.startMs) / 1_000)
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(formatMilliseconds(segment.startMs))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Text(segment.text)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private func transcriptResult(_ result: TranscriptSearchResult) -> some View {
+        Button {
+            model.seek(to: Double(result.startMs) / 1_000)
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(formatMilliseconds(result.startMs))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Text(result.text)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private var subtitleActions: some View {
+        HStack(spacing: 8) {
+            Button("Import Subtitle…", action: model.importTranscriptSubtitle)
+                .disabled(!model.canUseLocalTranscriptTools)
+            if model.canExtractEmbeddedSubtitle {
+                Button("Extract Embedded Subtitle…") {
+                    isChoosingEmbeddedTrack = true
+                }
+                .disabled(model.isDiscoveringEmbeddedSubtitles)
+            }
+        }
+        .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private var notesContent: some View {
+        if let draft = model.noteDraft {
+            NoteEditor(draft: draft, onChangeBody: model.updateNoteDraftBody, onSave: model.saveNoteDraft, onCancel: model.cancelNoteDraft)
+            Divider()
+        } else {
+            Button("New Note", action: model.beginNoteCapture)
+                .disabled(!model.canUseLocalTranscriptTools)
+        }
+
+        if let deleted = model.deletedNote {
+            HStack {
+                Text("Note deleted")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Undo", action: model.undoDeleteNote)
+                    .controlSize(.small)
+            }
+            .accessibilityIdentifier("player.note-undo")
+        }
+
+        if model.notes.isEmpty {
+            Text("No notes for this media.")
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(model.notes) { note in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Button(formatMilliseconds(note.positionMs)) {
+                            model.seek(to: Double(note.positionMs) / 1_000)
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption.monospacedDigit())
+                        Spacer()
+                        Button(action: { model.editNote(note) }) {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Edit note")
+                        Button(role: .destructive, action: { model.deleteNote(note) }) {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Delete note")
+                    }
+                    if let quote = note.transcriptQuote, !quote.isEmpty {
+                        Text(quote)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Text(note.body.isEmpty ? "Untitled note" : note.body)
+                        .lineLimit(4)
+                }
+                Divider()
+            }
+        }
+    }
+
+    private var embeddedTrackPicker: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Extract Embedded Subtitle")
+                .font(.headline)
+            Text("Choose a readable text subtitle track. This stays on your Mac.")
+                .foregroundStyle(.secondary)
+            List(model.embeddedSubtitleTracks) { track in
+                Button(track.displayName) {
+                    isChoosingEmbeddedTrack = false
+                    model.extractEmbeddedSubtitle(track: track)
+                }
+            }
+            .frame(minHeight: 120)
+            HStack {
+                Spacer()
+                Button("Cancel") { isChoosingEmbeddedTrack = false }
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
+    }
+
+    private func formatMilliseconds(_ milliseconds: Int64) -> String {
+        let seconds = max(0, Int(milliseconds / 1_000))
+        let hours = seconds / 3_600
+        let minutes = (seconds / 60) % 60
+        let remaining = seconds % 60
+        return hours > 0
+            ? String(format: "%02d:%02d:%02d", hours, minutes, remaining)
+            : String(format: "%02d:%02d", minutes, remaining)
+    }
+}
+
+private struct NoteEditor: View {
+    let draft: NoteDraft
+    let onChangeBody: (String) -> Void
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(draft.note == nil ? "New Note" : "Edit Note")
+                    .font(.headline)
+                Spacer()
+                Text(formatMilliseconds(draft.positionMs))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            if let quote = draft.transcriptQuote, !quote.isEmpty {
+                Text(quote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            TextEditor(text: Binding(get: { draft.body }, set: onChangeBody))
+                .font(.body)
+                .frame(height: 100)
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(.quaternary))
+            HStack {
+                Button("Cancel", action: onCancel)
+                Spacer()
+                Button("Save", action: onSave)
+                    .keyboardShortcut(.return, modifiers: [.command])
+            }
+        }
+    }
+
+    private func formatMilliseconds(_ milliseconds: Int64) -> String {
+        let seconds = max(0, Int(milliseconds / 1_000))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
 private struct SidebarView: View {
     let tab: SidebarTab
     let snapshot: PlaybackSnapshot
@@ -1263,6 +1596,8 @@ private struct SidebarView: View {
             Button("Load External Subtitle", action: onAddExternalSubtitle)
                 .buttonStyle(.borderless)
             trackList(snapshot.subtitleTracks)
+        case .transcript, .notes:
+            EmptyView()
         }
     }
 

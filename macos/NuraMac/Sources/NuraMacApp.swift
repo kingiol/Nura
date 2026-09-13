@@ -170,6 +170,11 @@ private struct NuraPlayerCommands: Commands {
             Button("Picture in Picture", action: { playerWindows.activeModel?.togglePiP() })
                 .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
         }
+        CommandMenu("Notes") {
+            Button("New Note", action: { playerWindows.activeModel?.beginNoteCapture() })
+                .disabled(!(playerWindows.activeModel?.canUseLocalTranscriptTools ?? false))
+                .keyboardShortcut("n", modifiers: [.command])
+        }
     }
 
     private func speedLabel(for value: Double) -> String {

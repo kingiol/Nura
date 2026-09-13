@@ -75,6 +75,7 @@ targets:
     scheme:
       gatherCoverageData: false
       testTargets:
+        - NuraMacTests
         - NuraMacUITests
       run:
         config: Debug
@@ -95,3 +96,16 @@ targets:
         OTHER_LDFLAGS:
           - "-framework"
           - Network
+  NuraMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: NuraMac
+    settings:
+      base:
+        PRODUCT_NAME: NuraMacTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.nura.player.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Nura.app/Contents/MacOS/Nura"
+        BUNDLE_LOADER: "$(TEST_HOST)"

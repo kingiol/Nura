@@ -116,6 +116,8 @@ private func nura_analysis_load_run_json(_ player: NuraHandle?, _ input: UnsafeP
 private func nura_analysis_save_run_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> Int32
 @_silgen_name("nura_analysis_delete_json")
 private func nura_analysis_delete_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_analysis_list_notes_json")
+private func nura_analysis_list_notes_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("nura_analysis_create_note_json")
 private func nura_analysis_create_note_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("nura_analysis_update_note_json")
@@ -248,6 +250,14 @@ private struct TranscriptSearchRequest: Encodable {
 
 private struct DeleteNoteRequest: Encodable {
     let id: Int64
+}
+
+private struct ListNotesRequest: Encodable {
+    let mediaFingerprint: String
+
+    enum CodingKeys: String, CodingKey {
+        case mediaFingerprint = "media_fingerprint"
+    }
 }
 
 struct Track: Decodable {
@@ -505,6 +515,13 @@ final class PlayerBridge {
 
     func deleteAnalysis(_ key: AnalysisKey) throws {
         try mutation(key, invoke: nura_analysis_delete_json)
+    }
+
+    func listNotes(mediaFingerprint: String) throws -> [InstantNote] {
+        try query(
+            ListNotesRequest(mediaFingerprint: mediaFingerprint),
+            invoke: nura_analysis_list_notes_json
+        )
     }
 
     func createNote(_ note: NewInstantNote) throws -> InstantNote {

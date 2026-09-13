@@ -38,6 +38,17 @@
       </MacroExpansion>
       <Testables>
          <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "157BDAAFE45B875056D5A3AB"
+               BuildableName = "NuraMacTests.xctest"
+               BlueprintName = "NuraMacTests"
+               ReferencedContainer = "container:NuraMac.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"

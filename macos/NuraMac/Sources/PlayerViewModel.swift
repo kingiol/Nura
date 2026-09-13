@@ -83,6 +83,19 @@ final class PlayerViewModel {
     private var pendingMutedState: Bool?
     private(set) var onlineSubtitleResults: [OnlineSubtitleResult] = []
     private(set) var isSearchingOnlineSubtitles = false
+    private(set) var localTranscriptState: LocalTranscriptState = .unavailable
+    private(set) var mediaFingerprint: String?
+    private(set) var transcriptDocument: TranscriptDocument?
+    private(set) var transcriptSearchResults: [TranscriptSearchResult] = []
+    private(set) var activeTranscriptKey: AnalysisKey?
+    private(set) var analysisRun: AnalysisRun?
+    private(set) var embeddedSubtitleTracks: [EmbeddedSubtitleTrack] = []
+    private(set) var embeddedSubtitleMessage: String?
+    private(set) var isDiscoveringEmbeddedSubtitles = false
+    private(set) var notes: [InstantNote] = []
+    private(set) var noteDraft: NoteDraft?
+    private(set) var deletedNote: InstantNote?
+    private(set) var noteCaptureRequestID = 0
 
     private var bridge: PlayerBridge?
     private var timer: Timer?
@@ -99,6 +112,7 @@ final class PlayerViewModel {
     private var requestedMediaIdentity: String?
     private var isOpenGLContextAttached = false
     private var pendingOpenRequest: PendingOpenRequest?
+    private var localAnalysisGeneration = 0
     private weak var playerWindow: NSWindow?
     private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
@@ -204,6 +218,27 @@ final class PlayerViewModel {
 
     var canScreenshot: Bool {
         snapshot.item != nil && snapshot.videoWidth != nil && snapshot.videoHeight != nil
+    }
+
+    var canUseLocalTranscriptTools: Bool {
+        mediaFingerprint != nil && localMediaURL != nil
+    }
+
+    var canExtractEmbeddedSubtitle: Bool {
+        !embeddedSubtitleTracks.isEmpty && !isDiscoveringEmbeddedSubtitles
+    }
+
+    var noContentExplanation: String? {
+        guard case .noContent(let reason) = localTranscriptState else { return nil }
+        return reason
+    }
+
+    var activeTranscriptQuote: String? {
+        guard let transcriptDocument else { return nil }
+        let positionMs = Int64((snapshot.positionSeconds * 1_000).rounded())
+        return transcriptDocument.segments.first(where: { segment in
+            segment.startMs <= positionMs && positionMs <= segment.endMs
+        })?.text
     }
 
     var isMuted: Bool {
@@ -471,6 +506,209 @@ final class PlayerViewModel {
             } catch {
                 showError(error.localizedDescription)
             }
+        }
+    }
+
+    func importTranscriptSubtitle() {
+        guard canUseLocalTranscriptTools else {
+            showError(L10n.text("Open local media before importing a subtitle"))
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "srt") ?? .text,
+            UTType(filenameExtension: "vtt") ?? .text,
+        ]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try importTranscriptSubtitle(at: url)
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func importTranscriptSubtitle(at url: URL) throws {
+        guard let mediaFingerprint else {
+            throw PlayerBridgeError.command("Open local media before importing a subtitle")
+        }
+        let fileExtension = url.pathExtension.lowercased()
+        let data = try Data(contentsOf: url)
+        let segments = try SubtitleParser.parse(data: data, fileExtension: fileExtension)
+        let key = AnalysisKey(
+            mediaFingerprint: mediaFingerprint,
+            sourceFingerprint: SubtitleParser.sourceFingerprint(data: data, trackIdentifier: "external"),
+            analysisProfile: "subtitle/\(fileExtension)-v1"
+        )
+        if let existing = try bridge?.loadTranscript(key) {
+            applyTranscript(existing)
+        } else {
+            let document = TranscriptDocument(
+                key: key,
+                source: "external_subtitle",
+                providerID: nil,
+                modelRevision: nil,
+                segments: segments
+            )
+            try bridge?.promoteTranscript(document)
+            applyTranscript(document)
+        }
+        analysisRun = try bridge?.loadAnalysisRun(key)
+    }
+
+    func extractEmbeddedSubtitle(track: EmbeddedSubtitleTrack) {
+        guard let url = localMediaURL else {
+            embeddedSubtitleMessage = "Embedded subtitle extraction is available for local media only."
+            return
+        }
+        let generation = localAnalysisGeneration
+        isDiscoveringEmbeddedSubtitles = true
+        Task { [weak self] in
+            do {
+                let document = try await EmbeddedSubtitleExtractor.extract(from: url, trackIdentifier: track.identifier)
+                guard let self, self.localAnalysisGeneration == generation else { return }
+                try self.bridge?.promoteTranscript(document)
+                self.applyTranscript(document)
+                self.analysisRun = try self.bridge?.loadAnalysisRun(document.key)
+                self.embeddedSubtitleMessage = nil
+                self.lastError = nil
+            } catch {
+                guard let self, self.localAnalysisGeneration == generation else { return }
+                self.embeddedSubtitleMessage = error.localizedDescription
+            }
+            guard let self, self.localAnalysisGeneration == generation else { return }
+            self.isDiscoveringEmbeddedSubtitles = false
+        }
+    }
+
+    func searchTranscript(query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let activeTranscriptKey, !trimmed.isEmpty else {
+            transcriptSearchResults = []
+            return
+        }
+        do {
+            transcriptSearchResults = try bridge?.searchTranscript(key: activeTranscriptKey, query: trimmed, limit: 50) ?? []
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func clearTranscriptSearch() {
+        transcriptSearchResults = []
+    }
+
+    func beginNoteCapture() {
+        guard let mediaFingerprint, let item = snapshot.item else {
+            showError(L10n.text("Open local media before creating a note"))
+            return
+        }
+        let positionMs = Int64((snapshot.positionSeconds * 1_000).rounded())
+        noteDraft = NoteDraft(
+            positionMs: positionMs,
+            mediaTitle: item.title,
+            transcriptQuote: activeTranscriptQuote
+        )
+        noteCaptureRequestID &+= 1
+        lastError = nil
+    }
+
+    func editNote(_ note: InstantNote) {
+        noteDraft = NoteDraft(
+            note: note,
+            positionMs: note.positionMs,
+            mediaTitle: note.mediaTitle,
+            transcriptQuote: note.transcriptQuote,
+            body: note.body
+        )
+    }
+
+    func updateNoteDraftBody(_ body: String) {
+        noteDraft?.body = body
+    }
+
+    func cancelNoteDraft() {
+        noteDraft = nil
+    }
+
+    func saveNoteDraft() {
+        guard let mediaFingerprint, let draft = noteDraft else { return }
+        do {
+            if let existing = draft.note {
+                let updated = InstantNote(
+                    id: existing.id,
+                    mediaFingerprint: mediaFingerprint,
+                    positionMs: draft.positionMs,
+                    mediaTitle: draft.mediaTitle,
+                    transcriptQuote: draft.transcriptQuote,
+                    screenshotReference: existing.screenshotReference,
+                    body: draft.body,
+                    createdAtMs: existing.createdAtMs,
+                    updatedAtMs: Int64(Date().timeIntervalSince1970 * 1_000)
+                )
+                try bridge?.updateNote(updated)
+                replaceNote(updated)
+            } else {
+                let saved = try bridge?.createNote(
+                    NewInstantNote(
+                        mediaFingerprint: mediaFingerprint,
+                        positionMs: draft.positionMs,
+                        mediaTitle: draft.mediaTitle,
+                        transcriptQuote: draft.transcriptQuote,
+                        screenshotReference: nil,
+                        body: draft.body
+                    )
+                )
+                if let saved {
+                    notes.append(saved)
+                    sortNotes()
+                }
+            }
+            noteDraft = nil
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func deleteNote(_ note: InstantNote) {
+        do {
+            let deleted = try bridge?.deleteNote(id: note.id)
+            if let deleted {
+                notes.removeAll { $0.id == deleted.id }
+                deletedNote = deleted
+            }
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
+        }
+    }
+
+    func undoDeleteNote() {
+        guard let deletedNote else { return }
+        do {
+            let restored = try bridge?.createNote(
+                NewInstantNote(
+                    mediaFingerprint: deletedNote.mediaFingerprint,
+                    positionMs: deletedNote.positionMs,
+                    mediaTitle: deletedNote.mediaTitle,
+                    transcriptQuote: deletedNote.transcriptQuote,
+                    screenshotReference: deletedNote.screenshotReference,
+                    body: deletedNote.body
+                )
+            )
+            if let restored {
+                notes.append(restored)
+                sortNotes()
+            }
+            self.deletedNote = nil
+            lastError = nil
+        } catch {
+            showError(error.localizedDescription)
         }
     }
 
@@ -1125,8 +1363,12 @@ final class PlayerViewModel {
         if activeMediaIdentity != incomingIdentity {
             invalidateSeekPreview()
             activeMediaIdentity = incomingIdentity
+            resetLocalAnalysis()
         }
         self.snapshot = snapshot
+        if let localURL = Self.localURL(for: snapshot.item), mediaFingerprint == nil {
+            loadLocalAnalysis(for: localURL)
+        }
         if let pendingPlaybackState,
            snapshot.status == "playing" || snapshot.status == "paused",
            pendingPlaybackState == (snapshot.status == "playing") {
@@ -1151,6 +1393,87 @@ final class PlayerViewModel {
         pictureInPicture.invalidatePlaybackState()
     }
 
+    private func resetLocalAnalysis() {
+        localAnalysisGeneration &+= 1
+        mediaFingerprint = nil
+        localTranscriptState = .unavailable
+        transcriptDocument = nil
+        transcriptSearchResults = []
+        activeTranscriptKey = nil
+        analysisRun = nil
+        embeddedSubtitleTracks = []
+        embeddedSubtitleMessage = nil
+        isDiscoveringEmbeddedSubtitles = false
+        notes = []
+        noteDraft = nil
+        deletedNote = nil
+    }
+
+    private func loadLocalAnalysis(for url: URL) {
+        let fingerprint = MediaFingerprint.forLocalMedia(url)
+        let cloudKey = AnalysisKey(
+            mediaFingerprint: fingerprint,
+            sourceFingerprint: "audio-v1",
+            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+        )
+        mediaFingerprint = fingerprint
+        localTranscriptState = .loading
+        do {
+            let document = try bridge?.loadTranscript(cloudKey)
+            let run = try bridge?.loadAnalysisRun(cloudKey)
+            let savedNotes = try bridge?.listNotes(mediaFingerprint: fingerprint) ?? []
+            analysisRun = run
+            notes = savedNotes
+            if let document {
+                applyTranscript(document)
+            } else if run?.status == .noContent {
+                localTranscriptState = .noContent(run?.lastError)
+            } else {
+                localTranscriptState = .unavailable
+            }
+            lastError = nil
+        } catch {
+            localTranscriptState = .unavailable
+            showError(error.localizedDescription)
+        }
+
+        let generation = localAnalysisGeneration
+        isDiscoveringEmbeddedSubtitles = true
+        Task { [weak self] in
+            do {
+                let tracks = try await EmbeddedSubtitleExtractor.discover(in: url)
+                guard let self, self.localAnalysisGeneration == generation else { return }
+                self.embeddedSubtitleTracks = tracks
+                self.embeddedSubtitleMessage = nil
+            } catch {
+                guard let self, self.localAnalysisGeneration == generation else { return }
+                self.embeddedSubtitleTracks = []
+                self.embeddedSubtitleMessage = error.localizedDescription
+            }
+            guard let self, self.localAnalysisGeneration == generation else { return }
+            self.isDiscoveringEmbeddedSubtitles = false
+        }
+    }
+
+    private func applyTranscript(_ document: TranscriptDocument) {
+        transcriptDocument = document
+        activeTranscriptKey = document.key
+        transcriptSearchResults = []
+        localTranscriptState = .transcript
+    }
+
+    private func replaceNote(_ note: InstantNote) {
+        guard let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
+        notes[index] = note
+        sortNotes()
+    }
+
+    private func sortNotes() {
+        notes.sort {
+            $0.positionMs == $1.positionMs ? $0.id < $1.id : $0.positionMs < $1.positionMs
+        }
+    }
+
     private func invalidateSeekPreview() {
         seekPreviewGeneration &+= 1
         sliderSeekGeneration = nil
@@ -1161,6 +1484,12 @@ final class PlayerViewModel {
 
     private var localMediaURL: URL? {
         guard case .localFile(let path) = snapshot.item?.source else { return nil }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private static func localURL(for item: MediaItem?) -> URL? {
+        guard case .localFile(let path) = item?.source else { return nil }
         let url = URL(fileURLWithPath: path).standardizedFileURL
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }

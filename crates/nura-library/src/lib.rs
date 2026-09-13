@@ -179,6 +179,7 @@ pub trait AnalysisRepository: Send {
     fn save_run(&mut self, run: &AnalysisRun) -> Result<(), AnalysisError>;
     fn load_run(&mut self, key: &AnalysisKey) -> Result<Option<AnalysisRun>, AnalysisError>;
     fn delete_analysis(&mut self, key: &AnalysisKey) -> Result<(), AnalysisError>;
+    fn list_notes(&mut self, media_fingerprint: &str) -> Result<Vec<InstantNote>, AnalysisError>;
     fn create_note(&mut self, note: &NewInstantNote) -> Result<InstantNote, AnalysisError>;
     fn update_note(&mut self, note: &InstantNote) -> Result<(), AnalysisError>;
     fn delete_note(&mut self, id: i64) -> Result<InstantNote, AnalysisError>;
@@ -579,6 +580,36 @@ impl AnalysisRepository for SqliteAnalysisRepository {
         Ok(())
     }
 
+    fn list_notes(&mut self, media_fingerprint: &str) -> Result<Vec<InstantNote>, AnalysisError> {
+        if media_fingerprint.trim().is_empty() {
+            return Err(AnalysisError::InvalidData(
+                "instant note media identity is empty".to_owned(),
+            ));
+        }
+
+        let mut statement = self.connection.prepare(
+            "
+            SELECT
+                id,
+                media_fingerprint,
+                position_ms,
+                media_title,
+                transcript_quote,
+                screenshot_reference,
+                body,
+                created_at_ms,
+                updated_at_ms
+            FROM instant_notes
+            WHERE media_fingerprint = ?1
+            ORDER BY position_ms ASC, id ASC
+            ",
+        )?;
+        statement
+            .query_map(params![media_fingerprint], instant_note_from_row)?
+            .collect::<Result<Vec<_>, rusqlite::Error>>()
+            .map_err(AnalysisError::Sqlite)
+    }
+
     fn create_note(&mut self, note: &NewInstantNote) -> Result<InstantNote, AnalysisError> {
         validate_new_note(note)?;
         let now = current_time_ms()?;
@@ -697,6 +728,20 @@ fn fts_match_query(query: &str) -> String {
         .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
         .collect::<Vec<_>>()
         .join(" AND ")
+}
+
+fn instant_note_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InstantNote> {
+    Ok(InstantNote {
+        id: row.get(0)?,
+        media_fingerprint: row.get(1)?,
+        position_ms: row.get(2)?,
+        media_title: row.get(3)?,
+        transcript_quote: row.get(4)?,
+        screenshot_reference: row.get(5)?,
+        body: row.get(6)?,
+        created_at_ms: row.get(7)?,
+        updated_at_ms: row.get(8)?,
+    })
 }
 
 fn validate_document(document: &TranscriptDocument) -> Result<(), AnalysisError> {
@@ -1085,6 +1130,36 @@ mod tests {
             Err(AnalysisError::InvalidData(_))
         ));
 
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn lists_notes_for_only_the_requested_media() {
+        let directory = test_directory("analysis-list-notes");
+        let mut repository =
+            SqliteAnalysisRepository::open(directory.join("analysis.sqlite")).unwrap();
+        let first = repository
+            .create_note(&NewInstantNote {
+                media_fingerprint: "media-a".to_owned(),
+                position_ms: 2_000,
+                media_title: "First".to_owned(),
+                transcript_quote: None,
+                screenshot_reference: None,
+                body: "First note".to_owned(),
+            })
+            .unwrap();
+        repository
+            .create_note(&NewInstantNote {
+                media_fingerprint: "media-b".to_owned(),
+                position_ms: 1_000,
+                media_title: "Second".to_owned(),
+                transcript_quote: None,
+                screenshot_reference: None,
+                body: "Second note".to_owned(),
+            })
+            .unwrap();
+
+        assert_eq!(repository.list_notes("media-a").unwrap(), vec![first]);
         fs::remove_dir_all(directory).unwrap();
     }
 

@@ -152,6 +152,20 @@ final class NuraMacUITests: XCTestCase {
         assertValue(closedToggle, becomes: "closed", timeout: 5)
     }
 
+    func testCanOpenTranscriptAndNoteCaptureSurfaces() throws {
+        try launch(loadsFixture: true)
+
+        let transcript = app.buttons["player.transcript-toggle"]
+        XCTAssertTrue(transcript.waitForExistence(timeout: 15))
+        transcript.click()
+        XCTAssertTrue(app.otherElements["player.analysis-sidebar"].waitForExistence(timeout: 5))
+
+        let note = app.buttons["player.note-capture"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.click()
+        XCTAssertTrue(app.otherElements["player.analysis-sidebar"].waitForExistence(timeout: 5))
+    }
+
     func testCanSwitchSettingsCategories() throws {
         try launch(loadsFixture: true)
 

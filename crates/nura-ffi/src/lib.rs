@@ -71,6 +71,10 @@ enum Command {
     },
     AnalysisSaveRun(AnalysisRun, Reply),
     AnalysisDelete(AnalysisKey, Reply),
+    AnalysisListNotes {
+        media_fingerprint: String,
+        reply: JsonReply,
+    },
     AnalysisCreateNote {
         note: NewInstantNote,
         reply: JsonReply,
@@ -391,6 +395,17 @@ fn handle_command(
             let _ = reply.send(result);
             return false;
         }
+        Command::AnalysisListNotes {
+            media_fingerprint,
+            reply,
+        } => {
+            let result = analysis
+                .list_notes(&media_fingerprint)
+                .map_err(|error| error.to_string())
+                .and_then(|notes| serde_json::to_string(&notes).map_err(|error| error.to_string()));
+            let _ = reply.send(result);
+            return false;
+        }
         Command::AnalysisCreateNote { note, reply } => {
             let result = analysis
                 .create_note(&note)
@@ -676,6 +691,28 @@ pub unsafe extern "C" fn nura_analysis_delete_json(
         }
     };
     command_result(player, |reply| Command::AnalysisDelete(key, reply))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_list_notes_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> *mut c_char {
+    #[derive(Deserialize)]
+    struct ListNotesRequest {
+        media_fingerprint: String,
+    }
+
+    let request: ListNotesRequest = match read_json(input) {
+        Ok(request) => request,
+        Err(error) => return json_result(Err(error)),
+    };
+    json_result(query_command_result(player, |reply| {
+        Command::AnalysisListNotes {
+            media_fingerprint: request.media_fingerprint,
+            reply,
+        }
+    }))
 }
 
 #[unsafe(no_mangle)]
