@@ -1286,9 +1286,6 @@ private struct AnalysisSidebarView: View {
                     transcriptResult(result)
                 }
             }
-
-            Divider()
-            subtitleActions
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text(model.localTranscriptState.message)

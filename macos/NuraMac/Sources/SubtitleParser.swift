@@ -41,6 +41,11 @@ enum SubtitleParser {
                 throw SubtitleParserError.invalidTiming("Missing WEBVTT header")
             }
             lines.removeFirst()
+            if let headerEnd = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                lines = Array(lines.dropFirst(headerEnd + 1))
+            } else {
+                lines = []
+            }
         }
 
         let blocks = splitBlocks(lines)

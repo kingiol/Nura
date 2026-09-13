@@ -225,7 +225,7 @@ final class PlayerViewModel {
     }
 
     var canExtractEmbeddedSubtitle: Bool {
-        !embeddedSubtitleTracks.isEmpty && !isDiscoveringEmbeddedSubtitles
+        transcriptDocument == nil && !embeddedSubtitleTracks.isEmpty && !isDiscoveringEmbeddedSubtitles
     }
 
     var noContentExplanation: String? {
@@ -514,6 +514,10 @@ final class PlayerViewModel {
             showError(L10n.text("Open local media before importing a subtitle"))
             return
         }
+        guard transcriptDocument == nil else {
+            showError("A transcript is already active for this media.")
+            return
+        }
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -534,6 +538,9 @@ final class PlayerViewModel {
     func importTranscriptSubtitle(at url: URL) throws {
         guard let mediaFingerprint else {
             throw PlayerBridgeError.command("Open local media before importing a subtitle")
+        }
+        guard transcriptDocument == nil else {
+            throw PlayerBridgeError.command("A transcript is already active for this media.")
         }
         let fileExtension = url.pathExtension.lowercased()
         let data = try Data(contentsOf: url)
@@ -564,12 +571,20 @@ final class PlayerViewModel {
             embeddedSubtitleMessage = "Embedded subtitle extraction is available for local media only."
             return
         }
+        guard transcriptDocument == nil else {
+            embeddedSubtitleMessage = "A transcript is already active for this media."
+            return
+        }
         let generation = localAnalysisGeneration
         isDiscoveringEmbeddedSubtitles = true
         Task { [weak self] in
             do {
                 let document = try await EmbeddedSubtitleExtractor.extract(from: url, trackIdentifier: track.identifier)
                 guard let self, self.localAnalysisGeneration == generation else { return }
+                guard self.transcriptDocument == nil else {
+                    self.embeddedSubtitleMessage = "A transcript is already active for this media."
+                    return
+                }
                 try self.bridge?.promoteTranscript(document)
                 self.applyTranscript(document)
                 self.analysisRun = try self.bridge?.loadAnalysisRun(document.key)

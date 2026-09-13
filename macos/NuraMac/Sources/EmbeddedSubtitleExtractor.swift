@@ -116,7 +116,7 @@ enum EmbeddedSubtitleExtractor {
         let mediaType = CMFormatDescriptionGetMediaType(description)
         guard mediaType == kCMMediaType_Text || mediaType == kCMMediaType_Subtitle else { return false }
         switch CMFormatDescriptionGetMediaSubType(description) {
-        case 0x7478_3367, 0x7465_7874, 0x7776_7474: // tx3g, text, wvtt
+        case tx3gFormat, wvttFormat:
             return true
         default:
             return false
@@ -143,7 +143,13 @@ enum EmbeddedSubtitleExtractor {
                   start.seconds >= 0, duration.seconds > 0 else {
                 continue
             }
-            let payload = try payloadString(from: sample)
+            guard let description = CMSampleBufferGetFormatDescription(sample) else {
+                throw EmbeddedSubtitleExtractionError.unreadablePayload
+            }
+            let payload = try payloadString(
+                from: sample,
+                mediaSubType: CMFormatDescriptionGetMediaSubType(description)
+            )
             let startMs = Int64((start.seconds * 1_000).rounded())
             let endMs = Int64(((start.seconds + duration.seconds) * 1_000).rounded())
             samples.append(TimedTextSample(startMs: startMs, endMs: endMs, payload: payload))
@@ -154,7 +160,10 @@ enum EmbeddedSubtitleExtractor {
         return samples
     }
 
-    private static func payloadString(from sample: CMSampleBuffer) throws -> String {
+    private static let tx3gFormat: FourCharCode = 0x7478_3367
+    private static let wvttFormat: FourCharCode = 0x7776_7474
+
+    private static func payloadString(from sample: CMSampleBuffer, mediaSubType: FourCharCode) throws -> String {
         guard let blockBuffer = CMSampleBufferGetDataBuffer(sample) else {
             throw EmbeddedSubtitleExtractionError.unreadablePayload
         }
@@ -167,18 +176,83 @@ enum EmbeddedSubtitleExtractor {
         guard result == kCMBlockBufferNoErr else {
             throw EmbeddedSubtitleExtractionError.unreadablePayload
         }
-        if data.count >= 3, data[0] == 0 {
-            let textLength = Int(data[1])
-            let textEnd = 2 + textLength
-            if textLength > 0, textEnd <= data.count,
-               let value = String(data: data[2..<textEnd], encoding: .utf8) {
-                return value
+        return try payloadString(data: data, mediaSubType: mediaSubType)
+    }
+
+    static func payloadString(data: Data, mediaSubType: FourCharCode) throws -> String {
+        switch mediaSubType {
+        case tx3gFormat:
+            return try tx3gPayloadString(data)
+        case wvttFormat:
+            return try wvttPayloadString(data)
+        default:
+            throw EmbeddedSubtitleExtractionError.unavailable("The selected subtitle track uses an unsupported timed-text format.")
+        }
+    }
+
+    private static func tx3gPayloadString(_ data: Data) throws -> String {
+        guard data.count >= 2 else { throw EmbeddedSubtitleExtractionError.unreadablePayload }
+        let textLength = Int(data[data.startIndex]) << 8 | Int(data[data.startIndex + 1])
+        let textStart = data.startIndex + 2
+        let textEnd = textStart + textLength
+        guard textEnd <= data.endIndex else { throw EmbeddedSubtitleExtractionError.unreadablePayload }
+        guard textLength > 0 else { return "" }
+        return try readableString(from: data[textStart..<textEnd])
+    }
+
+    private static func wvttPayloadString(_ data: Data) throws -> String {
+        let boxes = try isoBoxes(in: data)
+        var payloads: [String] = []
+        for box in boxes where box.type == "vttc" {
+            for child in try isoBoxes(in: box.payload) where child.type == "payl" {
+                payloads.append(try readableString(from: child.payload))
             }
         }
-        guard let value = String(data: data, encoding: .utf8) else {
+        guard !payloads.isEmpty else { throw EmbeddedSubtitleExtractionError.unreadablePayload }
+        return payloads.joined(separator: " ")
+    }
+
+    private static func readableString<DataType: DataProtocol>(from data: DataType) throws -> String {
+        let bytes = Data(data)
+        let encodings: [String.Encoding] = [.utf8, .utf16BigEndian]
+        guard let value = encodings
+            .compactMap({ String(data: bytes, encoding: $0) })
+            .first(where: isReadableText) else {
             throw EmbeddedSubtitleExtractionError.unreadablePayload
         }
         return value
+    }
+
+    private static func isReadableText(_ value: String) -> Bool {
+        !value.unicodeScalars.contains(where: { scalar in
+            scalar.value < 0x20 && scalar.value != 0x09 && scalar.value != 0x0A && scalar.value != 0x0D
+        })
+    }
+
+    private static func isoBoxes(in data: Data) throws -> [(type: String, payload: Data)] {
+        var offset = data.startIndex
+        var boxes: [(type: String, payload: Data)] = []
+        while offset < data.endIndex {
+            guard data.distance(from: offset, to: data.endIndex) >= 8 else {
+                throw EmbeddedSubtitleExtractionError.unreadablePayload
+            }
+            let size = Int(data[offset]) << 24
+                | Int(data[offset + 1]) << 16
+                | Int(data[offset + 2]) << 8
+                | Int(data[offset + 3])
+            guard size >= 8, size <= data.distance(from: offset, to: data.endIndex) else {
+                throw EmbeddedSubtitleExtractionError.unreadablePayload
+            }
+            let typeData = data[(offset + 4)..<(offset + 8)]
+            guard let type = String(data: typeData, encoding: .ascii) else {
+                throw EmbeddedSubtitleExtractionError.unreadablePayload
+            }
+            let payloadStart = offset + 8
+            let boxEnd = offset + size
+            boxes.append((type: type, payload: Data(data[payloadStart..<boxEnd])))
+            offset = boxEnd
+        }
+        return boxes
     }
 }
 
