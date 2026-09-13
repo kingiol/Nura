@@ -273,14 +273,9 @@ impl AnalysisRepository for SqliteAnalysisRepository {
                 "
                 SELECT t.source, t.provider_id, t.model_revision
                 FROM transcripts t
-                INNER JOIN analysis_runs r
-                    ON r.media_fingerprint = t.media_fingerprint
-                    AND r.source_fingerprint = t.source_fingerprint
-                    AND r.analysis_profile = t.analysis_profile
                 WHERE t.media_fingerprint = ?1
                     AND t.source_fingerprint = ?2
                     AND t.analysis_profile = ?3
-                    AND r.status IN ('complete', 'low_quality')
                 ",
                 key_params(key),
                 |row| {
@@ -333,6 +328,23 @@ impl AnalysisRepository for SqliteAnalysisRepository {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let key = &document.key;
+        let total_chunks = transaction
+            .query_row(
+                "
+                SELECT total_chunks
+                FROM analysis_runs
+                WHERE media_fingerprint = ?1
+                    AND source_fingerprint = ?2
+                    AND analysis_profile = ?3
+                ",
+                key_params(key),
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .unwrap_or(1)
+            .max(1);
+        let completed_chunk_indexes = (0..total_chunks).collect::<Vec<_>>();
+        let completed_chunk_indexes_json = serde_json::to_string(&completed_chunk_indexes)?;
         transaction.execute("DELETE FROM transcript_fts WHERE media_fingerprint = ?1 AND source_fingerprint = ?2 AND analysis_profile = ?3", key_params(key))?;
         transaction.execute("DELETE FROM transcript_segments WHERE media_fingerprint = ?1 AND source_fingerprint = ?2 AND analysis_profile = ?3", key_params(key))?;
         transaction.execute(
@@ -413,12 +425,20 @@ impl AnalysisRepository for SqliteAnalysisRepository {
                 completed_chunk_indexes_json,
                 status,
                 last_error
-            ) VALUES (?1, ?2, ?3, 0, '[]', 'complete', NULL)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, 'complete', NULL)
             ON CONFLICT(media_fingerprint, source_fingerprint, analysis_profile) DO UPDATE SET
+                total_chunks = excluded.total_chunks,
+                completed_chunk_indexes_json = excluded.completed_chunk_indexes_json,
                 status = 'complete',
                 last_error = NULL
             ",
-            key_params(key),
+            params![
+                key.media_fingerprint,
+                key.source_fingerprint,
+                key.analysis_profile,
+                total_chunks,
+                completed_chunk_indexes_json,
+            ],
         )?;
         transaction.commit()?;
         Ok(())
@@ -473,8 +493,8 @@ impl AnalysisRepository for SqliteAnalysisRepository {
     }
 
     fn save_run(&mut self, run: &AnalysisRun) -> Result<(), AnalysisError> {
-        validate_run(run)?;
-        let completed_chunk_indexes_json = serde_json::to_string(&run.completed_chunk_indexes)?;
+        let completed_chunk_indexes = canonical_completed_chunk_indexes(run)?;
+        let completed_chunk_indexes_json = serde_json::to_string(&completed_chunk_indexes)?;
         self.connection.execute(
             "
             INSERT INTO analysis_runs (
@@ -534,13 +554,17 @@ impl AnalysisRepository for SqliteAnalysisRepository {
         let status = AnalysisStatus::from_str(&status).ok_or_else(|| {
             AnalysisError::InvalidData(format!("unknown analysis status: {status}"))
         })?;
-
-        Ok(Some(AnalysisRun {
+        let run = AnalysisRun {
             key: key.clone(),
             total_chunks,
             completed_chunk_indexes,
             status,
             last_error,
+        };
+
+        Ok(Some(AnalysisRun {
+            completed_chunk_indexes: canonical_completed_chunk_indexes(&run)?,
+            ..run
         }))
     }
 
@@ -703,15 +727,16 @@ fn validate_document(document: &TranscriptDocument) -> Result<(), AnalysisError>
     Ok(())
 }
 
-fn validate_run(run: &AnalysisRun) -> Result<(), AnalysisError> {
+fn canonical_completed_chunk_indexes(run: &AnalysisRun) -> Result<Vec<i64>, AnalysisError> {
     validate_key(&run.key)?;
     if run.total_chunks < 0 {
         return Err(AnalysisError::InvalidData(
             "analysis run total chunks is negative".to_owned(),
         ));
     }
-    if run
-        .completed_chunk_indexes
+    let mut completed_chunk_indexes = run.completed_chunk_indexes.clone();
+    completed_chunk_indexes.sort_unstable();
+    if completed_chunk_indexes
         .iter()
         .any(|index| *index < 0 || *index >= run.total_chunks)
     {
@@ -719,7 +744,40 @@ fn validate_run(run: &AnalysisRun) -> Result<(), AnalysisError> {
             "analysis run has an invalid completed chunk index".to_owned(),
         ));
     }
-    Ok(())
+    if completed_chunk_indexes
+        .windows(2)
+        .any(|indexes| indexes[0] == indexes[1])
+    {
+        return Err(AnalysisError::InvalidData(
+            "analysis run has duplicate completed chunk indexes".to_owned(),
+        ));
+    }
+
+    if matches!(
+        run.status,
+        AnalysisStatus::Complete | AnalysisStatus::NoContent
+    ) && run.total_chunks > 0
+        && completed_chunk_indexes != (0..run.total_chunks).collect::<Vec<_>>()
+    {
+        return Err(AnalysisError::InvalidData(
+            "terminal analysis run does not include every completed chunk".to_owned(),
+        ));
+    }
+    if run.status == AnalysisStatus::Complete && run.total_chunks == 0 {
+        return Err(AnalysisError::InvalidData(
+            "complete analysis run has no chunks".to_owned(),
+        ));
+    }
+    if run.status == AnalysisStatus::NoContent
+        && run.total_chunks == 0
+        && !completed_chunk_indexes.is_empty()
+    {
+        return Err(AnalysisError::InvalidData(
+            "no-content analysis run with no chunks has completed indexes".to_owned(),
+        ));
+    }
+
+    Ok(completed_chunk_indexes)
 }
 
 fn validate_new_note(note: &NewInstantNote) -> Result<(), AnalysisError> {
@@ -893,6 +951,119 @@ mod tests {
         repository.save_run(&run).unwrap();
 
         assert_eq!(repository.load_run(&run.key).unwrap(), Some(run));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn unsuccessful_retranscription_attempts_keep_the_promoted_transcript_available() {
+        let directory = test_directory("analysis-retranscription");
+        let mut repository =
+            SqliteAnalysisRepository::open(directory.join("analysis.sqlite")).unwrap();
+        let key = AnalysisKey::new("media-a", "audio-v1", "groq/whisper-large-v3-turbo/segment");
+        repository
+            .promote_transcript(&document(key.clone(), "persistent transcript"))
+            .unwrap();
+
+        for (status, total_chunks, completed_chunk_indexes) in [
+            (AnalysisStatus::Failed, 2, vec![0]),
+            (AnalysisStatus::Cancelled, 2, vec![0]),
+            (AnalysisStatus::NoContent, 0, Vec::new()),
+        ] {
+            repository
+                .save_run(&AnalysisRun {
+                    key: key.clone(),
+                    total_chunks,
+                    completed_chunk_indexes,
+                    status,
+                    last_error: Some("retry did not produce a replacement".to_owned()),
+                })
+                .unwrap();
+
+            assert_eq!(
+                repository.complete_transcript(&key).unwrap(),
+                Some(document(key.clone(), "persistent transcript"))
+            );
+            assert_eq!(
+                repository
+                    .search_transcript(&key, "persistent", 10)
+                    .unwrap(),
+                vec![TranscriptSearchResult {
+                    start_ms: 1_000,
+                    end_ms: 2_000,
+                    text: "persistent transcript".to_owned(),
+                }]
+            );
+        }
+
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn promotion_marks_run_complete_with_all_progress_indexes() {
+        let directory = test_directory("analysis-promotion-progress");
+        let mut repository =
+            SqliteAnalysisRepository::open(directory.join("analysis.sqlite")).unwrap();
+        let key = AnalysisKey::new("media-a", "audio-v1", "groq/whisper-large-v3-turbo/segment");
+        repository
+            .save_run(&AnalysisRun {
+                key: key.clone(),
+                total_chunks: 3,
+                completed_chunk_indexes: vec![2, 0],
+                status: AnalysisStatus::Processing,
+                last_error: None,
+            })
+            .unwrap();
+
+        repository
+            .promote_transcript(&document(key.clone(), "complete transcript"))
+            .unwrap();
+
+        assert_eq!(
+            repository.load_run(&key).unwrap(),
+            Some(AnalysisRun {
+                key,
+                total_chunks: 3,
+                completed_chunk_indexes: vec![0, 1, 2],
+                status: AnalysisStatus::Complete,
+                last_error: None,
+            })
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn saving_a_run_canonicalizes_indexes_and_rejects_duplicates() {
+        let directory = test_directory("analysis-run-indexes");
+        let mut repository =
+            SqliteAnalysisRepository::open(directory.join("analysis.sqlite")).unwrap();
+        let key = AnalysisKey::new("media-a", "audio-v1", "groq/whisper-large-v3-turbo/segment");
+        let run = AnalysisRun {
+            key: key.clone(),
+            total_chunks: 3,
+            completed_chunk_indexes: vec![2, 0],
+            status: AnalysisStatus::Processing,
+            last_error: None,
+        };
+
+        repository.save_run(&run).unwrap();
+        assert_eq!(
+            repository.load_run(&key).unwrap(),
+            Some(AnalysisRun {
+                completed_chunk_indexes: vec![0, 2],
+                ..run
+            })
+        );
+        assert!(matches!(
+            repository.save_run(&AnalysisRun {
+                key,
+                total_chunks: 2,
+                completed_chunk_indexes: vec![0, 0],
+                status: AnalysisStatus::Processing,
+                last_error: None,
+            }),
+            Err(AnalysisError::InvalidData(_))
+        ));
+
         fs::remove_dir_all(directory).unwrap();
     }
 
