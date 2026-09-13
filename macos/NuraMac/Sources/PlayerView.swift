@@ -1374,7 +1374,7 @@ private struct AnalysisSidebarView: View {
 
     @ViewBuilder
     private var cloudAnalysisActions: some View {
-        if model.canUseLocalTranscriptTools {
+        if model.isCloudAnalysisActive || model.canResumeAnalysis || model.canReTranscribe || model.canStartInitialCloudAnalysis {
             VStack(alignment: .leading, spacing: 7) {
                 if let progressMessage = model.cloudAnalysisProgress.message {
                     Text(progressMessage)
@@ -1397,7 +1397,7 @@ private struct AnalysisSidebarView: View {
                     }
                     .controlSize(.small)
                     .accessibilityIdentifier("player.cloud-analysis")
-                } else {
+                } else if model.canStartInitialCloudAnalysis {
                     Button(model.cloudActionTitle, action: model.requestCloudAnalysis)
                         .controlSize(.small)
                         .accessibilityIdentifier("player.cloud-analysis")

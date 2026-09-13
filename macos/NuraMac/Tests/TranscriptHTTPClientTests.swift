@@ -73,6 +73,74 @@ final class TranscriptHTTPClientTests: XCTestCase {
         }
     }
 
+    func testInitialCloudAnalysisGuardRejectsAnyActiveTranscript() {
+        XCTAssertFalse(
+            CloudAnalysisWorkflowRules.canStartInitialAnalysis(
+                hasActiveTranscript: true,
+                isProcessing: false,
+                canResume: false,
+                canReTranscribe: false
+            )
+        )
+        XCTAssertTrue(
+            CloudAnalysisWorkflowRules.canStartInitialAnalysis(
+                hasActiveTranscript: false,
+                isProcessing: false,
+                canResume: false,
+                canReTranscribe: false
+            )
+        )
+    }
+
+    func testUnreadableMediaUsesTerminalNoContentRunBeforeCloudConfiguration() {
+        let key = AnalysisKey(
+            mediaFingerprint: "media",
+            sourceFingerprint: "audio-v1",
+            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+        )
+
+        let run = CloudAnalysisWorkflowRules.noContentRun(
+            key: key,
+            reason: AudioChunkExportError.unreadableMedia.localizedDescription
+        )
+
+        XCTAssertEqual(run.status, .noContent)
+        XCTAssertEqual(run.key, key)
+        XCTAssertEqual(run.completedChunkIndexes, [])
+    }
+
+    func testCancelledRunKeepsTheOriginalAnalysisKey() {
+        let original = AnalysisKey(
+            mediaFingerprint: "media-a",
+            sourceFingerprint: "audio-v1",
+            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+        )
+        let replacement = AnalysisKey(
+            mediaFingerprint: "media-b",
+            sourceFingerprint: "audio-v1",
+            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+        )
+        let existing = AnalysisRun(
+            key: original,
+            totalChunks: 3,
+            completedChunkIndexes: [0],
+            status: .processing,
+            lastError: nil
+        )
+
+        let cancelled = CloudAnalysisWorkflowRules.interruptedRun(
+            key: original,
+            existing: existing,
+            status: .cancelled,
+            message: nil
+        )
+
+        XCTAssertEqual(cancelled.key, original)
+        XCTAssertNotEqual(cancelled.key, replacement)
+        XCTAssertEqual(cancelled.completedChunkIndexes, [0])
+        XCTAssertEqual(cancelled.status, .cancelled)
+    }
+
     private func makeAudioFixture() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("TranscriptHTTPClientTests-\(UUID().uuidString).m4a")
         try Data([0, 1, 2]).write(to: url)

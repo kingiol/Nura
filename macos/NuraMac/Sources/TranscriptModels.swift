@@ -62,3 +62,39 @@ enum CloudAnalysisProgress: Equatable {
         }
     }
 }
+
+enum CloudAnalysisWorkflowRules {
+    static func canStartInitialAnalysis(
+        hasActiveTranscript: Bool,
+        isProcessing: Bool,
+        canResume: Bool,
+        canReTranscribe: Bool
+    ) -> Bool {
+        !hasActiveTranscript && !isProcessing && !canResume && !canReTranscribe
+    }
+
+    static func noContentRun(key: AnalysisKey, reason: String) -> AnalysisRun {
+        AnalysisRun(
+            key: key,
+            totalChunks: 0,
+            completedChunkIndexes: [],
+            status: .noContent,
+            lastError: reason
+        )
+    }
+
+    static func interruptedRun(
+        key: AnalysisKey,
+        existing: AnalysisRun?,
+        status: AnalysisStatus,
+        message: String?
+    ) -> AnalysisRun {
+        AnalysisRun(
+            key: key,
+            totalChunks: existing?.totalChunks ?? 0,
+            completedChunkIndexes: existing?.completedChunkIndexes ?? [],
+            status: status,
+            lastError: message
+        )
+    }
+}

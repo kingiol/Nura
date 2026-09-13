@@ -40,15 +40,21 @@ struct ExportedAudioChunk: Sendable {
 enum AudioChunkExporter {
     static func inspect(_ mediaURL: URL) async throws -> AudioAssetInfo {
         guard mediaURL.isFileURL else { throw AudioChunkExportError.remoteMedia }
-        let asset = AVURLAsset(url: mediaURL)
-        guard try await asset.load(.isReadable) else { throw AudioChunkExportError.unreadableMedia }
-        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        guard !audioTracks.isEmpty else { throw AudioChunkExportError.noAudio }
-        let duration = try await asset.load(.duration)
-        guard duration.isValid, duration.seconds.isFinite, duration.seconds > 0 else {
-            throw AudioChunkExportError.noDuration
+        do {
+            let asset = AVURLAsset(url: mediaURL)
+            guard try await asset.load(.isReadable) else { throw AudioChunkExportError.unreadableMedia }
+            let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+            guard !audioTracks.isEmpty else { throw AudioChunkExportError.noAudio }
+            let duration = try await asset.load(.duration)
+            guard duration.isValid, duration.seconds.isFinite, duration.seconds > 0 else {
+                throw AudioChunkExportError.noDuration
+            }
+            return AudioAssetInfo(durationMs: Int64((duration.seconds * 1_000).rounded(.up)))
+        } catch let error as AudioChunkExportError {
+            throw error
+        } catch {
+            throw AudioChunkExportError.unreadableMedia
         }
-        return AudioAssetInfo(durationMs: Int64((duration.seconds * 1_000).rounded(.up)))
     }
 
     static func export(
