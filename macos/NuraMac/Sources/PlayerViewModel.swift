@@ -89,6 +89,8 @@ final class PlayerViewModel {
     private(set) var transcriptSearchResults: [TranscriptSearchResult] = []
     private(set) var activeTranscriptKey: AnalysisKey?
     private(set) var analysisRun: AnalysisRun?
+    private(set) var cloudAnalysisProgress: CloudAnalysisProgress = .idle
+    private(set) var isCloudConsentPresented = false
     private(set) var embeddedSubtitleTracks: [EmbeddedSubtitleTrack] = []
     private(set) var embeddedSubtitleMessage: String?
     private(set) var isDiscoveringEmbeddedSubtitles = false
@@ -113,6 +115,9 @@ final class PlayerViewModel {
     private var isOpenGLContextAttached = false
     private var pendingOpenRequest: PendingOpenRequest?
     private var localAnalysisGeneration = 0
+    private var cloudAnalysisTask: Task<Void, Never>?
+    private var cloudAnalysisTaskID: UUID?
+    private var requestedCloudAnalysisAction: CloudAnalysisAction?
     private weak var playerWindow: NSWindow?
     private var windowVideoGeometry: VideoGeometry?
     private let screenshotDirectoryKey = "screenshotDirectory"
@@ -231,6 +236,35 @@ final class PlayerViewModel {
     var noContentExplanation: String? {
         guard case .noContent(let reason) = localTranscriptState else { return nil }
         return reason
+    }
+
+    var isCloudAnalysisActive: Bool {
+        if case .processing = cloudAnalysisProgress { return true }
+        return false
+    }
+
+    var canResumeAnalysis: Bool {
+        guard let analysisRun,
+              analysisRun.key == cloudAnalysisKey,
+              analysisRun.totalChunks > Int64(analysisRun.completedChunkIndexes.count),
+              !isCloudAnalysisActive else {
+            return false
+        }
+        return [.queued, .processing, .failed, .cancelled].contains(analysisRun.status)
+    }
+
+    var canReTranscribe: Bool {
+        guard let analysisRun, analysisRun.key == cloudAnalysisKey, !isCloudAnalysisActive else { return false }
+        if analysisRun.status == .noContent || analysisRun.status == .lowQuality {
+            return true
+        }
+        return analysisRun.status == .complete && transcriptDocument?.key == cloudAnalysisKey
+    }
+
+    var cloudActionTitle: String {
+        if canResumeAnalysis { return "Resume Analysis" }
+        if canReTranscribe { return analysisRun?.status == .noContent ? "Analyze Audio Again…" : "Re-transcribe…" }
+        return "Analyze with Cloud…"
     }
 
     var activeTranscriptQuote: String? {
@@ -563,7 +597,6 @@ final class PlayerViewModel {
             try bridge?.promoteTranscript(document)
             applyTranscript(document)
         }
-        analysisRun = try bridge?.loadAnalysisRun(key)
     }
 
     func extractEmbeddedSubtitle(track: EmbeddedSubtitleTrack) {
@@ -587,7 +620,6 @@ final class PlayerViewModel {
                 }
                 try self.bridge?.promoteTranscript(document)
                 self.applyTranscript(document)
-                self.analysisRun = try self.bridge?.loadAnalysisRun(document.key)
                 self.embeddedSubtitleMessage = nil
                 self.lastError = nil
             } catch {
@@ -617,8 +649,46 @@ final class PlayerViewModel {
         transcriptSearchResults = []
     }
 
+    func requestCloudAnalysis() {
+        guard canUseLocalTranscriptTools else {
+            Task { await startCloudAnalysis(action: .initial) }
+            return
+        }
+        guard !isCloudAnalysisActive else { return }
+        requestedCloudAnalysisAction = .initial
+        isCloudConsentPresented = true
+    }
+
+    func dismissCloudConsent() {
+        requestedCloudAnalysisAction = nil
+        isCloudConsentPresented = false
+    }
+
+    func analyzeWithCloud() async {
+        guard !isCloudAnalysisActive else { return }
+        let action = requestedCloudAnalysisAction ?? .initial
+        requestedCloudAnalysisAction = nil
+        isCloudConsentPresented = false
+        await startCloudAnalysis(action: action)
+    }
+
+    func cancelAnalysis() {
+        cloudAnalysisTask?.cancel()
+    }
+
+    func resumeAnalysis() async {
+        guard canResumeAnalysis else { return }
+        await startCloudAnalysis(action: .resume)
+    }
+
+    func reTranscribe() async {
+        guard canReTranscribe else { return }
+        requestedCloudAnalysisAction = .retranscribe
+        isCloudConsentPresented = true
+    }
+
     func beginNoteCapture() {
-        guard let mediaFingerprint, let item = snapshot.item else {
+        guard mediaFingerprint != nil, let item = snapshot.item else {
             showError(L10n.text("Open local media before creating a note"))
             return
         }
@@ -1410,6 +1480,12 @@ final class PlayerViewModel {
 
     private func resetLocalAnalysis() {
         localAnalysisGeneration &+= 1
+        cloudAnalysisTask?.cancel()
+        cloudAnalysisTask = nil
+        cloudAnalysisTaskID = nil
+        requestedCloudAnalysisAction = nil
+        isCloudConsentPresented = false
+        cloudAnalysisProgress = .idle
         mediaFingerprint = nil
         localTranscriptState = .unavailable
         transcriptDocument = nil
@@ -1475,6 +1551,308 @@ final class PlayerViewModel {
         activeTranscriptKey = document.key
         transcriptSearchResults = []
         localTranscriptState = .transcript
+    }
+
+    private enum CloudAnalysisAction {
+        case initial
+        case resume
+        case retranscribe
+    }
+
+    private var cloudAnalysisKey: AnalysisKey? {
+        guard let mediaFingerprint else { return nil }
+        return AnalysisKey(
+            mediaFingerprint: mediaFingerprint,
+            sourceFingerprint: "audio-v1",
+            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+        )
+    }
+
+    private var cloudCheckpointDirectory: URL {
+        stateDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Nura", isDirectory: true)
+    }
+
+    private func startCloudAnalysis(action: CloudAnalysisAction) async {
+        guard cloudAnalysisTask == nil else { return }
+        let generation = localAnalysisGeneration
+        let taskID = UUID()
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performCloudAnalysis(action: action, generation: generation)
+        }
+        cloudAnalysisTask = task
+        cloudAnalysisTaskID = taskID
+        await task.value
+        if cloudAnalysisTaskID == taskID {
+            cloudAnalysisTask = nil
+            cloudAnalysisTaskID = nil
+        }
+    }
+
+    private func performCloudAnalysis(action: CloudAnalysisAction, generation: Int) async {
+        guard let bridge else {
+            updateCloudFailure("Transcript analysis is unavailable.", generation: generation)
+            return
+        }
+        guard let mediaURL = localMediaURL, let key = cloudAnalysisKey else {
+            await saveUnavailableCloudAnalysis(bridge: bridge, generation: generation)
+            return
+        }
+
+        do {
+            let configuration = try cloudConfiguration()
+            let assetInfo: AudioAssetInfo
+            do {
+                assetInfo = try await AudioChunkExporter.inspect(mediaURL)
+            } catch let error as AudioChunkExportError where error == .noAudio || error == .noDuration {
+                let run = AnalysisRun(
+                    key: key,
+                    totalChunks: 0,
+                    completedChunkIndexes: [],
+                    status: .noContent,
+                    lastError: error.localizedDescription
+                )
+                try bridge.saveAnalysisRun(run)
+                if localAnalysisGeneration == generation {
+                    analysisRun = run
+                    if transcriptDocument == nil {
+                        localTranscriptState = .noContent(error.localizedDescription)
+                    }
+                    cloudAnalysisProgress = .idle
+                    lastError = nil
+                }
+                return
+            }
+
+            let plan = AudioChunkPlan(durationMs: assetInfo.durationMs)
+            guard !plan.chunks.isEmpty else {
+                let run = AnalysisRun(
+                    key: key,
+                    totalChunks: 0,
+                    completedChunkIndexes: [],
+                    status: .noContent,
+                    lastError: AudioChunkExportError.noDuration.localizedDescription
+                )
+                try bridge.saveAnalysisRun(run)
+                if localAnalysisGeneration == generation {
+                    analysisRun = run
+                    if transcriptDocument == nil {
+                        localTranscriptState = .noContent(AudioChunkExportError.noDuration.localizedDescription)
+                    }
+                    cloudAnalysisProgress = .idle
+                    lastError = nil
+                }
+                return
+            }
+
+            var run: AnalysisRun
+            var checkpoint: CloudAnalysisCheckpoint
+            switch action {
+            case .resume:
+                guard let savedRun = try bridge.loadAnalysisRun(key), savedRun.totalChunks == Int64(plan.chunks.count) else {
+                    throw PlayerBridgeError.command("This analysis cannot be resumed. Start a new analysis instead.")
+                }
+                guard let savedCheckpoint = try CloudAnalysisCheckpointStore.load(from: cloudCheckpointDirectory, key: key),
+                      savedCheckpoint.key == key else {
+                    throw PlayerBridgeError.command("The saved partial transcript is unavailable. Re-transcribe to start over.")
+                }
+                let checkpointIndexes = Set(savedCheckpoint.chunks.keys.map(Int64.init))
+                let planIndexes = Set(plan.chunks.map { Int64($0.index) })
+                guard Set(savedRun.completedChunkIndexes).isSubset(of: checkpointIndexes),
+                      checkpointIndexes.isSubset(of: planIndexes) else {
+                    throw PlayerBridgeError.command("The saved partial transcript is unavailable. Re-transcribe to start over.")
+                }
+                run = AnalysisRun(
+                    key: key,
+                    totalChunks: savedRun.totalChunks,
+                    completedChunkIndexes: Array(checkpointIndexes).sorted(),
+                    status: .processing,
+                    lastError: nil
+                )
+                checkpoint = savedCheckpoint
+            case .initial, .retranscribe:
+                CloudAnalysisCheckpointStore.remove(from: cloudCheckpointDirectory, key: key)
+                run = AnalysisRun(
+                    key: key,
+                    totalChunks: Int64(plan.chunks.count),
+                    completedChunkIndexes: [],
+                    status: .queued,
+                    lastError: nil
+                )
+                checkpoint = CloudAnalysisCheckpoint(key: key, chunks: [:], providerID: nil, modelRevision: nil)
+            }
+
+            try bridge.saveAnalysisRun(run)
+            updateCloudProcessing(run: run, generation: generation)
+            let client = TranscriptHTTPClient()
+            for plannedChunk in plan.chunks where !run.completedChunkIndexes.contains(Int64(plannedChunk.index)) {
+                try Task.checkCancellation()
+                run = AnalysisRun(
+                    key: key,
+                    totalChunks: run.totalChunks,
+                    completedChunkIndexes: run.completedChunkIndexes,
+                    status: .processing,
+                    lastError: nil
+                )
+                try bridge.saveAnalysisRun(run)
+                let exported = try await AudioChunkExporter.export(mediaURL: mediaURL, plannedChunk: plannedChunk)
+                defer { exported.removeTemporaryFiles() }
+                try Task.checkCancellation()
+                let result = try await client.transcribe(chunk: exported.chunk, configuration: configuration)
+                let segments = normalizedCloudSegments(result.segments)
+                checkpoint.chunks[plannedChunk.index] = segments
+                checkpoint.providerID = result.providerID
+                checkpoint.modelRevision = result.modelRevision
+                try CloudAnalysisCheckpointStore.save(checkpoint, in: cloudCheckpointDirectory)
+                run = AnalysisRun(
+                    key: key,
+                    totalChunks: run.totalChunks,
+                    completedChunkIndexes: run.completedChunkIndexes + [Int64(plannedChunk.index)],
+                    status: .processing,
+                    lastError: nil
+                )
+                try bridge.saveAnalysisRun(run)
+                updateCloudProcessing(run: run, generation: generation)
+            }
+
+            let segments = checkpoint.chunks
+                .sorted(by: { $0.key < $1.key })
+                .flatMap(\.value)
+                .sorted { lhs, rhs in
+                    lhs.startMs == rhs.startMs ? lhs.endMs < rhs.endMs : lhs.startMs < rhs.startMs
+                }
+            if segments.isEmpty {
+                let noContent = AnalysisRun(
+                    key: key,
+                    totalChunks: Int64(plan.chunks.count),
+                    completedChunkIndexes: plan.chunks.map { Int64($0.index) },
+                    status: .noContent,
+                    lastError: "No searchable speech was returned from the audio."
+                )
+                try bridge.saveAnalysisRun(noContent)
+                CloudAnalysisCheckpointStore.remove(from: cloudCheckpointDirectory, key: key)
+                if localAnalysisGeneration == generation {
+                    analysisRun = noContent
+                    if transcriptDocument == nil {
+                        localTranscriptState = .noContent(noContent.lastError)
+                    }
+                    cloudAnalysisProgress = .idle
+                    lastError = nil
+                }
+                return
+            }
+
+            let document = TranscriptDocument(
+                key: key,
+                source: "cloud_audio",
+                providerID: checkpoint.providerID,
+                modelRevision: checkpoint.modelRevision,
+                segments: segments
+            )
+            try bridge.promoteTranscript(document)
+            CloudAnalysisCheckpointStore.remove(from: cloudCheckpointDirectory, key: key)
+            let completedRun = try bridge.loadAnalysisRun(key)
+            if localAnalysisGeneration == generation {
+                analysisRun = completedRun
+                applyTranscript(document)
+                cloudAnalysisProgress = .idle
+                lastError = nil
+            }
+        } catch is CancellationError {
+            await persistCloudInterruption(status: .cancelled, message: nil, generation: generation)
+        } catch {
+            if Task.isCancelled {
+                await persistCloudInterruption(status: .cancelled, message: nil, generation: generation)
+            } else {
+                await persistCloudInterruption(status: .failed, message: error.localizedDescription, generation: generation)
+            }
+        }
+    }
+
+    private func saveUnavailableCloudAnalysis(bridge: PlayerBridge, generation: Int) async {
+        guard let item = snapshot.item else {
+            updateCloudFailure("Open local media before analyzing audio.", generation: generation)
+            return
+        }
+        let remoteFingerprint = SubtitleParser.sourceFingerprint(data: Data(item.locator.utf8), trackIdentifier: "remote")
+        let key = AnalysisKey(
+            mediaFingerprint: remoteFingerprint,
+            sourceFingerprint: "audio-v1",
+            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+        )
+        do {
+            try saveNoContentRun(bridge: bridge, key: key, reason: AudioChunkExportError.remoteMedia.localizedDescription)
+            updateCloudFailure(AudioChunkExportError.remoteMedia.localizedDescription, generation: generation)
+        } catch {
+            updateCloudFailure(error.localizedDescription, generation: generation)
+        }
+    }
+
+    private func saveNoContentRun(bridge: PlayerBridge, key: AnalysisKey, reason: String) throws {
+        try bridge.saveAnalysisRun(
+            AnalysisRun(
+                key: key,
+                totalChunks: 0,
+                completedChunkIndexes: [],
+                status: .noContent,
+                lastError: reason
+            )
+        )
+    }
+
+    private func cloudConfiguration() throws -> TranscriptHTTPConfiguration {
+        let value = settings.aiAPIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let baseURL = URL(string: value) else { throw TranscriptHTTPClientError.invalidBaseURL }
+        return try TranscriptHTTPConfiguration(baseURL: baseURL, bearerToken: settings.aiAPIBearerToken)
+    }
+
+    private func normalizedCloudSegments(_ segments: [TranscriptSegment]) -> [TranscriptSegment] {
+        segments.compactMap { segment in
+            let text = SubtitleParser.normalizedText(segment.text)
+            guard segment.startMs >= 0, segment.endMs > segment.startMs, !text.isEmpty else { return nil }
+            return TranscriptSegment(startMs: segment.startMs, endMs: segment.endMs, text: text)
+        }
+    }
+
+    private func updateCloudProcessing(run: AnalysisRun, generation: Int) {
+        guard localAnalysisGeneration == generation else { return }
+        analysisRun = run
+        cloudAnalysisProgress = .processing(
+            completedChunks: run.completedChunkIndexes.count,
+            totalChunks: Int(run.totalChunks)
+        )
+        lastError = nil
+    }
+
+    private func persistCloudInterruption(status: AnalysisStatus, message: String?, generation: Int) async {
+        guard let bridge, let key = cloudAnalysisKey else {
+            updateCloudFailure(message ?? "Audio analysis was interrupted.", generation: generation)
+            return
+        }
+        do {
+            let existing = try bridge.loadAnalysisRun(key)
+            let run = AnalysisRun(
+                key: key,
+                totalChunks: existing?.totalChunks ?? 0,
+                completedChunkIndexes: existing?.completedChunkIndexes ?? [],
+                status: status,
+                lastError: message
+            )
+            try bridge.saveAnalysisRun(run)
+            guard localAnalysisGeneration == generation else { return }
+            analysisRun = run
+            cloudAnalysisProgress = status == .cancelled ? .cancelled : .failed(message ?? "Audio analysis failed.")
+            if status != .cancelled { lastError = message }
+        } catch {
+            updateCloudFailure(error.localizedDescription, generation: generation)
+        }
+    }
+
+    private func updateCloudFailure(_ message: String, generation: Int) {
+        guard localAnalysisGeneration == generation else { return }
+        cloudAnalysisProgress = .failed(message)
+        lastError = message
     }
 
     private func replaceNote(_ note: InstantNote) {

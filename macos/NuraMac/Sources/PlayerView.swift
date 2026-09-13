@@ -1252,6 +1252,14 @@ private struct AnalysisSidebarView: View {
         .sheet(isPresented: $isChoosingEmbeddedTrack) {
             embeddedTrackPicker
         }
+        .sheet(isPresented: Binding(
+            get: { model.isCloudConsentPresented },
+            set: { presented in
+                if !presented { model.dismissCloudConsent() }
+            }
+        )) {
+            cloudAnalysisConsent
+        }
         .accessibilityIdentifier("player.analysis-sidebar")
     }
 
@@ -1286,6 +1294,7 @@ private struct AnalysisSidebarView: View {
                     transcriptResult(result)
                 }
             }
+            cloudAnalysisActions
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text(model.localTranscriptState.message)
@@ -1300,6 +1309,7 @@ private struct AnalysisSidebarView: View {
                         .foregroundStyle(.secondary)
                 }
                 subtitleActions
+                cloudAnalysisActions
                 if let message = model.embeddedSubtitleMessage, !message.isEmpty {
                     Text(message)
                         .font(.caption)
@@ -1360,6 +1370,40 @@ private struct AnalysisSidebarView: View {
             }
         }
         .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private var cloudAnalysisActions: some View {
+        if model.canUseLocalTranscriptTools {
+            VStack(alignment: .leading, spacing: 7) {
+                if let progressMessage = model.cloudAnalysisProgress.message {
+                    Text(progressMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if model.isCloudAnalysisActive {
+                    Button("Cancel Analysis", role: .cancel, action: model.cancelAnalysis)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("player.cloud-analysis-cancel")
+                } else if model.canResumeAnalysis {
+                    Button("Resume Analysis") {
+                        Task { await model.resumeAnalysis() }
+                    }
+                    .controlSize(.small)
+                    .accessibilityIdentifier("player.cloud-analysis")
+                } else if model.canReTranscribe {
+                    Button(model.cloudActionTitle) {
+                        Task { await model.reTranscribe() }
+                    }
+                    .controlSize(.small)
+                    .accessibilityIdentifier("player.cloud-analysis")
+                } else {
+                    Button(model.cloudActionTitle, action: model.requestCloudAnalysis)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("player.cloud-analysis")
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -1442,6 +1486,26 @@ private struct AnalysisSidebarView: View {
         }
         .padding(20)
         .frame(width: 380)
+    }
+
+    private var cloudAnalysisConsent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Analyze with Groq Whisper Turbo?")
+                .font(.headline)
+            Text("Nura will upload audio chunks to the configured AI API. Transcript results are stored locally on this Mac.")
+                .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Cancel", action: model.dismissCloudConsent)
+                Button("Analyze Audio") {
+                    Task { await model.analyzeWithCloud() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("player.cloud-consent-confirm")
+            }
+        }
+        .padding(20)
+        .frame(width: 430)
     }
 
     private func formatMilliseconds(_ milliseconds: Int64) -> String {

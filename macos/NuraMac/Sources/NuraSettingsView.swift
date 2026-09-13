@@ -327,6 +327,11 @@ private struct NetworkSettingsPage: View {
                         : L10n.format("Maximum cache: %d KiB", settings.cacheSizeKiB))
                 }
             }
+            Section("AI Transcription") {
+                TextField("API base URL", text: $settings.aiAPIBaseURL)
+                    .textContentType(.URL)
+                SecureField("Bearer token", text: $settings.aiAPIBearerToken)
+            }
         }
         .formStyle(.grouped)
         .padding()

@@ -42,3 +42,23 @@ enum LocalTranscriptState: Equatable {
         }
     }
 }
+
+enum CloudAnalysisProgress: Equatable {
+    case idle
+    case processing(completedChunks: Int, totalChunks: Int)
+    case failed(String)
+    case cancelled
+
+    var message: String? {
+        switch self {
+        case .idle:
+            return nil
+        case .processing(let completedChunks, let totalChunks):
+            return "Analyzing audio \(completedChunks) of \(totalChunks)…"
+        case .failed(let message):
+            return message
+        case .cancelled:
+            return "Audio analysis was cancelled."
+        }
+    }
+}

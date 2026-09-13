@@ -142,6 +142,7 @@ final class NuraSettings {
         static let userAgent = "userAgent"
         static let shortcuts = "shortcuts"
         static let advancedOptions = "advancedOptions"
+        static let aiAPIBaseURL = "aiAPIBaseURL"
     }
 
     private let defaults: UserDefaults
@@ -162,6 +163,8 @@ final class NuraSettings {
     var userAgent: String { didSet { defaults.set(userAgent, forKey: Key.userAgent) } }
     var shortcuts: [ShortcutAction: ShortcutBinding] { didSet { save(shortcuts, key: Key.shortcuts) } }
     var advancedOptions: [AdvancedMpvOption] { didSet { save(advancedOptions, key: Key.advancedOptions) } }
+    var aiAPIBaseURL: String { didSet { defaults.set(aiAPIBaseURL, forKey: Key.aiAPIBaseURL) } }
+    var aiAPIBearerToken: String { didSet { KeychainStore.set(aiAPIBearerToken, for: "nura-api-bearer-token") } }
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -186,6 +189,8 @@ final class NuraSettings {
         userAgent = defaults.string(forKey: Key.userAgent) ?? ""
         shortcuts = Self.load([ShortcutAction: ShortcutBinding].self, from: defaults, key: Key.shortcuts) ?? ShortcutBinding.defaults
         advancedOptions = Self.load([AdvancedMpvOption].self, from: defaults, key: Key.advancedOptions) ?? []
+        aiAPIBaseURL = defaults.string(forKey: Key.aiAPIBaseURL) ?? ""
+        aiAPIBearerToken = KeychainStore.value(for: "nura-api-bearer-token")
     }
 
     func binding(for action: ShortcutAction) -> ShortcutBinding {

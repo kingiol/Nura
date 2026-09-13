@@ -159,6 +159,7 @@ final class NuraMacUITests: XCTestCase {
         XCTAssertTrue(transcript.waitForExistence(timeout: 15))
         transcript.click()
         XCTAssertTrue(app.otherElements["player.analysis-sidebar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["player.cloud-analysis"].exists)
 
         let note = app.buttons["player.note-capture"]
         XCTAssertTrue(note.waitForExistence(timeout: 5))
