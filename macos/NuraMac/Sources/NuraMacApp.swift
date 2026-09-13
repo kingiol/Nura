@@ -95,6 +95,7 @@ private struct AdditionalPlayerWindow: View {
 private struct NuraPlayerCommands: Commands {
     let playerWindows: PlayerWindowManager
     let settings: NuraSettings
+    private let playbackSpeedValues = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -137,6 +138,21 @@ private struct NuraPlayerCommands: Commands {
                 .disabled(!(playerWindows.activeModel?.canFrameStep ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .frameBackStep), modifiers: settings.modifiers(for: .frameBackStep))
             Divider()
+            Menu("Playback Speed") {
+                ForEach(playbackSpeedValues, id: \.self) { value in
+                    Button {
+                        playerWindows.activeModel?.setSpeed(value)
+                    } label: {
+                        HStack {
+                            Text(speedLabel(for: value))
+                            if abs((playerWindows.activeModel?.snapshot.speed ?? 0) - value) < 0.001 {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+            .disabled(playerWindows.activeModel == nil)
             Button(L10n.format("Seek Backward %d Seconds", Int(settings.shortSeekSeconds))) { playerWindows.activeModel?.seekRelative(-settings.shortSeekSeconds) }
                 .disabled(!(playerWindows.activeModel?.canSeek ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .seekBackward), modifiers: settings.modifiers(for: .seekBackward))
@@ -154,5 +170,9 @@ private struct NuraPlayerCommands: Commands {
             Button("Picture in Picture", action: { playerWindows.activeModel?.togglePiP() })
                 .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
         }
+    }
+
+    private func speedLabel(for value: Double) -> String {
+        value == 1.0 ? "1x" : "\(value)x"
     }
 }

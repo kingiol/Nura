@@ -294,6 +294,11 @@ struct PlayerView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 12) {
+                    SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+                        .help("Playback speed")
+                        .accessibilityIdentifier("player.speed-menu")
+                        .accessibilityLabel("Playback speed")
+
                     Button(action: model.togglePiP) {
                         Image(systemName: "pip")
                     }
