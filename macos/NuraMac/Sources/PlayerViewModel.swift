@@ -1667,6 +1667,9 @@ final class PlayerViewModel {
             do {
                 assetInfo = try await AudioChunkExporter.inspect(mediaURL)
             } catch let error as AudioChunkExportError {
+                if CloudAnalysisWorkflowRules.inspectionStatus(isCancelled: Task.isCancelled) == .cancelled {
+                    throw CancellationError()
+                }
                 persistNoContent(bridge: bridge, key: target.key, reason: error.localizedDescription, generation: generation)
                 return
             }

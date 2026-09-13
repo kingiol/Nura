@@ -92,6 +92,11 @@ final class TranscriptHTTPClientTests: XCTestCase {
         )
     }
 
+    func testCancellationTakesPrecedenceOverNoContentInspectionResult() {
+        XCTAssertEqual(CloudAnalysisWorkflowRules.inspectionStatus(isCancelled: true), .cancelled)
+        XCTAssertEqual(CloudAnalysisWorkflowRules.inspectionStatus(isCancelled: false), .noContent)
+    }
+
     func testUnreadableMediaUsesTerminalNoContentRunBeforeCloudConfiguration() {
         let key = AnalysisKey(
             mediaFingerprint: "media",

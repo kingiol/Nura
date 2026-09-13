@@ -64,6 +64,10 @@ enum CloudAnalysisProgress: Equatable {
 }
 
 enum CloudAnalysisWorkflowRules {
+    static func inspectionStatus(isCancelled: Bool) -> AnalysisStatus {
+        isCancelled ? .cancelled : .noContent
+    }
+
     static func canStartInitialAnalysis(
         hasActiveTranscript: Bool,
         isProcessing: Bool,

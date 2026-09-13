@@ -41,15 +41,21 @@ enum AudioChunkExporter {
     static func inspect(_ mediaURL: URL) async throws -> AudioAssetInfo {
         guard mediaURL.isFileURL else { throw AudioChunkExportError.remoteMedia }
         do {
+            try Task.checkCancellation()
             let asset = AVURLAsset(url: mediaURL)
             guard try await asset.load(.isReadable) else { throw AudioChunkExportError.unreadableMedia }
+            try Task.checkCancellation()
             let audioTracks = try await asset.loadTracks(withMediaType: .audio)
             guard !audioTracks.isEmpty else { throw AudioChunkExportError.noAudio }
+            try Task.checkCancellation()
             let duration = try await asset.load(.duration)
             guard duration.isValid, duration.seconds.isFinite, duration.seconds > 0 else {
                 throw AudioChunkExportError.noDuration
             }
+            try Task.checkCancellation()
             return AudioAssetInfo(durationMs: Int64((duration.seconds * 1_000).rounded(.up)))
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as AudioChunkExportError {
             throw error
         } catch {
