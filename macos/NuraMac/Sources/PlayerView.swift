@@ -803,10 +803,6 @@ private struct SettingsSidebarView: View {
 
     @ViewBuilder
     private var generalContent: some View {
-        settingsSection("Playback") {
-            SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
-        }
-
         settingsSection("Looping") {
             Button(action: model.toggleLoop) {
                 Label(model.loopEnabled ? "Disable Loop" : "Loop Current Item", systemImage: model.loopEnabled ? "repeat.1" : "repeat")
