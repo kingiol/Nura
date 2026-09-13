@@ -104,6 +104,151 @@ private func nura_player_next_event(_ player: NuraHandle?) -> UnsafeMutablePoint
 private func nura_string_free(_ value: UnsafeMutablePointer<CChar>?)
 @_silgen_name("nura_last_error")
 private func nura_last_error() -> UnsafeMutablePointer<CChar>?
+@_silgen_name("nura_analysis_load_json")
+private func nura_analysis_load_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("nura_analysis_search_json")
+private func nura_analysis_search_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("nura_analysis_promote_json")
+private func nura_analysis_promote_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_analysis_load_run_json")
+private func nura_analysis_load_run_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("nura_analysis_save_run_json")
+private func nura_analysis_save_run_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_analysis_delete_json")
+private func nura_analysis_delete_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_analysis_create_note_json")
+private func nura_analysis_create_note_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("nura_analysis_update_note_json")
+private func nura_analysis_update_note_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> Int32
+@_silgen_name("nura_analysis_delete_note_json")
+private func nura_analysis_delete_note_json(_ player: NuraHandle?, _ input: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+
+struct AnalysisKey: Codable, Equatable {
+    let mediaFingerprint: String
+    let sourceFingerprint: String
+    let analysisProfile: String
+
+    enum CodingKeys: String, CodingKey {
+        case mediaFingerprint = "media_fingerprint"
+        case sourceFingerprint = "source_fingerprint"
+        case analysisProfile = "analysis_profile"
+    }
+}
+
+struct TranscriptSegment: Codable, Equatable {
+    let startMs: Int64
+    let endMs: Int64
+    let text: String
+
+    enum CodingKeys: String, CodingKey {
+        case startMs = "start_ms"
+        case endMs = "end_ms"
+        case text
+    }
+}
+
+struct TranscriptDocument: Codable, Equatable {
+    let key: AnalysisKey
+    let source: String
+    let providerID: String?
+    let modelRevision: String?
+    let segments: [TranscriptSegment]
+
+    enum CodingKeys: String, CodingKey {
+        case key, source, segments
+        case providerID = "provider_id"
+        case modelRevision = "model_revision"
+    }
+}
+
+struct TranscriptSearchResult: Codable, Equatable {
+    let startMs: Int64
+    let endMs: Int64
+    let text: String
+
+    enum CodingKeys: String, CodingKey {
+        case startMs = "start_ms"
+        case endMs = "end_ms"
+        case text
+    }
+}
+
+enum AnalysisStatus: String, Codable {
+    case idle
+    case queued
+    case processing
+    case complete
+    case noContent = "no_content"
+    case lowQuality = "low_quality"
+    case failed
+    case cancelled
+}
+
+struct AnalysisRun: Codable, Equatable {
+    let key: AnalysisKey
+    let totalChunks: Int64
+    let completedChunkIndexes: [Int64]
+    let status: AnalysisStatus
+    let lastError: String?
+
+    enum CodingKeys: String, CodingKey {
+        case key, status
+        case totalChunks = "total_chunks"
+        case completedChunkIndexes = "completed_chunk_indexes"
+        case lastError = "last_error"
+    }
+}
+
+struct InstantNote: Codable, Equatable, Identifiable {
+    let id: Int64
+    let mediaFingerprint: String
+    let positionMs: Int64
+    let mediaTitle: String
+    let transcriptQuote: String?
+    let screenshotReference: String?
+    let body: String
+    let createdAtMs: Int64
+    let updatedAtMs: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id, body
+        case mediaFingerprint = "media_fingerprint"
+        case positionMs = "position_ms"
+        case mediaTitle = "media_title"
+        case transcriptQuote = "transcript_quote"
+        case screenshotReference = "screenshot_reference"
+        case createdAtMs = "created_at_ms"
+        case updatedAtMs = "updated_at_ms"
+    }
+}
+
+struct NewInstantNote: Codable, Equatable {
+    let mediaFingerprint: String
+    let positionMs: Int64
+    let mediaTitle: String
+    let transcriptQuote: String?
+    let screenshotReference: String?
+    let body: String
+
+    enum CodingKeys: String, CodingKey {
+        case body
+        case mediaFingerprint = "media_fingerprint"
+        case positionMs = "position_ms"
+        case mediaTitle = "media_title"
+        case transcriptQuote = "transcript_quote"
+        case screenshotReference = "screenshot_reference"
+    }
+}
+
+private struct TranscriptSearchRequest: Encodable {
+    let key: AnalysisKey
+    let query: String
+    let limit: Int
+}
+
+private struct DeleteNoteRequest: Encodable {
+    let id: Int64
+}
 
 struct Track: Decodable {
     let id: Int64
@@ -249,6 +394,7 @@ enum PlayerBridgeError: LocalizedError {
 final class PlayerBridge {
     private var handle: NuraHandle?
     private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
 
     init(stateDirectory: URL? = nil, startupOptionsJSON: String = "{}") throws {
         let directory = stateDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -330,6 +476,49 @@ final class PlayerBridge {
     func attachOpenGLContext() throws { try command { nura_player_attach_opengl_context(handle) } }
     func detachOpenGLContext() throws { try command { nura_player_detach_opengl_context(handle) } }
 
+    func loadTranscript(_ key: AnalysisKey) throws -> TranscriptDocument? {
+        try query(key, invoke: nura_analysis_load_json)
+    }
+
+    func searchTranscript(
+        key: AnalysisKey,
+        query: String,
+        limit: Int
+    ) throws -> [TranscriptSearchResult] {
+        try self.query(
+            TranscriptSearchRequest(key: key, query: query, limit: limit),
+            invoke: nura_analysis_search_json
+        )
+    }
+
+    func loadAnalysisRun(_ key: AnalysisKey) throws -> AnalysisRun? {
+        try query(key, invoke: nura_analysis_load_run_json)
+    }
+
+    func promoteTranscript(_ document: TranscriptDocument) throws {
+        try mutation(document, invoke: nura_analysis_promote_json)
+    }
+
+    func saveAnalysisRun(_ run: AnalysisRun) throws {
+        try mutation(run, invoke: nura_analysis_save_run_json)
+    }
+
+    func deleteAnalysis(_ key: AnalysisKey) throws {
+        try mutation(key, invoke: nura_analysis_delete_json)
+    }
+
+    func createNote(_ note: NewInstantNote) throws -> InstantNote {
+        try query(note, invoke: nura_analysis_create_note_json)
+    }
+
+    func updateNote(_ note: InstantNote) throws {
+        try mutation(note, invoke: nura_analysis_update_note_json)
+    }
+
+    func deleteNote(id: Int64) throws -> InstantNote {
+        try query(DeleteNoteRequest(id: id), invoke: nura_analysis_delete_note_json)
+    }
+
     func render(fbo: Int32, width: Int32, height: Int32) throws -> Bool {
         switch nura_player_render_opengl(handle, fbo, width, height) {
         case 0:
@@ -353,6 +542,40 @@ final class PlayerBridge {
 
     private func command(_ operation: () -> Int32) throws {
         guard operation() == 0 else { throw PlayerBridgeError.command(Self.lastError()) }
+    }
+
+    private func query<Input: Encodable, Output: Decodable>(
+        _ input: Input,
+        invoke: (NuraHandle?, UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+    ) throws -> Output {
+        let request: String
+        do {
+            request = String(decoding: try encoder.encode(input), as: UTF8.self)
+        } catch {
+            throw PlayerBridgeError.command("Failed to encode analysis request: \(error.localizedDescription)")
+        }
+        guard let raw = request.withCString({ invoke(handle, $0) }) else {
+            throw PlayerBridgeError.command(Self.lastError())
+        }
+        defer { nura_string_free(raw) }
+        do {
+            return try decoder.decode(Output.self, from: Data(String(cString: raw).utf8))
+        } catch {
+            throw PlayerBridgeError.command("Failed to decode analysis response: \(error.localizedDescription)")
+        }
+    }
+
+    private func mutation<Input: Encodable>(
+        _ input: Input,
+        invoke: (NuraHandle?, UnsafePointer<CChar>?) -> Int32
+    ) throws {
+        let request: String
+        do {
+            request = String(decoding: try encoder.encode(input), as: UTF8.self)
+        } catch {
+            throw PlayerBridgeError.command("Failed to encode analysis request: \(error.localizedDescription)")
+        }
+        try command { request.withCString { invoke(handle, $0) } }
     }
 
     private static func lastError() -> String {

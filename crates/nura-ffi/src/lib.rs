@@ -5,12 +5,16 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, TryLockError, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use nura_domain::TrackKind;
-use nura_library::SqliteHistoryRepository;
+use nura_domain::{
+    AnalysisKey, AnalysisRun, InstantNote, NewInstantNote, TrackKind, TranscriptDocument,
+};
+use nura_library::{AnalysisRepository, SqliteAnalysisRepository, SqliteHistoryRepository};
 use nura_mpv::{MpvEngine, MpvStartupOptions, SharedMpvEngine};
 use nura_player_core::{PlayerEvent, PlayerSession};
+use serde::Deserialize;
 
 type Reply = mpsc::SyncSender<Result<(), String>>;
+type JsonReply = mpsc::SyncSender<Result<String, String>>;
 
 // A busy engine is a normal dropped video frame, not a render failure.
 const NURA_RENDER_SKIPPED: c_int = 1;
@@ -52,8 +56,39 @@ enum Command {
     AudioTrack(Option<i64>, Reply),
     SubtitleTrack(Option<i64>, Reply),
     VideoTrack(Option<i64>, Reply),
+    AnalysisLoad {
+        key: AnalysisKey,
+        reply: JsonReply,
+    },
+    AnalysisSearch {
+        request: TranscriptSearchRequest,
+        reply: JsonReply,
+    },
+    AnalysisPromote(TranscriptDocument, Reply),
+    AnalysisLoadRun {
+        key: AnalysisKey,
+        reply: JsonReply,
+    },
+    AnalysisSaveRun(AnalysisRun, Reply),
+    AnalysisDelete(AnalysisKey, Reply),
+    AnalysisCreateNote {
+        note: NewInstantNote,
+        reply: JsonReply,
+    },
+    AnalysisUpdateNote(InstantNote, Reply),
+    AnalysisDeleteNote {
+        id: i64,
+        reply: JsonReply,
+    },
     Async(AsyncCommand),
     Shutdown(Reply),
+}
+
+#[derive(Deserialize)]
+struct TranscriptSearchRequest {
+    key: AnalysisKey,
+    query: String,
+    limit: usize,
 }
 
 enum AsyncCommand {
@@ -254,6 +289,7 @@ fn apply_pending_volume(
 
 fn handle_command(
     session: &mut PlayerSession<SharedMpvEngine, SqliteHistoryRepository>,
+    analysis: &mut SqliteAnalysisRepository,
     command: Command,
     events: &Arc<Mutex<VecDeque<PlayerEvent>>>,
 ) -> bool {
@@ -308,6 +344,76 @@ fn handle_command(
         Command::AudioTrack(id, reply) => (session.select_track(TrackKind::Audio, id), reply),
         Command::SubtitleTrack(id, reply) => (session.select_track(TrackKind::Subtitle, id), reply),
         Command::VideoTrack(id, reply) => (session.select_track(TrackKind::Video, id), reply),
+        Command::AnalysisLoad { key, reply } => {
+            let result = analysis
+                .complete_transcript(&key)
+                .map_err(|error| error.to_string())
+                .and_then(|document| {
+                    serde_json::to_string(&document).map_err(|error| error.to_string())
+                });
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisSearch { request, reply } => {
+            let result = analysis
+                .search_transcript(&request.key, &request.query, request.limit)
+                .map_err(|error| error.to_string())
+                .and_then(|results| {
+                    serde_json::to_string(&results).map_err(|error| error.to_string())
+                });
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisPromote(document, reply) => {
+            let result = analysis
+                .promote_transcript(&document)
+                .map_err(|error| error.to_string());
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisLoadRun { key, reply } => {
+            let result = analysis
+                .load_run(&key)
+                .map_err(|error| error.to_string())
+                .and_then(|run| serde_json::to_string(&run).map_err(|error| error.to_string()));
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisSaveRun(run, reply) => {
+            let result = analysis.save_run(&run).map_err(|error| error.to_string());
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisDelete(key, reply) => {
+            let result = analysis
+                .delete_analysis(&key)
+                .map_err(|error| error.to_string());
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisCreateNote { note, reply } => {
+            let result = analysis
+                .create_note(&note)
+                .map_err(|error| error.to_string())
+                .and_then(|note| serde_json::to_string(&note).map_err(|error| error.to_string()));
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisUpdateNote(note, reply) => {
+            let result = analysis
+                .update_note(&note)
+                .map_err(|error| error.to_string());
+            let _ = reply.send(result);
+            return false;
+        }
+        Command::AnalysisDeleteNote { id, reply } => {
+            let result = analysis
+                .delete_note(id)
+                .map_err(|error| error.to_string())
+                .and_then(|note| serde_json::to_string(&note).map_err(|error| error.to_string()));
+            let _ = reply.send(result);
+            return false;
+        }
         Command::Shutdown(reply) => {
             let result = session.shutdown().map_err(|error| error.to_string());
             let _ = reply.send(result);
@@ -323,16 +429,20 @@ fn spawn_worker(
     receiver: mpsc::Receiver<Command>,
     engine: SharedMpvEngine,
     history_path: PathBuf,
+    analysis_path: PathBuf,
     pending_volume: Arc<Mutex<Option<f64>>>,
     events: Arc<Mutex<VecDeque<PlayerEvent>>>,
 ) -> Result<JoinHandle<()>, String> {
     let history = SqliteHistoryRepository::open(history_path).map_err(|error| error.to_string())?;
+    let analysis =
+        SqliteAnalysisRepository::open(analysis_path).map_err(|error| error.to_string())?;
     Ok(thread::spawn(move || {
         let mut session = PlayerSession::new(engine, history);
+        let mut analysis = analysis;
         loop {
             match receiver.recv_timeout(Duration::from_millis(100)) {
                 Ok(command) => {
-                    if handle_command(&mut session, command, &events) {
+                    if handle_command(&mut session, &mut analysis, command, &events) {
                         break;
                     }
                 }
@@ -393,6 +503,27 @@ unsafe fn read_string(value: *const c_char) -> Result<String, String> {
         .map_err(|_| "received invalid UTF-8".to_owned())
 }
 
+unsafe fn read_json<T: serde::de::DeserializeOwned>(value: *const c_char) -> Result<T, String> {
+    let value = read_string(value)?;
+    serde_json::from_str(&value).map_err(|error| format!("received invalid JSON: {error}"))
+}
+
+fn json_result(result: Result<String, String>) -> *mut c_char {
+    match result {
+        Ok(value) => match CString::new(value) {
+            Ok(value) => value.into_raw(),
+            Err(error) => {
+                set_last_error(format!("failed to encode JSON response: {error}"));
+                std::ptr::null_mut()
+            }
+        },
+        Err(error) => {
+            set_last_error(error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn nura_last_error() -> *mut c_char {
     take_last_error().into_raw()
@@ -424,6 +555,7 @@ pub extern "C" fn nura_player_create(
             receiver,
             engine.clone(),
             directory.join("history.sqlite"),
+            directory.join("analysis.sqlite"),
             pending_volume.clone(),
             events.clone(),
         )?;
@@ -457,6 +589,144 @@ pub unsafe extern "C" fn nura_player_destroy(player: *mut NuraPlayer) {
             let _ = worker.join();
         }
     });
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_load_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> *mut c_char {
+    let key = match read_json(input) {
+        Ok(key) => key,
+        Err(error) => return json_result(Err(error)),
+    };
+    json_result(query_command_result(player, |reply| {
+        Command::AnalysisLoad { key, reply }
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_search_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> *mut c_char {
+    let request = match read_json(input) {
+        Ok(request) => request,
+        Err(error) => return json_result(Err(error)),
+    };
+    json_result(query_command_result(player, |reply| {
+        Command::AnalysisSearch { request, reply }
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_promote_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> c_int {
+    let document = match read_json(input) {
+        Ok(document) => document,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    command_result(player, |reply| Command::AnalysisPromote(document, reply))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_load_run_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> *mut c_char {
+    let key = match read_json(input) {
+        Ok(key) => key,
+        Err(error) => return json_result(Err(error)),
+    };
+    json_result(query_command_result(player, |reply| {
+        Command::AnalysisLoadRun { key, reply }
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_save_run_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> c_int {
+    let run = match read_json(input) {
+        Ok(run) => run,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    command_result(player, |reply| Command::AnalysisSaveRun(run, reply))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_delete_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> c_int {
+    let key = match read_json(input) {
+        Ok(key) => key,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    command_result(player, |reply| Command::AnalysisDelete(key, reply))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_create_note_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> *mut c_char {
+    let note = match read_json(input) {
+        Ok(note) => note,
+        Err(error) => return json_result(Err(error)),
+    };
+    json_result(query_command_result(player, |reply| {
+        Command::AnalysisCreateNote { note, reply }
+    }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_update_note_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> c_int {
+    let note = match read_json(input) {
+        Ok(note) => note,
+        Err(error) => {
+            set_last_error(error);
+            return -1;
+        }
+    };
+    command_result(player, |reply| Command::AnalysisUpdateNote(note, reply))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_analysis_delete_note_json(
+    player: *mut NuraPlayer,
+    input: *const c_char,
+) -> *mut c_char {
+    #[derive(Deserialize)]
+    struct DeleteNoteRequest {
+        id: i64,
+    }
+
+    let request: DeleteNoteRequest = match read_json(input) {
+        Ok(request) => request,
+        Err(error) => return json_result(Err(error)),
+    };
+    json_result(query_command_result(player, |reply| {
+        Command::AnalysisDeleteNote {
+            id: request.id,
+            reply,
+        }
+    }))
 }
 
 #[unsafe(no_mangle)]
@@ -1122,6 +1392,7 @@ pub unsafe extern "C" fn nura_string_free(value: *mut c_char) {
 
 unsafe fn command_result(player: *mut NuraPlayer, command: impl FnOnce(Reply) -> Command) -> c_int {
     let Some(player) = player.as_ref() else {
+        set_last_error("player is unavailable");
         return -1;
     };
     match send_command(player, command) {
@@ -1131,6 +1402,23 @@ unsafe fn command_result(player: *mut NuraPlayer, command: impl FnOnce(Reply) ->
             -1
         }
     }
+}
+
+unsafe fn query_command_result(
+    player: *mut NuraPlayer,
+    command: impl FnOnce(JsonReply) -> Command,
+) -> Result<String, String> {
+    let Some(player) = player.as_ref() else {
+        return Err("player is unavailable".to_owned());
+    };
+    let (sender, receiver) = mpsc::sync_channel(1);
+    player
+        .commands
+        .send(command(sender))
+        .map_err(|_| "player worker has stopped".to_owned())?;
+    receiver
+        .recv()
+        .map_err(|_| "player worker did not reply".to_owned())?
 }
 
 fn async_command_result(player: &NuraPlayer, command: AsyncCommand) -> c_int {

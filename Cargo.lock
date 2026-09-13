@@ -121,6 +121,7 @@ dependencies = [
  "nura-library",
  "nura-mpv",
  "nura-player-core",
+ "serde",
  "serde_json",
 ]
 

@@ -5,11 +5,12 @@ edition.workspace = true
 license.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 nura-domain = { path = "../nura-domain" }
 nura-library = { path = "../nura-library" }
 nura-mpv = { path = "../nura-mpv" }
 nura-player-core = { path = "../nura-player-core" }
+serde.workspace = true
 serde_json.workspace = true
