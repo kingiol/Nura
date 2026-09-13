@@ -341,8 +341,7 @@ impl AnalysisRepository for SqliteAnalysisRepository {
                 |row| row.get::<_, i64>(0),
             )
             .optional()?
-            .unwrap_or(1)
-            .max(1);
+            .unwrap_or(0);
         let completed_chunk_indexes = (0..total_chunks).collect::<Vec<_>>();
         let completed_chunk_indexes_json = serde_json::to_string(&completed_chunk_indexes)?;
         transaction.execute("DELETE FROM transcript_fts WHERE media_fingerprint = ?1 AND source_fingerprint = ?2 AND analysis_profile = ?3", key_params(key))?;
@@ -763,17 +762,14 @@ fn canonical_completed_chunk_indexes(run: &AnalysisRun) -> Result<Vec<i64>, Anal
             "terminal analysis run does not include every completed chunk".to_owned(),
         ));
     }
-    if run.status == AnalysisStatus::Complete && run.total_chunks == 0 {
-        return Err(AnalysisError::InvalidData(
-            "complete analysis run has no chunks".to_owned(),
-        ));
-    }
-    if run.status == AnalysisStatus::NoContent
-        && run.total_chunks == 0
+    if matches!(
+        run.status,
+        AnalysisStatus::Complete | AnalysisStatus::NoContent
+    ) && run.total_chunks == 0
         && !completed_chunk_indexes.is_empty()
     {
         return Err(AnalysisError::InvalidData(
-            "no-content analysis run with no chunks has completed indexes".to_owned(),
+            "zero-chunk terminal analysis run has completed indexes".to_owned(),
         ));
     }
 
@@ -877,6 +873,30 @@ mod tests {
     }
 
     #[test]
+    fn local_subtitle_promotion_uses_a_valid_zero_chunk_complete_run() {
+        let directory = test_directory("local-subtitle-run");
+        let mut repository =
+            SqliteAnalysisRepository::open(directory.join("analysis.sqlite")).unwrap();
+        let key = AnalysisKey::new("media-a", "subtitle-a", "subtitle/srt-v1");
+
+        repository
+            .promote_transcript(&document(key.clone(), "local subtitle"))
+            .unwrap();
+
+        assert_eq!(
+            repository.load_run(&key).unwrap(),
+            Some(AnalysisRun {
+                key,
+                total_chunks: 0,
+                completed_chunk_indexes: Vec::new(),
+                status: AnalysisStatus::Complete,
+                last_error: None,
+            })
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn deleting_analysis_keeps_user_notes() {
         let directory = test_directory("analysis-delete");
         let mut repository =
@@ -965,6 +985,7 @@ mod tests {
             .unwrap();
 
         for (status, total_chunks, completed_chunk_indexes) in [
+            (AnalysisStatus::Processing, 2, vec![0]),
             (AnalysisStatus::Failed, 2, vec![0]),
             (AnalysisStatus::Cancelled, 2, vec![0]),
             (AnalysisStatus::NoContent, 0, Vec::new()),
