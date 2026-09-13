@@ -130,6 +130,7 @@ version = "0.1.0"
 dependencies = [
  "nura-domain",
  "rusqlite",
+ "serde_json",
  "thiserror",
 ]
 

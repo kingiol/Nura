@@ -7,4 +7,5 @@ license.workspace = true
 [dependencies]
 nura-domain = { path = "../nura-domain" }
 rusqlite.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true

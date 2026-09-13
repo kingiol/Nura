@@ -19,6 +19,124 @@ pub struct HistoryEntry {
     pub opened_at_seconds: i64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalysisKey {
+    pub media_fingerprint: String,
+    pub source_fingerprint: String,
+    pub analysis_profile: String,
+}
+
+impl AnalysisKey {
+    pub fn new(
+        media_fingerprint: impl Into<String>,
+        source_fingerprint: impl Into<String>,
+        analysis_profile: impl Into<String>,
+    ) -> Self {
+        Self {
+            media_fingerprint: media_fingerprint.into(),
+            source_fingerprint: source_fingerprint.into(),
+            analysis_profile: analysis_profile.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptSegment {
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptDocument {
+    pub key: AnalysisKey,
+    pub source: String,
+    pub provider_id: Option<String>,
+    pub model_revision: Option<String>,
+    pub segments: Vec<TranscriptSegment>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptSearchResult {
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalysisStatus {
+    Idle,
+    Queued,
+    Processing,
+    Complete,
+    NoContent,
+    LowQuality,
+    Failed,
+    Cancelled,
+}
+
+impl AnalysisStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Queued => "queued",
+            Self::Processing => "processing",
+            Self::Complete => "complete",
+            Self::NoContent => "no_content",
+            Self::LowQuality => "low_quality",
+            Self::Failed => "failed",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "idle" => Some(Self::Idle),
+            "queued" => Some(Self::Queued),
+            "processing" => Some(Self::Processing),
+            "complete" => Some(Self::Complete),
+            "no_content" => Some(Self::NoContent),
+            "low_quality" => Some(Self::LowQuality),
+            "failed" => Some(Self::Failed),
+            "cancelled" => Some(Self::Cancelled),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalysisRun {
+    pub key: AnalysisKey,
+    pub total_chunks: i64,
+    pub completed_chunk_indexes: Vec<i64>,
+    pub status: AnalysisStatus,
+    pub last_error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstantNote {
+    pub id: i64,
+    pub media_fingerprint: String,
+    pub position_ms: i64,
+    pub media_title: String,
+    pub transcript_quote: Option<String>,
+    pub screenshot_reference: Option<String>,
+    pub body: String,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NewInstantNote {
+    pub media_fingerprint: String,
+    pub position_ms: i64,
+    pub media_title: String,
+    pub transcript_quote: Option<String>,
+    pub screenshot_reference: Option<String>,
+    pub body: String,
+}
+
 impl MediaItem {
     pub fn from_path(path: impl Into<PathBuf>) -> Result<Self, DomainError> {
         let path = path.into();
