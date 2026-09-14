@@ -101,7 +101,7 @@ final class TranscriptHTTPClientTests: XCTestCase {
         let key = AnalysisKey(
             mediaFingerprint: "media",
             sourceFingerprint: "audio-v1",
-            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+            analysisProfile: "cloud/segment"
         )
 
         let run = CloudAnalysisWorkflowRules.noContentRun(
@@ -118,12 +118,12 @@ final class TranscriptHTTPClientTests: XCTestCase {
         let original = AnalysisKey(
             mediaFingerprint: "media-a",
             sourceFingerprint: "audio-v1",
-            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+            analysisProfile: "cloud/segment"
         )
         let replacement = AnalysisKey(
             mediaFingerprint: "media-b",
             sourceFingerprint: "audio-v1",
-            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+            analysisProfile: "cloud/segment"
         )
         let existing = AnalysisRun(
             key: original,

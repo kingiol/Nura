@@ -1490,7 +1490,7 @@ private struct AnalysisSidebarView: View {
 
     private var cloudAnalysisConsent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Analyze with Groq Whisper Turbo?")
+            Text("Analyze with Cloud ASR?")
                 .font(.headline)
             Text("Nura will upload audio chunks to the configured AI API. Transcript results are stored locally on this Mac.")
                 .foregroundStyle(.secondary)

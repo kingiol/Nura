@@ -1527,7 +1527,7 @@ final class PlayerViewModel {
         let cloudKey = AnalysisKey(
             mediaFingerprint: fingerprint,
             sourceFingerprint: "audio-v1",
-            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+            analysisProfile: "cloud/segment"
         )
         mediaFingerprint = fingerprint
         localTranscriptState = .loading
@@ -1592,7 +1592,7 @@ final class PlayerViewModel {
         return AnalysisKey(
             mediaFingerprint: mediaFingerprint,
             sourceFingerprint: "audio-v1",
-            analysisProfile: "groq/whisper-large-v3-turbo/segment"
+            analysisProfile: "cloud/segment"
         )
     }
 
@@ -1610,7 +1610,7 @@ final class PlayerViewModel {
             key: AnalysisKey(
                 mediaFingerprint: fingerprint,
                 sourceFingerprint: "audio-v1",
-                analysisProfile: "groq/whisper-large-v3-turbo/segment"
+                analysisProfile: "cloud/segment"
             ),
             mediaURL: nil,
             unavailableReason: AudioChunkExportError.remoteMedia.localizedDescription

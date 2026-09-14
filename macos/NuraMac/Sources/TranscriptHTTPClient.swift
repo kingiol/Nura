@@ -10,7 +10,8 @@ struct AudioChunk: Equatable, Sendable {
 }
 
 struct AudioChunkPlan: Equatable, Sendable {
-    static let defaultChunkDurationMs: Int64 = 600_000
+    // Qwen3-ASR synchronous inference accepts recordings up to five minutes.
+    static let defaultChunkDurationMs: Int64 = 300_000
 
     struct Chunk: Equatable, Sendable {
         let index: Int
