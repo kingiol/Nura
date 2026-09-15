@@ -4,9 +4,12 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 APP=${1:?usage: package-libmpv-runtime.sh /path/to/Nura.app}
 LOCK="$ROOT/runtime/macos-arm64.lock"
+FFMPEG_LOCK="$ROOT/runtime/ffmpeg-macos-arm64.lock"
 FRAMEWORKS="$APP/Contents/Frameworks"
 RESOURCES="$APP/Contents/Resources"
 MANIFEST="$RESOURCES/libmpv-runtime-manifest.tsv"
+FFMPEG_MANIFEST="$RESOURCES/ffmpeg-runtime-manifest.tsv"
+TOOLS="$RESOURCES/bin"
 
 [ -d "$APP/Contents" ] || {
     printf '%s\n' "not a macOS app bundle: $APP" >&2
@@ -14,6 +17,10 @@ MANIFEST="$RESOURCES/libmpv-runtime-manifest.tsv"
 }
 [ -f "$LOCK" ] || {
     printf '%s\n' "runtime lock is missing: $LOCK" >&2
+    exit 1
+}
+[ -f "$FFMPEG_LOCK" ] || {
+    printf '%s\n' "FFmpeg runtime lock is missing: $FFMPEG_LOCK" >&2
     exit 1
 }
 
@@ -31,6 +38,37 @@ nura_install_name_tool() {
     rm -f "$stderr_file"
 }
 
+nura_resolve_ffmpeg_binary() {
+    name=$1
+    case "$name" in
+        ffmpeg) source=${NURA_FFMPEG_BINARY:-} ;;
+        ffprobe) source=${NURA_FFPROBE_BINARY:-} ;;
+        *)
+            printf '%s\n' "unsupported FFmpeg binary: $name" >&2
+            return 1
+            ;;
+    esac
+
+    if [ -z "$source" ]; then
+        for candidate in \
+            "/opt/homebrew/bin/$name" \
+            "/usr/local/bin/$name" \
+            "/opt/homebrew/opt/ffmpeg/bin/$name" \
+            "/usr/local/opt/ffmpeg/bin/$name"; do
+            if [ -f "$candidate" ]; then
+                source=$candidate
+                break
+            fi
+        done
+    fi
+
+    [ -f "$source" ] || {
+        printf '%s\n' "$name was not found. Run: brew bundle --file=\"$ROOT/Brewfile\"" >&2
+        return 1
+    }
+    nura_realpath "$source"
+}
+
 records=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-records.XXXXXX")
 actual_lock=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-actual.XXXXXX")
 dependencies=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-dependencies.XXXXXX")
@@ -38,9 +76,13 @@ bundled_dylibs=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-bundled.XXXXXX")
 closure=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-closure.XXXXXX")
 sorted_records=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-sorted-records.XXXXXX")
 stale_filenames=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-stale.XXXXXX")
-trap 'rm -f "$records" "$actual_lock" "$dependencies" "$bundled_dylibs" "$closure" "$sorted_records" "$stale_filenames"' EXIT HUP INT TERM
+actual_ffmpeg_lock=$(mktemp "${TMPDIR:-/tmp}/nura-ffmpeg-actual.XXXXXX")
+ffmpeg_dependencies=$(mktemp "${TMPDIR:-/tmp}/nura-ffmpeg-dependencies.XXXXXX")
+trap 'rm -f "$records" "$actual_lock" "$dependencies" "$bundled_dylibs" "$closure" "$sorted_records" "$stale_filenames" "$actual_ffmpeg_lock" "$ffmpeg_dependencies"' EXIT HUP INT TERM
 
 source=$(nura_resolve_mpv_source)
+nura_ffmpeg=$(nura_resolve_ffmpeg_binary ffmpeg)
+nura_ffprobe=$(nura_resolve_ffmpeg_binary ffprobe)
 nura_collect_runtime_closure "$source" > "$closure"
 while IFS='	' read -r source_path filename; do
     sha256=$(shasum -a 256 "$source_path" | awk '{print $1}')
@@ -57,6 +99,22 @@ LC_ALL=C sort -t '	' -k1,1 "$records" > "$sorted_records"
 if ! cmp -s "$LOCK" "$actual_lock"; then
     printf '%s\n' "libmpv runtime does not match $LOCK. Run scripts/update-libmpv-runtime-lock.sh, review the diff, and commit the approved runtime upgrade." >&2
     diff -u "$LOCK" "$actual_lock" >&2 || true
+    exit 1
+fi
+
+{
+    printf '%s\n' '# filename	source_path	sha256	architectures'
+    for tool_source in "$nura_ffmpeg" "$nura_ffprobe"; do
+        tool_filename=$(basename "$tool_source")
+        tool_sha256=$(shasum -a 256 "$tool_source" | awk '{print $1}')
+        tool_architectures=$(lipo -archs "$tool_source")
+        printf '%s\t%s\t%s\t%s\n' "$tool_filename" "$tool_source" "$tool_sha256" "$tool_architectures"
+    done
+} > "$actual_ffmpeg_lock"
+
+if ! cmp -s "$FFMPEG_LOCK" "$actual_ffmpeg_lock"; then
+    printf '%s\n' "FFmpeg runtime does not match $FFMPEG_LOCK. Review the binary upgrade and update the lock deliberately." >&2
+    diff -u "$FFMPEG_LOCK" "$actual_ffmpeg_lock" >&2 || true
     exit 1
 fi
 
@@ -78,6 +136,28 @@ while IFS='	' read -r filename source_path sha256 architectures; do
     [ "$filename" = '# filename' ] && continue
     cp -L "$source_path" "$FRAMEWORKS/$filename"
 done < "$actual_lock"
+
+mkdir -p "$TOOLS"
+cp -L "$nura_ffmpeg" "$TOOLS/ffmpeg"
+cp -L "$nura_ffprobe" "$TOOLS/ffprobe"
+chmod 755 "$TOOLS/ffmpeg" "$TOOLS/ffprobe"
+
+while IFS='	' read -r tool_filename tool_source sha256 architectures; do
+    [ "$tool_filename" = '# filename' ] && continue
+    tool="$TOOLS/$tool_filename"
+    nura_dependency_references "$tool_source" > "$ffmpeg_dependencies"
+    while IFS= read -r reference; do
+        nura_is_system_dependency "$reference" && continue
+        dependency_source=$(nura_resolve_dependency "$tool_source" "$reference")
+        nura_is_system_dependency "$dependency_source" && continue
+        dependency_filename=$(awk -F '\t' -v source="$dependency_source" '$2 == source { print $1; exit }' "$records")
+        [ -n "$dependency_filename" ] || {
+            printf '%s\n' "libmpv runtime lock has no bundled filename for $dependency_source" >&2
+            exit 1
+        }
+        nura_install_name_tool -change "$reference" "@loader_path/../../Frameworks/$dependency_filename" "$tool"
+    done < "$ffmpeg_dependencies"
+done < "$actual_ffmpeg_lock"
 
 while IFS='	' read -r filename source_path sha256 architectures; do
     [ "$filename" = '# filename' ] && continue
@@ -129,4 +209,34 @@ while IFS= read -r dylib; do
 done < "$bundled_dylibs"
 
 cp "$actual_lock" "$MANIFEST"
-printf '%s\n' "Bundled $(awk 'NR > 1 { count += 1 } END { print count + 0 }' "$actual_lock") verified libmpv runtime dylibs into $APP"
+cp "$actual_ffmpeg_lock" "$FFMPEG_MANIFEST"
+
+for tool in "$TOOLS/ffmpeg" "$TOOLS/ffprobe"; do
+    nura_dependency_references "$tool" > "$ffmpeg_dependencies"
+    while IFS= read -r reference; do
+        case "$reference" in
+            /opt/homebrew/*|/usr/local/*)
+                printf '%s\n' "bundled FFmpeg binary still references Homebrew: $tool -> $reference" >&2
+                exit 1
+                ;;
+            @loader_path/../../Frameworks/*)
+                dependency_filename=${reference##*/}
+                [ -f "$FRAMEWORKS/$dependency_filename" ] || {
+                    printf '%s\n' "bundled FFmpeg dependency is missing: $tool -> $reference" >&2
+                    exit 1
+                }
+                ;;
+            @rpath/*|@executable_path/*|@loader_path/*)
+                printf '%s\n' "unresolved bundled FFmpeg dependency: $tool -> $reference" >&2
+                exit 1
+                ;;
+        esac
+    done < "$ffmpeg_dependencies"
+    file -b "$tool" | grep -q 'Mach-O 64-bit dynamically linked shared library arm64\|Mach-O 64-bit executable arm64'
+    if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+        codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$tool"
+        codesign --verify --strict "$tool"
+    fi
+done
+
+printf '%s\n' "Bundled $(awk 'NR > 1 { count += 1 } END { print count + 0 }' "$actual_lock") verified libmpv runtime dylibs and FFmpeg tools into $APP"

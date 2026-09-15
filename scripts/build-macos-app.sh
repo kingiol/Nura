@@ -20,6 +20,9 @@ cp -R "$DERIVED_DATA/Build/Products/Release/Nura.app" "$APP"
 
 test -f "$APP/Contents/Frameworks/libmpv.2.dylib"
 test -f "$APP/Contents/Resources/libmpv-runtime-manifest.tsv"
+test -x "$APP/Contents/Resources/bin/ffmpeg"
+test -x "$APP/Contents/Resources/bin/ffprobe"
+test -f "$APP/Contents/Resources/ffmpeg-runtime-manifest.tsv"
 
 YTDL_PATH="$($ROOT/scripts/check-ytdlp.sh --standalone)"
 mkdir -p "$APP/Contents/Resources/bin"

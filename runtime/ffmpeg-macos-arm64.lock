@@ -1,0 +1,3 @@
+# filename	source_path	sha256	architectures
+ffmpeg	/opt/homebrew/Cellar/ffmpeg/9.0.1_1/bin/ffmpeg	9f5ddd4f8b36eb07b0c5d60ab6ea1e618bedd70bc45feab82b4dc23be1596ad1	arm64
+ffprobe	/opt/homebrew/Cellar/ffmpeg/9.0.1_1/bin/ffprobe	0ecd5e1affb1466b129b4f65bee261e9ab625c4d4a2e7c3e9089f63d44808605	arm64

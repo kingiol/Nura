@@ -3,9 +3,14 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 LOCK="$ROOT/runtime/macos-arm64.lock"
+FFMPEG_LOCK="$ROOT/runtime/ffmpeg-macos-arm64.lock"
 
 [ -f "$LOCK" ] || {
     printf '%s\n' "runtime lock is missing: $LOCK" >&2
+    exit 1
+}
+[ -f "$FFMPEG_LOCK" ] || {
+    printf '%s\n' "FFmpeg runtime lock is missing: $FFMPEG_LOCK" >&2
     exit 1
 }
 
@@ -19,6 +24,9 @@ mkdir -p "$app/Contents/Resources"
 test -f "$app/Contents/Frameworks/libmpv.2.dylib"
 test -f "$app/Contents/Resources/libmpv-runtime-manifest.tsv"
 cmp -s "$LOCK" "$app/Contents/Resources/libmpv-runtime-manifest.tsv"
+test -x "$app/Contents/Resources/bin/ffmpeg"
+test -x "$app/Contents/Resources/bin/ffprobe"
+cmp -s "$FFMPEG_LOCK" "$app/Contents/Resources/ffmpeg-runtime-manifest.tsv"
 
 find "$app/Contents/Frameworks" -maxdepth 1 -type f -name '*.dylib' -print |
     LC_ALL=C sort > "$temporary/dylibs"
@@ -27,4 +35,9 @@ while IFS= read -r dylib; do
     ! otool -L "$dylib" | grep -Eq '/(opt/homebrew|usr/local)/'
 done < "$temporary/dylibs"
 
-printf '%s\n' "Verified $(wc -l < "$temporary/dylibs" | tr -d ' ') bundled libmpv runtime dylibs."
+for tool in "$app/Contents/Resources/bin/ffmpeg" "$app/Contents/Resources/bin/ffprobe"; do
+    file -b "$tool" | grep -q 'Mach-O 64-bit executable arm64'
+    ! otool -L "$tool" | grep -Eq '/(opt/homebrew|usr/local)/'
+done
+
+printf '%s\n' "Verified $(wc -l < "$temporary/dylibs" | tr -d ' ') bundled libmpv runtime dylibs and FFmpeg tools."

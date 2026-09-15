@@ -1738,7 +1738,11 @@ final class PlayerViewModel {
                     lastError: nil
                 )
                 try bridge.saveAnalysisRun(run)
-                let exported = try await AudioChunkExporter.export(mediaURL: mediaURL, plannedChunk: plannedChunk)
+                let exported = try await AudioChunkExporter.export(
+                    mediaURL: mediaURL,
+                    plannedChunk: plannedChunk,
+                    audioStreamIndex: assetInfo.audioStreamIndex
+                )
                 defer { exported.removeTemporaryFiles() }
                 try Task.checkCancellation()
                 let result = try await client.transcribe(chunk: exported.chunk, configuration: configuration)
