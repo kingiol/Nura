@@ -3,6 +3,8 @@ import Foundation
 struct EmbeddedSubtitleTrack: Identifiable, Equatable {
     let identifier: String
     let displayName: String
+    let kind: EmbeddedSubtitleKind
+    let isSupported: Bool
 
     var id: String { identifier }
 }

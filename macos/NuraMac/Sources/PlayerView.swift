@@ -1473,10 +1473,22 @@ private struct AnalysisSidebarView: View {
             Text("Choose a readable text subtitle track. This stays on your Mac.")
                 .foregroundStyle(.secondary)
             List(model.embeddedSubtitleTracks) { track in
-                Button(track.displayName) {
+                Button {
                     isChoosingEmbeddedTrack = false
-                    model.extractEmbeddedSubtitle(track: track)
+                    if track.isSupported {
+                        model.extractEmbeddedSubtitle(track: track)
+                    } else {
+                        model.showEmbeddedSubtitleUnavailable(track)
+                    }
+                } label: {
+                    HStack {
+                        Text(track.displayName)
+                        if !track.isSupported {
+                            Image(systemName: "exclamationmark.triangle")
+                        }
+                    }
                 }
+                .disabled(!track.isSupported)
             }
             .frame(minHeight: 120)
             HStack {

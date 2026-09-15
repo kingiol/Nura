@@ -37,37 +37,148 @@ final class SubtitleParserTests: XCTestCase {
         )
     }
 
-    func testTimedTextSamplesBecomeAbsoluteSegments() throws {
+    func testEmbeddedSubtitleSRTBecomesAbsoluteSegments() throws {
+        let srt = """
+        1
+        00:00:01,250 --> 00:00:03,500
+        Hello <i>Nura</i>
+
+        2
+        00:00:04,000 --> 00:00:05,500
+        Second cue
+        """
+
         XCTAssertEqual(
-            try EmbeddedSubtitleExtractor.normalize([
-                .init(startMs: 2_000, endMs: 4_000, payload: "Hello")
-            ]),
-            [TranscriptSegment(startMs: 2_000, endMs: 4_000, text: "Hello")]
+            try EmbeddedSubtitleExtractor.segments(fromSRT: srt),
+            [
+                TranscriptSegment(startMs: 1_250, endMs: 3_500, text: "Hello Nura"),
+                TranscriptSegment(startMs: 4_000, endMs: 5_500, text: "Second cue"),
+            ]
         )
     }
 
-    func testEmbeddedSubtitleDecodesTx3GPayloadWithoutTrailingStyles() throws {
-        let payload = Data([0x00, 0x05] + Array("Hello".utf8) + [0x00, 0x00, 0x00, 0x00])
+    func testEmbeddedSubtitleClassifiesTextAndGraphicStreams() throws {
+        let textStream = try makeStream(
+            index: 2,
+            codecName: "ass",
+            codecLongName: "ASS (Advanced SubStation Alpha)",
+            width: nil,
+            height: nil,
+            isDefault: 1,
+            language: "eng",
+            title: "Commentary"
+        )
+        let graphicStream = try makeStream(
+            index: 3,
+            codecName: "hdmv_pgs_subtitle",
+            codecLongName: "HDMV PGS subtitle",
+            width: 1920,
+            height: 1080,
+            isDefault: 0,
+            language: nil,
+            title: nil
+        )
 
+        XCTAssertEqual(textStream.kind, .text)
+        XCTAssertTrue(textStream.kind.isText)
+        XCTAssertEqual(graphicStream.kind, .graphic)
+        XCTAssertFalse(graphicStream.kind.isText)
         XCTAssertEqual(
-            try EmbeddedSubtitleExtractor.payloadString(data: payload, mediaSubType: 0x7478_3367),
-            "Hello"
+            EmbeddedSubtitleExtractor.displayName(for: textStream),
+            "Commentary | eng | text"
+        )
+        XCTAssertEqual(
+            EmbeddedSubtitleExtractor.displayName(for: graphicStream),
+            "Subtitle track 3 | requires OCR"
         )
     }
 
-    func testEmbeddedSubtitleDecodesWVTTVttcPaylPayload() throws {
-        let payload = wvttBox(type: "vttc", payload: wvttBox(type: "payl", payload: Data("Hello".utf8)))
+    func testEmbeddedSubtitleSelectsDefaultStream() throws {
+        let streams = [
+            try makeStream(
+                index: 0,
+                codecName: "subrip",
+                codecLongName: nil,
+                width: nil,
+                height: nil,
+                isDefault: 0,
+                language: "eng",
+                title: nil
+            ),
+            try makeStream(
+                index: 1,
+                codecName: "subrip",
+                codecLongName: nil,
+                width: nil,
+                height: nil,
+                isDefault: 1,
+                language: "chi",
+                title: nil
+            ),
+        ]
 
         XCTAssertEqual(
-            try EmbeddedSubtitleExtractor.payloadString(data: payload, mediaSubType: 0x7776_7474),
-            "Hello"
+            EmbeddedSubtitleExtractor.selectDefaultSubtitleStream(from: streams)?.index,
+            1
         )
     }
 
-    func testEmbeddedSubtitleRejectsUnsupportedTextFormat() {
-        XCTAssertThrowsError(
-            try EmbeddedSubtitleExtractor.payloadString(data: Data("plain text".utf8), mediaSubType: 0x7465_7874)
-        )
+    func testEmbeddedSubtitleProbeDecodesLanguageAndTitle() throws {
+        let json = """
+        {
+            "streams": [
+                {
+                    "index": 1,
+                    "codec_name": "mov_text",
+                    "codec_type": "subtitle",
+                    "codec_long_name": "MOV text",
+                    "width": null,
+                    "height": null,
+                    "disposition": { "default": 1 },
+                    "tags": { "language": "eng", "name": "English" }
+                }
+            ]
+        }
+        """
+
+        let response = try JSONDecoder().decode(SubtitleProbeResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.streams.count, 1)
+        XCTAssertEqual(response.streams[0].language, "eng")
+        XCTAssertEqual(response.streams[0].title, "English")
+        XCTAssertEqual(response.streams[0].kind, .text)
+    }
+
+    private func makeStream(
+        index: Int,
+        codecName: String?,
+        codecLongName: String?,
+        width: Int?,
+        height: Int?,
+        isDefault: Int,
+        language: String?,
+        title: String?
+    ) throws -> ProbeSubtitleStream {
+        var tags = "{ "
+        if let language {
+            tags += "\"language\": \"\(language)\", "
+        }
+        if let title {
+            tags += "\"name\": \"\(title)\", "
+        }
+        tags += "\"default_placeholder\": \"true\" }"
+        let json = """
+        {
+            "index": \(index),
+            "codec_name": \(codecName.map { "\"\($0)\"" } ?? "null"),
+            "codec_type": "subtitle",
+            "codec_long_name": \(codecLongName.map { "\"\($0)\"" } ?? "null"),
+            "width": \(width.map(String.init) ?? "null"),
+            "height": \(height.map(String.init) ?? "null"),
+            "disposition": { "default": \(isDefault) },
+            "tags": \(tags)
+        }
+        """
+        return try JSONDecoder().decode(ProbeSubtitleStream.self, from: Data(json.utf8))
     }
 
     func testSourceFingerprintChangesWhenSubtitlePayloadChanges() {
@@ -77,13 +188,4 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertNotEqual(first, second)
     }
 
-    private func wvttBox(type: String, payload: Data) -> Data {
-        let size = UInt32(payload.count + 8)
-        return Data([
-            UInt8((size >> 24) & 0xFF),
-            UInt8((size >> 16) & 0xFF),
-            UInt8((size >> 8) & 0xFF),
-            UInt8(size & 0xFF),
-        ]) + Data(type.utf8) + payload
-    }
 }

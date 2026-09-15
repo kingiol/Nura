@@ -619,6 +619,12 @@ final class PlayerViewModel {
             embeddedSubtitleMessage = "Embedded subtitle extraction is available for local media only."
             return
         }
+        guard track.isSupported else {
+            embeddedSubtitleMessage = track.kind == .graphic
+                ? "This subtitle track is a bitmap subtitle and would require OCR."
+                : "This subtitle track cannot be read as timed text."
+            return
+        }
         guard transcriptDocument == nil else {
             embeddedSubtitleMessage = "A transcript is already active for this media."
             return
@@ -644,6 +650,12 @@ final class PlayerViewModel {
             guard let self, self.localAnalysisGeneration == generation else { return }
             self.isDiscoveringEmbeddedSubtitles = false
         }
+    }
+
+    func showEmbeddedSubtitleUnavailable(_ track: EmbeddedSubtitleTrack) {
+        embeddedSubtitleMessage = track.kind == .graphic
+            ? "This subtitle track is a bitmap subtitle and would require OCR."
+            : "This subtitle track cannot be read as timed text."
     }
 
     func searchTranscript(query: String) {

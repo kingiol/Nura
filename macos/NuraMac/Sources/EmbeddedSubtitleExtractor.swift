@@ -1,73 +1,60 @@
-import AVFoundation
-import CoreMedia
 import Foundation
 
 enum EmbeddedSubtitleExtractionError: LocalizedError, Equatable {
-    case unavailable(String)
-    case unreadablePayload
+    case remoteMedia
+    case ffprobeUnavailable
+    case ffmpegUnavailable
+    case probeFailed(String)
+    case exportFailed(String)
     case noContent
+    case unsupportedGraphicSubtitle
 
     var errorDescription: String? {
         switch self {
-        case .unavailable(let reason):
-            return reason
-        case .unreadablePayload:
-            return "The selected subtitle track uses an unsupported text encoding."
+        case .remoteMedia:
+            return "Embedded subtitle extraction is available for local media only."
+        case .ffprobeUnavailable:
+            return "FFprobe is unavailable for subtitle extraction."
+        case .ffmpegUnavailable:
+            return "FFmpeg is unavailable for subtitle extraction."
+        case .probeFailed(let message), .exportFailed(let message):
+            return message
         case .noContent:
             return "The selected subtitle track does not contain readable timed text."
+        case .unsupportedGraphicSubtitle:
+            return "This subtitle track is a bitmap subtitle and would require OCR."
         }
     }
 }
 
 enum EmbeddedSubtitleExtractor {
-    struct TimedTextSample: Equatable {
-        let startMs: Int64
-        let endMs: Int64
-        let payload: String
-    }
-
     static func discover(in url: URL) async throws -> [EmbeddedSubtitleTrack] {
-        guard url.isFileURL else {
-            throw EmbeddedSubtitleExtractionError.unavailable("Embedded subtitle extraction is available for local media only.")
-        }
-        let asset = AVURLAsset(url: url)
-        guard try await asset.load(.isReadable) else {
-            throw EmbeddedSubtitleExtractionError.unavailable("This media file is not readable by AVFoundation.")
-        }
-        let tracks = try await subtitleTracks(in: asset)
-        var available: [EmbeddedSubtitleTrack] = []
-        for track in tracks {
-            guard try await canReadMetadata(for: track, asset: asset) else { continue }
-            available.append(
-                EmbeddedSubtitleTrack(
-                    identifier: String(track.trackID),
-                    displayName: "Subtitle track \(track.trackID)"
-                )
+        let probe = try await inspect(url: url)
+        return probe.streams.map { stream in
+            EmbeddedSubtitleTrack(
+                identifier: String(stream.index),
+                displayName: displayName(for: stream),
+                kind: stream.kind,
+                isSupported: stream.kind.isText
             )
         }
-        return available
     }
 
     static func extract(from url: URL, trackIdentifier: String) async throws -> TranscriptDocument {
-        guard url.isFileURL else {
-            throw EmbeddedSubtitleExtractionError.unavailable("Embedded subtitle extraction is available for local media only.")
+        guard url.isFileURL else { throw EmbeddedSubtitleExtractionError.remoteMedia }
+        guard let streamIndex = Int(trackIdentifier) else {
+            throw EmbeddedSubtitleExtractionError.probeFailed("The selected subtitle track is unavailable.")
         }
-        guard let trackID = Int32(trackIdentifier) else {
-            throw EmbeddedSubtitleExtractionError.unavailable("The selected subtitle track is unavailable.")
+        let probe = try await inspect(url: url)
+        guard let stream = probe.streams.first(where: { $0.index == streamIndex }) else {
+            throw EmbeddedSubtitleExtractionError.probeFailed("The selected subtitle track cannot be read as timed text.")
         }
-        let asset = AVURLAsset(url: url)
-        guard try await asset.load(.isReadable) else {
-            throw EmbeddedSubtitleExtractionError.unavailable("This media file is not readable by AVFoundation.")
-        }
-        guard let track = try await subtitleTracks(in: asset).first(where: { $0.trackID == trackID }) else {
-            throw EmbeddedSubtitleExtractionError.unavailable("The selected subtitle track cannot be read as timed text.")
-        }
-        guard try await canReadMetadata(for: track, asset: asset) else {
-            throw EmbeddedSubtitleExtractionError.unavailable("The selected subtitle track cannot be read as timed text.")
+        guard stream.kind.isText else {
+            throw EmbeddedSubtitleExtractionError.unsupportedGraphicSubtitle
         }
 
-        let samples = try readSamples(from: track, asset: asset)
-        let segments = try normalize(samples)
+        let srt = try await exportSRT(from: url, streamIndex: streamIndex)
+        let segments = try segments(fromSRT: srt)
         let normalizedPayload = segments.map { "\($0.startMs)-\($0.endMs):\($0.text)" }.joined(separator: "\n")
         let sourceFingerprint = SubtitleParser.sourceFingerprint(
             data: Data(normalizedPayload.utf8),
@@ -76,7 +63,7 @@ enum EmbeddedSubtitleExtractor {
         let key = AnalysisKey(
             mediaFingerprint: MediaFingerprint.forLocalMedia(url),
             sourceFingerprint: sourceFingerprint,
-            analysisProfile: "embedded/avfoundation-v1"
+            analysisProfile: "embedded/ffmpeg-v1"
         )
         return TranscriptDocument(
             key: key,
@@ -87,172 +74,248 @@ enum EmbeddedSubtitleExtractor {
         )
     }
 
-    static func normalize(_ samples: [TimedTextSample]) throws -> [TranscriptSegment] {
-        let segments = samples.compactMap { sample -> TranscriptSegment? in
-            guard sample.startMs >= 0, sample.endMs > sample.startMs else { return nil }
-            let text = SubtitleParser.normalizedText(sample.payload)
-            guard !text.isEmpty else { return nil }
-            return TranscriptSegment(startMs: sample.startMs, endMs: sample.endMs, text: text)
-        }
-        guard !segments.isEmpty else { throw EmbeddedSubtitleExtractionError.noContent }
-        return segments
+    static func segments(fromSRT srt: String) throws -> [TranscriptSegment] {
+        try SubtitleParser.parse(srt, fileExtension: "srt")
     }
 
-    private static func subtitleTracks(in asset: AVAsset) async throws -> [AVAssetTrack] {
-        let textTracks = try await asset.loadTracks(withMediaType: .text)
-        let subtitleTracks = try await asset.loadTracks(withMediaType: .subtitle)
-        return textTracks + subtitleTracks
+    static func selectDefaultSubtitleStream(from streams: [ProbeSubtitleStream]) -> ProbeSubtitleStream? {
+        let orderedStreams = streams.sorted { $0.index < $1.index }
+        return orderedStreams.first(where: { $0.disposition?.isDefault == 1 }) ?? orderedStreams.first
     }
 
-    private static func canReadMetadata(for track: AVAssetTrack, asset: AVAsset) async throws -> Bool {
-        let descriptions = try await track.load(.formatDescriptions)
-        guard descriptions.contains(where: isSupportedTextFormat) else { return false }
-        let reader = try AVAssetReader(asset: asset)
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
-        return reader.canAdd(output)
-    }
-
-    private static func isSupportedTextFormat(_ description: CMFormatDescription) -> Bool {
-        let mediaType = CMFormatDescriptionGetMediaType(description)
-        guard mediaType == kCMMediaType_Text || mediaType == kCMMediaType_Subtitle else { return false }
-        switch CMFormatDescriptionGetMediaSubType(description) {
-        case tx3gFormat, wvttFormat:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private static func readSamples(from track: AVAssetTrack, asset: AVAsset) throws -> [TimedTextSample] {
-        let reader = try AVAssetReader(asset: asset)
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
-        guard reader.canAdd(output) else {
-            throw EmbeddedSubtitleExtractionError.unavailable("The selected subtitle track cannot be read as timed text.")
-        }
-        reader.add(output)
-        guard reader.startReading() else {
-            throw EmbeddedSubtitleExtractionError.unavailable(reader.error?.localizedDescription ?? "AVFoundation could not start reading this subtitle track.")
+    static func inspect(url: URL) async throws -> SubtitleProbeResponse {
+        guard url.isFileURL else { throw EmbeddedSubtitleExtractionError.remoteMedia }
+        guard let ffprobeURL = executableURL(named: "ffprobe") else {
+            throw EmbeddedSubtitleExtractionError.ffprobeUnavailable
         }
 
-        var samples: [TimedTextSample] = []
-        while let sample = output.copyNextSampleBuffer() {
-            let start = CMSampleBufferGetPresentationTimeStamp(sample)
-            let duration = CMSampleBufferGetDuration(sample)
-            guard start.isValid, duration.isValid,
-                  start.seconds.isFinite, duration.seconds.isFinite,
-                  start.seconds >= 0, duration.seconds > 0 else {
-                continue
-            }
-            guard let description = CMSampleBufferGetFormatDescription(sample) else {
-                throw EmbeddedSubtitleExtractionError.unreadablePayload
-            }
-            let payload = try payloadString(
-                from: sample,
-                mediaSubType: CMFormatDescriptionGetMediaSubType(description)
+        let result: SubtitleProcessResult
+        do {
+            result = try await runProcess(
+                executableURL: ffprobeURL,
+                arguments: [
+                    "-v", "error",
+                    "-print_format", "json",
+                    "-show_entries", "stream=index,codec_name,codec_type,codec_long_name,width,height,disposition:stream_tags=language,title,name",
+                    "-select_streams", "s",
+                    url.path,
+                ]
             )
-            let startMs = Int64((start.seconds * 1_000).rounded())
-            let endMs = Int64(((start.seconds + duration.seconds) * 1_000).rounded())
-            samples.append(TimedTextSample(startMs: startMs, endMs: endMs, payload: payload))
+        } catch {
+            throw EmbeddedSubtitleExtractionError.probeFailed(error.localizedDescription)
         }
-        if reader.status == .failed {
-            throw EmbeddedSubtitleExtractionError.unavailable(reader.error?.localizedDescription ?? "AVFoundation could not read this subtitle track.")
-        }
-        return samples
-    }
 
-    private static let tx3gFormat: FourCharCode = 0x7478_3367
-    private static let wvttFormat: FourCharCode = 0x7776_7474
+        try Task.checkCancellation()
+        guard result.status == 0 else {
+            throw EmbeddedSubtitleExtractionError.probeFailed(result.errorMessage)
+        }
 
-    private static func payloadString(from sample: CMSampleBuffer, mediaSubType: FourCharCode) throws -> String {
-        guard let blockBuffer = CMSampleBufferGetDataBuffer(sample) else {
-            throw EmbeddedSubtitleExtractionError.unreadablePayload
-        }
-        let length = CMBlockBufferGetDataLength(blockBuffer)
-        guard length > 0 else { return "" }
-        var data = Data(count: length)
-        let result = data.withUnsafeMutableBytes { bytes in
-            CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0, dataLength: length, destination: bytes.baseAddress!)
-        }
-        guard result == kCMBlockBufferNoErr else {
-            throw EmbeddedSubtitleExtractionError.unreadablePayload
-        }
-        return try payloadString(data: data, mediaSubType: mediaSubType)
-    }
-
-    static func payloadString(data: Data, mediaSubType: FourCharCode) throws -> String {
-        switch mediaSubType {
-        case tx3gFormat:
-            return try tx3gPayloadString(data)
-        case wvttFormat:
-            return try wvttPayloadString(data)
-        default:
-            throw EmbeddedSubtitleExtractionError.unavailable("The selected subtitle track uses an unsupported timed-text format.")
+        do {
+            let response = try JSONDecoder().decode(SubtitleProbeResponse.self, from: Data(result.standardOutput.utf8))
+            return response
+        } catch let error as EmbeddedSubtitleExtractionError {
+            throw error
+        } catch {
+            throw EmbeddedSubtitleExtractionError.probeFailed("FFprobe returned invalid media metadata.")
         }
     }
 
-    private static func tx3gPayloadString(_ data: Data) throws -> String {
-        guard data.count >= 2 else { throw EmbeddedSubtitleExtractionError.unreadablePayload }
-        let textLength = Int(data[data.startIndex]) << 8 | Int(data[data.startIndex + 1])
-        let textStart = data.startIndex + 2
-        let textEnd = textStart + textLength
-        guard textEnd <= data.endIndex else { throw EmbeddedSubtitleExtractionError.unreadablePayload }
-        guard textLength > 0 else { return "" }
-        return try readableString(from: data[textStart..<textEnd])
+    static func exportSRT(from url: URL, streamIndex: Int) async throws -> String {
+        guard url.isFileURL else { throw EmbeddedSubtitleExtractionError.remoteMedia }
+        guard let ffmpegURL = executableURL(named: "ffmpeg") else {
+            throw EmbeddedSubtitleExtractionError.ffmpegUnavailable
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NuraEmbeddedSubtitle-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let srtURL = temporaryDirectory.appendingPathComponent("subtitle.srt")
+        do {
+            let result = try await runProcess(
+                executableURL: ffmpegURL,
+                arguments: [
+                    "-hide_banner", "-loglevel", "error", "-y",
+                    "-i", url.path,
+                    "-map", "0:\(streamIndex)",
+                    "-vn", "-an", "-dn",
+                    "-c:s", "srt",
+                    "-f", "srt",
+                    srtURL.path,
+                ]
+            )
+            try Task.checkCancellation()
+            guard result.status == 0 else {
+                throw EmbeddedSubtitleExtractionError.exportFailed(result.errorMessage)
+            }
+            let data = try Data(contentsOf: srtURL)
+            guard let srt = String(data: data, encoding: .utf8) else {
+                throw EmbeddedSubtitleExtractionError.noContent
+            }
+            return srt
+        } catch {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+            throw error
+        }
     }
 
-    private static func wvttPayloadString(_ data: Data) throws -> String {
-        let boxes = try isoBoxes(in: data)
-        var payloads: [String] = []
-        for box in boxes where box.type == "vttc" {
-            for child in try isoBoxes(in: box.payload) where child.type == "payl" {
-                payloads.append(try readableString(from: child.payload))
+    static func displayName(for stream: ProbeSubtitleStream) -> String {
+        let title = stream.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let language = stream.language?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        var components = [String]()
+        if let title {
+            components.append(title)
+        }
+        if let language {
+            components.append(language)
+        }
+        if components.isEmpty {
+            components.append("Subtitle track \(stream.index)")
+        }
+        components.append(stream.kind.displayLabel)
+        return components.joined(separator: " | ")
+    }
+
+    static func executableURL(named name: String) -> URL? {
+        let environmentKey = "NURA_\(name.uppercased())_PATH"
+        var candidates: [URL] = []
+        if let override = ProcessInfo.processInfo.environment[environmentKey], !override.isEmpty {
+            candidates.append(URL(fileURLWithPath: override))
+        }
+        if let resourceURL = Bundle.main.resourceURL {
+            candidates.append(resourceURL.appendingPathComponent("bin").appendingPathComponent(name))
+            candidates.append(resourceURL.appendingPathComponent(name))
+        }
+        candidates.append(contentsOf: [
+            URL(fileURLWithPath: "/opt/homebrew/bin/\(name)"),
+            URL(fileURLWithPath: "/usr/local/bin/\(name)"),
+            URL(fileURLWithPath: "/usr/bin/\(name)"),
+        ])
+        return candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) })
+    }
+
+    static func runProcess(executableURL: URL, arguments: [String]) async throws -> SubtitleProcessResult {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let process = Process()
+                    let standardOutput = Pipe()
+                    let standardError = Pipe()
+                    process.executableURL = executableURL
+                    process.arguments = arguments
+                    process.standardOutput = standardOutput
+                    process.standardError = standardError
+                    try process.run()
+                    process.waitUntilExit()
+                    let stdout = String(data: standardOutput.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                    let stderr = String(data: standardError.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                    continuation.resume(returning: SubtitleProcessResult(
+                        status: process.terminationStatus,
+                        standardOutput: stdout,
+                        errorMessage: stderr.isEmpty ? "FFmpeg process failed." : stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
         }
-        guard !payloads.isEmpty else { throw EmbeddedSubtitleExtractionError.unreadablePayload }
-        return payloads.joined(separator: " ")
+    }
+}
+
+struct SubtitleProcessResult: Sendable {
+    let status: Int32
+    let standardOutput: String
+    let errorMessage: String
+}
+
+struct SubtitleProbeResponse: Decodable, Equatable {
+    let streams: [ProbeSubtitleStream]
+}
+
+struct ProbeSubtitleStream: Decodable, Equatable {
+    let index: Int
+    let codecName: String?
+    let codecType: String?
+    let codecLongName: String?
+    let width: Int?
+    let height: Int?
+    let disposition: SubtitleProbeDisposition?
+    let language: String?
+    let title: String?
+
+    enum CodingKeys: String, CodingKey {
+        case index
+        case codecName = "codec_name"
+        case codecType = "codec_type"
+        case codecLongName = "codec_long_name"
+        case width
+        case height
+        case disposition
+        case tags
+        case tagLanguage = "language"
+        case tagTitle = "title"
+        case tagName = "name"
     }
 
-    private static func readableString<DataType: DataProtocol>(from data: DataType) throws -> String {
-        let bytes = Data(data)
-        let encodings: [String.Encoding] = [.utf8, .utf16BigEndian]
-        guard let value = encodings
-            .compactMap({ String(data: bytes, encoding: $0) })
-            .first(where: isReadableText) else {
-            throw EmbeddedSubtitleExtractionError.unreadablePayload
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        index = try container.decode(Int.self, forKey: .index)
+        codecName = try container.decodeIfPresent(String.self, forKey: .codecName)
+        codecType = try container.decodeIfPresent(String.self, forKey: .codecType)
+        codecLongName = try container.decodeIfPresent(String.self, forKey: .codecLongName)
+        width = try container.decodeIfPresent(Int.self, forKey: .width)
+        height = try container.decodeIfPresent(Int.self, forKey: .height)
+        disposition = try container.decodeIfPresent(SubtitleProbeDisposition.self, forKey: .disposition)
+        if let tags = try container.decodeIfPresent([String: String].self, forKey: .tags) {
+            language = tags["language"]
+            title = tags["name"] ?? tags["title"]
+        } else {
+            language = nil
+            title = nil
         }
-        return value
     }
 
-    private static func isReadableText(_ value: String) -> Bool {
-        !value.unicodeScalars.contains(where: { scalar in
-            scalar.value < 0x20 && scalar.value != 0x09 && scalar.value != 0x0A && scalar.value != 0x0D
-        })
-    }
-
-    private static func isoBoxes(in data: Data) throws -> [(type: String, payload: Data)] {
-        var offset = data.startIndex
-        var boxes: [(type: String, payload: Data)] = []
-        while offset < data.endIndex {
-            guard data.distance(from: offset, to: data.endIndex) >= 8 else {
-                throw EmbeddedSubtitleExtractionError.unreadablePayload
+    var kind: EmbeddedSubtitleKind {
+        guard codecType == "subtitle" else { return .unknown }
+        if let codecName = codecName?.lowercased() {
+            switch codecName {
+            case "subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "tx3g", "text",
+                 "eia_608", "eia_708", "cc_dec", "microdvd", "mpl2", "pjs", "subviewer",
+                 "subviewer1", "stl", "vplayer", "jacosub", "sami", "realtext", "dvb_teletext":
+                return .text
+            case "hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvdsub", "dvb_subtitle",
+                 "dvbsub", "xsub", "dvd_vobsub", "vobsub":
+                return .graphic
+            default:
+                break
             }
-            let size = Int(data[offset]) << 24
-                | Int(data[offset + 1]) << 16
-                | Int(data[offset + 2]) << 8
-                | Int(data[offset + 3])
-            guard size >= 8, size <= data.distance(from: offset, to: data.endIndex) else {
-                throw EmbeddedSubtitleExtractionError.unreadablePayload
-            }
-            let typeData = data[(offset + 4)..<(offset + 8)]
-            guard let type = String(data: typeData, encoding: .ascii) else {
-                throw EmbeddedSubtitleExtractionError.unreadablePayload
-            }
-            let payloadStart = offset + 8
-            let boxEnd = offset + size
-            boxes.append((type: type, payload: Data(data[payloadStart..<boxEnd])))
-            offset = boxEnd
         }
-        return boxes
+        if let width = width, width > 0, let height = height, height > 0 {
+            return .graphic
+        }
+        return .unknown
+    }
+}
+
+enum EmbeddedSubtitleKind: Equatable {
+    case text
+    case graphic
+    case unknown
+
+    var isText: Bool { self == .text }
+    var displayLabel: String {
+        switch self {
+        case .text: return "text"
+        case .graphic: return "requires OCR"
+        case .unknown: return "unknown"
+        }
+    }
+}
+
+struct SubtitleProbeDisposition: Decodable, Equatable {
+    let isDefault: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case isDefault = "default"
     }
 }
 
@@ -264,5 +327,11 @@ enum MediaFingerprint {
         let modificationTime = resourceValues?.contentModificationDate?.timeIntervalSince1970 ?? 0
         let identity = "local-v1|\(canonicalURL.path)|\(size)|\(modificationTime)"
         return SubtitleParser.sourceFingerprint(data: Data(identity.utf8), trackIdentifier: "media")
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }
