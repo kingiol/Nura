@@ -49,7 +49,7 @@ nura_is_system_dependency() {
 
 nura_dependency_references() {
     otool -L "$1" |
-        sed '1,2d' |
+        sed '1d' |
         sed 's/^[[:space:]]*//' |
         while IFS= read -r line; do
             [ -n "$line" ] || continue

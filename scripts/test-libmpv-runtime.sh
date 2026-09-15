@@ -27,6 +27,7 @@ cmp -s "$LOCK" "$app/Contents/Resources/libmpv-runtime-manifest.tsv"
 test -x "$app/Contents/Resources/bin/ffmpeg"
 test -x "$app/Contents/Resources/bin/ffprobe"
 cmp -s "$FFMPEG_LOCK" "$app/Contents/Resources/ffmpeg-runtime-manifest.tsv"
+test -f "$app/Contents/Frameworks/libavdevice.63.1.101.dylib"
 
 find "$app/Contents/Frameworks" -maxdepth 1 -type f -name '*.dylib' -print |
     LC_ALL=C sort > "$temporary/dylibs"
@@ -40,4 +41,28 @@ for tool in "$app/Contents/Resources/bin/ffmpeg" "$app/Contents/Resources/bin/ff
     ! otool -L "$tool" | grep -Eq '/(opt/homebrew|usr/local)/'
 done
 
-printf '%s\n' "Verified $(wc -l < "$temporary/dylibs" | tr -d ' ') bundled libmpv runtime dylibs and FFmpeg tools."
+media="$ROOT/test-fixtures/media/oceans.mp4"
+[ -f "$media" ] || {
+    printf '%s\n' "skipping FFmpeg conversion smoke test: $media is missing" >&2
+    exit 0
+}
+"$app/Contents/Resources/bin/ffprobe" \
+    -v error -print_format json \
+    -show_entries format=duration:stream=index,codec_type,disposition \
+    -select_streams a \
+    "$media" > "$temporary/probe.json"
+"$app/Contents/Resources/bin/ffmpeg" \
+    -hide_banner -loglevel error -y \
+    -i "$media" \
+    -ss 0.000 -t 1.000 \
+    -map 0:1 \
+    -vn -sn -dn \
+    -ac 1 -ar 16000 -c:a aac -b:a 64k \
+    -movflags +faststart \
+    "$temporary/chunk.m4a"
+test -s "$temporary/chunk.m4a"
+"$app/Contents/Resources/bin/ffprobe" \
+    -v error -print_format json \
+    -show_entries stream=codec_name,sample_rate,channels \
+    "$temporary/chunk.m4a" > "$temporary/chunk-probe.json"
+printf '%s\n' "Verified $(wc -l < "$temporary/dylibs" | tr -d ' ') bundled libmpv runtime dylibs, FFmpeg tools, and a real audio extraction smoke test."

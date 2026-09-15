@@ -10,6 +10,7 @@ RESOURCES="$APP/Contents/Resources"
 MANIFEST="$RESOURCES/libmpv-runtime-manifest.tsv"
 FFMPEG_MANIFEST="$RESOURCES/ffmpeg-runtime-manifest.tsv"
 TOOLS="$RESOURCES/bin"
+FFMPEG_LIBRARIES="libavdevice.63.1.101.dylib"
 
 [ -d "$APP/Contents" ] || {
     printf '%s\n' "not a macOS app bundle: $APP" >&2
@@ -69,6 +70,21 @@ nura_resolve_ffmpeg_binary() {
     nura_realpath "$source"
 }
 
+nura_resolve_ffmpeg_library() {
+    filename=$1
+    for candidate in \
+        "/opt/homebrew/Cellar/ffmpeg/9.0.1_1/lib/$filename" \
+        "/usr/local/Cellar/ffmpeg/9.0.1_1/lib/$filename"; do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$(nura_realpath "$candidate")"
+            return 0
+        fi
+    done
+
+    printf '%s\n' "FFmpeg library $filename was not found. Run: brew bundle --file=\"$ROOT/Brewfile\"" >&2
+    return 1
+}
+
 records=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-records.XXXXXX")
 actual_lock=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-actual.XXXXXX")
 dependencies=$(mktemp "${TMPDIR:-/tmp}/nura-libmpv-dependencies.XXXXXX")
@@ -83,6 +99,7 @@ trap 'rm -f "$records" "$actual_lock" "$dependencies" "$bundled_dylibs" "$closur
 source=$(nura_resolve_mpv_source)
 nura_ffmpeg=$(nura_resolve_ffmpeg_binary ffmpeg)
 nura_ffprobe=$(nura_resolve_ffmpeg_binary ffprobe)
+ffmpeg_library=$(nura_resolve_ffmpeg_library "$FFMPEG_LIBRARIES")
 nura_collect_runtime_closure "$source" > "$closure"
 while IFS='	' read -r source_path filename; do
     sha256=$(shasum -a 256 "$source_path" | awk '{print $1}')
@@ -104,11 +121,11 @@ fi
 
 {
     printf '%s\n' '# filename	source_path	sha256	architectures'
-    for tool_source in "$nura_ffmpeg" "$nura_ffprobe"; do
-        tool_filename=$(basename "$tool_source")
-        tool_sha256=$(shasum -a 256 "$tool_source" | awk '{print $1}')
-        tool_architectures=$(lipo -archs "$tool_source")
-        printf '%s\t%s\t%s\t%s\n' "$tool_filename" "$tool_source" "$tool_sha256" "$tool_architectures"
+    for ffmpeg_source in "$nura_ffmpeg" "$nura_ffprobe" "$ffmpeg_library"; do
+        ffmpeg_filename=$(basename "$ffmpeg_source")
+        ffmpeg_sha256=$(shasum -a 256 "$ffmpeg_source" | awk '{print $1}')
+        ffmpeg_architectures=$(lipo -archs "$ffmpeg_source")
+        printf '%s\t%s\t%s\t%s\n' "$ffmpeg_filename" "$ffmpeg_source" "$ffmpeg_sha256" "$ffmpeg_architectures"
     done
 } > "$actual_ffmpeg_lock"
 
@@ -134,28 +151,60 @@ fi
 
 while IFS='	' read -r filename source_path sha256 architectures; do
     [ "$filename" = '# filename' ] && continue
-    cp -L "$source_path" "$FRAMEWORKS/$filename"
+    temporary_copy=$(mktemp "$FRAMEWORKS/.nura-runtime.XXXXXX")
+    cp -L "$source_path" "$temporary_copy"
+    chmod 644 "$temporary_copy"
+    mv -f "$temporary_copy" "$FRAMEWORKS/$filename"
 done < "$actual_lock"
 
 mkdir -p "$TOOLS"
-cp -L "$nura_ffmpeg" "$TOOLS/ffmpeg"
-cp -L "$nura_ffprobe" "$TOOLS/ffprobe"
+for bundled_file in "$nura_ffmpeg:$TOOLS/ffmpeg" "$nura_ffprobe:$TOOLS/ffprobe" "$ffmpeg_library:$FRAMEWORKS/$FFMPEG_LIBRARIES"; do
+    source_file=${bundled_file%%:*}
+    target_file=${bundled_file#*:}
+    temporary_copy=$(mktemp "$(dirname "$target_file")/.nura-runtime.XXXXXX")
+    cp -L "$source_file" "$temporary_copy"
+    chmod 644 "$temporary_copy"
+    mv -f "$temporary_copy" "$target_file"
+done
 chmod 755 "$TOOLS/ffmpeg" "$TOOLS/ffprobe"
 
-while IFS='	' read -r tool_filename tool_source sha256 architectures; do
-    [ "$tool_filename" = '# filename' ] && continue
-    tool="$TOOLS/$tool_filename"
-    nura_dependency_references "$tool_source" > "$ffmpeg_dependencies"
+while IFS='	' read -r ffmpeg_filename ffmpeg_source sha256 architectures; do
+    [ "$ffmpeg_filename" = '# filename' ] && continue
+    case "$ffmpeg_filename" in
+        ffmpeg|ffprobe) ffmpeg_path="$TOOLS/$ffmpeg_filename" ;;
+        *) ffmpeg_path="$FRAMEWORKS/$ffmpeg_filename" ;;
+    esac
+    nura_dependency_references "$ffmpeg_source" > "$ffmpeg_dependencies"
     while IFS= read -r reference; do
         nura_is_system_dependency "$reference" && continue
-        dependency_source=$(nura_resolve_dependency "$tool_source" "$reference")
+        dependency_source=$(nura_resolve_dependency "$ffmpeg_source" "$reference")
         nura_is_system_dependency "$dependency_source" && continue
         dependency_filename=$(awk -F '\t' -v source="$dependency_source" '$2 == source { print $1; exit }' "$records")
-        [ -n "$dependency_filename" ] || {
-            printf '%s\n' "libmpv runtime lock has no bundled filename for $dependency_source" >&2
-            exit 1
-        }
-        nura_install_name_tool -change "$reference" "@loader_path/../../Frameworks/$dependency_filename" "$tool"
+        if [ -n "$dependency_filename" ]; then
+            case "$ffmpeg_filename" in
+                ffmpeg|ffprobe)
+                    dependency_replacement="@loader_path/../../Frameworks/$dependency_filename"
+                    ;;
+                *)
+                    dependency_replacement="@loader_path/$dependency_filename"
+                    ;;
+            esac
+        else
+            dependency_filename=$(awk -F '\t' -v source="$dependency_source" '$2 == source { print $1; exit }' "$actual_ffmpeg_lock")
+            [ -n "$dependency_filename" ] || {
+                printf '%s\n' "runtime lock has no bundled filename for $dependency_source" >&2
+                exit 1
+            }
+            case "$ffmpeg_filename" in
+                ffmpeg|ffprobe)
+                    dependency_replacement="@loader_path/../../Frameworks/$dependency_filename"
+                    ;;
+                *)
+                    dependency_replacement="@loader_path/$dependency_filename"
+                    ;;
+            esac
+        fi
+        nura_install_name_tool -change "$reference" "$dependency_replacement" "$ffmpeg_path"
     done < "$ffmpeg_dependencies"
 done < "$actual_ffmpeg_lock"
 
@@ -170,11 +219,17 @@ while IFS='	' read -r filename source_path sha256 architectures; do
         dependency_source=$(nura_resolve_dependency "$source_path" "$reference")
         nura_is_system_dependency "$dependency_source" && continue
         dependency_filename=$(awk -F '	' -v source="$dependency_source" '$2 == source { print $1; exit }' "$records")
-        [ -n "$dependency_filename" ] || {
-            printf '%s\n' "runtime lock has no bundled filename for $dependency_source" >&2
-            exit 1
-        }
-        nura_install_name_tool -change "$reference" "@loader_path/$dependency_filename" "$dylib"
+        if [ -n "$dependency_filename" ]; then
+            dependency_replacement="@loader_path/$dependency_filename"
+        else
+            dependency_filename=$(awk -F '	' -v source="$dependency_source" '$2 == source { print $1; exit }' "$actual_ffmpeg_lock")
+            [ -n "$dependency_filename" ] || {
+                printf '%s\n' "runtime lock has no bundled filename for $dependency_source" >&2
+                exit 1
+            }
+            dependency_replacement="@loader_path/$dependency_filename"
+        fi
+        nura_install_name_tool -change "$reference" "$dependency_replacement" "$dylib"
     done < "$dependencies"
 done < "$actual_lock"
 
@@ -196,6 +251,9 @@ while IFS= read -r dylib; do
                 }
                 ;;
             @rpath/*|@executable_path/*)
+                if [ "$reference" = "@rpath/$(basename "$dylib")" ]; then
+                    continue
+                fi
                 printf '%s\n' "unresolved bundled dependency: $dylib -> $reference" >&2
                 exit 1
                 ;;
