@@ -32,16 +32,21 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { container in
             ZStack {
-                RenderSurfaceView(model: model)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                    .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
-                    .onTapGesture { revealControls() }
-                    .contextMenu {
-                        if !model.showsWelcomeScreen {
-                            playbackContextMenu
-                        }
+                HStack(spacing: 0) {
+                    playerArea()
+                        .frame(maxWidth: .infinity)
+
+                    if !model.showsWelcomeScreen, sidebar == .transcript || sidebar == .notes {
+                        AnalysisSidebarView(
+                            model: model,
+                            tab: sidebar ?? .transcript,
+                            onSelectTab: { self.sidebar = $0 },
+                            onClose: { self.sidebar = nil }
+                        )
+                        .frame(width: 360)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
+                }
 
                 if model.showsWelcomeScreen {
                     EmptyWelcomeView(
@@ -59,31 +64,13 @@ struct PlayerView: View {
                         .transition(.opacity)
                 }
 
-                VStack(spacing: 0) {
-                    if !model.showsWelcomeScreen, controlsVisible {
-                        Spacer()
-                        controlBar
-                            .frame(width: controlBarWidth(in: container.size))
-                            .transition(.opacity)
-                    } else {
-                        Spacer()
-                    }
-                }
-
-                if !model.showsWelcomeScreen, let sidebar {
+                if !model.showsWelcomeScreen, let sidebar, sidebar != .transcript, sidebar != .notes {
                     Group {
                         if sidebar == .settings {
                             SettingsSidebarView(
                                 model: model,
                                 onClose: { self.sidebar = nil },
                                 onTogglePiP: togglePiP
-                            )
-                        } else if sidebar == .transcript || sidebar == .notes {
-                            AnalysisSidebarView(
-                                model: model,
-                                tab: sidebar ?? .transcript,
-                                onSelectTab: { self.sidebar = $0 },
-                                onClose: { self.sidebar = nil }
                             )
                         } else {
                             SidebarView(
@@ -113,14 +100,17 @@ struct PlayerView: View {
                         sidebarHovered = hovering
                         updateControlsVisibility()
                     }
-                        .frame(width: sidebar == .settings || sidebar == .transcript || sidebar == .notes ? 360 : 300)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .frame(width: sidebar == .settings ? 360 : 300)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
             .ignoresSafeArea()
             .background(Color.black)
-            .background(WindowButtonVisibility(isVisible: controlsVisible, onWindowAvailable: onWindowAvailable))
+            .background(WindowButtonVisibility(
+                isVisible: !model.showsWelcomeScreen && controlsVisible,
+                onWindowAvailable: onWindowAvailable
+            ))
             .animation(.easeOut(duration: 0.18), value: controlsVisible)
             .animation(.easeOut(duration: 0.18), value: sidebar)
             .animation(.easeOut(duration: 0.18), value: model.showsWelcomeScreen)
@@ -130,6 +120,14 @@ struct PlayerView: View {
             .onAppear {
                 model.updateWindowGeometryIfNeeded()
                 revealControls()
+            }
+            .onChange(of: sidebar) { _, newValue in
+                if !model.showsWelcomeScreen {
+                    model.setAnalysisSidebarPresented(
+                        newValue == .transcript || newValue == .notes,
+                        sidebarWidth: 360
+                    )
+                }
             }
             .onChange(of: model.isPictureInPictureActive) { _, active in
                 if active {
@@ -170,6 +168,39 @@ struct PlayerView: View {
         Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
         Button("Picture in Picture", action: model.togglePiP)
         Button("Toggle Fullscreen", action: model.toggleFullscreen)
+    }
+
+    private var videoSurface: some View {
+        RenderSurfaceView(model: model)
+            .background(Color.black)
+            .onDrop(of: [UTType.fileURL.identifier, UTType.plainText.identifier], isTargeted: $isDropTargeted, perform: handleDrop)
+            .onTapGesture { revealControls() }
+            .contextMenu {
+                if !model.showsWelcomeScreen {
+                    playbackContextMenu
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func playerArea() -> some View {
+        GeometryReader { area in
+            ZStack {
+                videoSurface
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                VStack(spacing: 0) {
+                    if !model.showsWelcomeScreen, controlsVisible {
+                        Spacer()
+                        controlBar
+                            .frame(width: controlBarWidth(in: area.size))
+                            .transition(.opacity)
+                    } else {
+                        Spacer()
+                    }
+                }
+            }
+        }
     }
 
     private func controlBarWidth(in containerSize: CGSize) -> CGFloat {

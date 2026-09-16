@@ -120,6 +120,9 @@ final class PlayerViewModel {
     private var requestedCloudAnalysisAction: CloudAnalysisAction?
     private weak var playerWindow: NSWindow?
     private var windowVideoGeometry: VideoGeometry?
+    private var windowVideoSidebarWidth: CGFloat = 0
+    private var windowAnalysisSidebarWidth: CGFloat = 360
+    private(set) var isAnalysisSidebarPresented = false
     private let screenshotDirectoryKey = "screenshotDirectory"
     private let stateDirectory: URL?
     private let defaults: UserDefaults
@@ -398,6 +401,19 @@ final class PlayerViewModel {
         updateWindowGeometryIfNeeded()
     }
 
+    func setAnalysisSidebarPresented(_ presented: Bool, sidebarWidth: CGFloat = 360) {
+        let expectedVideoSidebarWidth = presented ? sidebarWidth : 0
+        if isAnalysisSidebarPresented == presented
+            && windowAnalysisSidebarWidth == sidebarWidth
+            && windowVideoSidebarWidth == expectedVideoSidebarWidth {
+            return
+        }
+        isAnalysisSidebarPresented = presented
+        windowAnalysisSidebarWidth = sidebarWidth
+        updateWindowGeometryIfNeeded()
+        windowVideoSidebarWidth = expectedVideoSidebarWidth
+    }
+
     func detachWindow() {
         timer?.invalidate()
         timer = nil
@@ -406,6 +422,7 @@ final class PlayerViewModel {
         isOpenGLContextAttached = false
         pendingOpenRequest = nil
         windowVideoGeometry = nil
+        windowVideoSidebarWidth = 0
         playerWindow = nil
     }
 
@@ -1409,8 +1426,16 @@ final class PlayerViewModel {
             return
         }
 
-        configure(window, for: geometry, on: screen, resizeToFit: true)
+        let sidebarWidth = isAnalysisSidebarPresented ? windowAnalysisSidebarWidth : 0
+        configure(
+            window,
+            for: geometry,
+            on: screen,
+            resizeToFit: true,
+            sidebarWidth: sidebarWidth
+        )
         windowVideoGeometry = geometry
+        windowVideoSidebarWidth = sidebarWidth
         lastError = nil
     }
 
@@ -1984,33 +2009,49 @@ final class PlayerViewModel {
         guard let geometry = currentVideoGeometry else {
             configureNonVideoWindow()
             windowVideoGeometry = nil
+            windowVideoSidebarWidth = 0
             return
         }
-        guard geometry != windowVideoGeometry,
+        let sidebarWidth = isAnalysisSidebarPresented ? windowAnalysisSidebarWidth : 0
+        guard geometry != windowVideoGeometry || windowVideoSidebarWidth != sidebarWidth,
               let window = playerWindow,
               let screen = window.screen ?? NSScreen.main else {
             return
         }
-        configure(window, for: geometry, on: screen, resizeToFit: true)
+        configure(
+            window,
+            for: geometry,
+            on: screen,
+            resizeToFit: true,
+            sidebarWidth: sidebarWidth
+        )
         windowVideoGeometry = geometry
+        windowVideoSidebarWidth = sidebarWidth
     }
 
-    private func configure(_ window: NSWindow, for geometry: VideoGeometry, on screen: NSScreen, resizeToFit: Bool) {
+    private func configure(_ window: NSWindow, for geometry: VideoGeometry, on screen: NSScreen, resizeToFit: Bool, sidebarWidth: CGFloat = 0) {
         let contentSize = geometry.size
-        window.contentAspectRatio = contentSize
-        window.contentMinSize = geometry.minimumSize
+        let aspectSize = NSSize(
+            width: contentSize.width + sidebarWidth,
+            height: contentSize.height
+        )
+        window.contentAspectRatio = aspectSize
+        window.contentMinSize = NSSize(
+            width: aspectSize.width * 0.5,
+            height: aspectSize.height * 0.5
+        )
         guard resizeToFit else { return }
 
         let visibleFrame = screen.visibleFrame
         let maximumSize = NSSize(width: visibleFrame.width * 0.9, height: visibleFrame.height * 0.9)
-        let maximumScale = min(maximumSize.width / contentSize.width, maximumSize.height / contentSize.height)
+        let maximumScale = min(maximumSize.width / aspectSize.width, maximumSize.height / aspectSize.height)
         guard maximumScale > 0 else {
             showError(L10n.text("Unable to fit the video on this display"))
             return
         }
 
         let scale = min(maximumScale, 1)
-        let fittedContentSize = NSSize(width: contentSize.width * scale, height: contentSize.height * scale)
+        let fittedContentSize = NSSize(width: aspectSize.width * scale, height: aspectSize.height * scale)
         var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: fittedContentSize))
         frame.origin = NSPoint(x: window.frame.midX - frame.width / 2, y: window.frame.midY - frame.height / 2)
         frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))

@@ -155,6 +155,9 @@
         }
       }
     },
+    "Analyze with Cloud ASR?" : {
+
+    },
     "API key" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -331,6 +334,9 @@
         }
       }
     },
+    "Checking local subtitle tracks…" : {
+
+    },
     "Choose a destination from the player settings when saving screenshots." : {
       "localizations" : {
         "zh-Hans" : {
@@ -351,6 +357,9 @@
           }
         }
       }
+    },
+    "Choose a readable text subtitle track. This stays on your Mac." : {
+
     },
     "Choose Screenshot Folder" : {
       "extractionState" : "stale",
@@ -658,6 +667,9 @@
           }
         }
       }
+    },
+    "Extract Embedded Subtitle" : {
+
     },
     "Fit to Video" : {
       "extractionState" : "stale",
@@ -1098,6 +1110,9 @@
         }
       }
     },
+    "No notes for this media." : {
+
+    },
     "No Playback History" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1139,6 +1154,9 @@
         }
       }
     },
+    "Note deleted" : {
+
+    },
     "Nura" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1149,6 +1167,9 @@
           }
         }
       }
+    },
+    "Nura will upload audio chunks to the configured AI API. Transcript results are stored locally on this Mac." : {
+
     },
     "Off" : {
       "extractionState" : "stale",
@@ -2181,6 +2202,9 @@
           }
         }
       }
+    },
+    "Transcript tools are available for local media." : {
+
     },
     "Transform" : {
       "extractionState" : "stale",
