@@ -105,6 +105,7 @@ struct PlayerView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .frame(minWidth: 600, minHeight: 360)
             .ignoresSafeArea()
             .background(Color.black)
             .background(WindowButtonVisibility(

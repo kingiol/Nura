@@ -12,7 +12,11 @@ private struct VideoGeometry: Equatable {
 
     var minimumSize: NSSize {
         let scale = 600 / max(width, height)
-        return NSSize(width: width * scale, height: height * scale)
+        let size = NSSize(width: width * scale, height: height * scale)
+        return NSSize(
+            width: max(size.width, 600),
+            height: max(size.height, 360)
+        )
     }
 }
 
@@ -2036,10 +2040,7 @@ final class PlayerViewModel {
             height: contentSize.height
         )
         window.contentAspectRatio = aspectSize
-        window.contentMinSize = NSSize(
-            width: aspectSize.width * 0.5,
-            height: aspectSize.height * 0.5
-        )
+        window.contentMinSize = geometry.minimumSize
         guard resizeToFit else { return }
 
         let visibleFrame = screen.visibleFrame
@@ -2052,7 +2053,11 @@ final class PlayerViewModel {
 
         let scale = min(maximumScale, 1)
         let fittedContentSize = NSSize(width: aspectSize.width * scale, height: aspectSize.height * scale)
-        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: fittedContentSize))
+        let minimumContentSize = NSSize(
+            width: max(window.contentMinSize.width, fittedContentSize.width),
+            height: max(window.contentMinSize.height, fittedContentSize.height)
+        )
+        var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize))
         frame.origin = NSPoint(x: window.frame.midX - frame.width / 2, y: window.frame.midY - frame.height / 2)
         frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))
         frame.origin.y = max(visibleFrame.minY, min(frame.origin.y, visibleFrame.maxY - frame.height))
