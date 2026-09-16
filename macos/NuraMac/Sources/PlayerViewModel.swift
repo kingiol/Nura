@@ -2,7 +2,7 @@ import AppKit
 import Observation
 import UniformTypeIdentifiers
 
-private struct VideoGeometry: Equatable {
+struct VideoGeometry: Equatable {
     let width: CGFloat
     let height: CGFloat
 
@@ -13,9 +13,24 @@ private struct VideoGeometry: Equatable {
     var minimumSize: NSSize {
         let scale = 600 / max(width, height)
         let size = NSSize(width: width * scale, height: height * scale)
+        let minimumScale: CGFloat
+        if width >= height {
+            minimumScale = max(600 / width, 360 / height)
+        } else {
+            minimumScale = max(600 / height, 360 / width)
+        }
+        return NSSize(width: width * minimumScale, height: height * minimumScale)
+    }
+}
+
+final class PlayerWindowResizeDelegate: NSObject, NSWindowDelegate {
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        let minimumContentSize = sender.contentMinSize
+        guard minimumContentSize.width > 0, minimumContentSize.height > 0 else { return frameSize }
+        let minimumFrameSize = sender.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize)).size
         return NSSize(
-            width: max(size.width, 600),
-            height: max(size.height, 360)
+            width: max(frameSize.width, minimumFrameSize.width),
+            height: max(frameSize.height, minimumFrameSize.height)
         )
     }
 }
@@ -123,6 +138,7 @@ final class PlayerViewModel {
     private var cloudAnalysisTaskID: UUID?
     private var requestedCloudAnalysisAction: CloudAnalysisAction?
     private weak var playerWindow: NSWindow?
+    private let windowResizeDelegate = PlayerWindowResizeDelegate()
     private var windowVideoGeometry: VideoGeometry?
     private var windowVideoSidebarWidth: CGFloat = 0
     private var windowAnalysisSidebarWidth: CGFloat = 360
@@ -401,6 +417,12 @@ final class PlayerViewModel {
 
     func attach(to window: NSWindow) {
         playerWindow = window
+        window.delegate = windowResizeDelegate
+        if !disableWindowResize {
+            window.minSize = window.frameRect(
+                forContentRect: NSRect(origin: .zero, size: NSSize(width: 600, height: 360))
+            ).size
+        }
         startRuntime()
         updateWindowGeometryIfNeeded()
     }
@@ -427,6 +449,7 @@ final class PlayerViewModel {
         pendingOpenRequest = nil
         windowVideoGeometry = nil
         windowVideoSidebarWidth = 0
+        playerWindow?.delegate = nil
         playerWindow = nil
     }
 
@@ -2039,8 +2062,8 @@ final class PlayerViewModel {
             width: contentSize.width + sidebarWidth,
             height: contentSize.height
         )
-        window.contentAspectRatio = aspectSize
-        window.contentMinSize = geometry.minimumSize
+        window.contentAspectRatio = .zero
+        applyMinimumWindowSize(geometry.minimumSize)
         guard resizeToFit else { return }
 
         let visibleFrame = screen.visibleFrame
@@ -2070,7 +2093,14 @@ final class PlayerViewModel {
         let minimumSize = NSSize(width: minimumLength, height: minimumLength)
         guard window.contentAspectRatio != .zero || window.contentMinSize != minimumSize else { return }
         window.contentAspectRatio = .zero
+        applyMinimumWindowSize(minimumSize)
+    }
+
+    private func applyMinimumWindowSize(_ minimumSize: NSSize) {
+        guard let window = playerWindow else { return }
+        window.delegate = windowResizeDelegate
         window.contentMinSize = minimumSize
+        window.minSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumSize)).size
     }
 
     private func showError(_ message: String) {
