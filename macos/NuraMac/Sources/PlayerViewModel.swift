@@ -404,12 +404,6 @@ final class PlayerViewModel {
 
     func attach(to window: NSWindow) {
         playerWindow = window
-        if !disableWindowResize {
-            let minimumLength: CGFloat = snapshot.item == nil ? 600 : 300
-            let minimumSize = NSSize(width: minimumLength, height: minimumLength)
-            window.contentMinSize = minimumSize
-            window.minSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumSize)).size
-        }
         startRuntime()
         updateWindowGeometryIfNeeded()
     }
@@ -2020,7 +2014,6 @@ final class PlayerViewModel {
     func updateWindowGeometryIfNeeded() {
         guard !disableWindowResize else { return }
         guard let geometry = currentVideoGeometry else {
-            configureNonVideoWindow()
             windowVideoGeometry = nil
             windowVideoSidebarWidth = 0
             return
@@ -2048,8 +2041,6 @@ final class PlayerViewModel {
             width: contentSize.width + sidebarWidth,
             height: contentSize.height
         )
-        window.contentAspectRatio = .zero
-        applyMinimumWindowSize(geometry.minimumSize)
         guard resizeToFit else { return }
 
         let visibleFrame = screen.visibleFrame
@@ -2063,29 +2054,14 @@ final class PlayerViewModel {
         let scale = min(maximumScale, 1)
         let fittedContentSize = NSSize(width: aspectSize.width * scale, height: aspectSize.height * scale)
         let minimumContentSize = NSSize(
-            width: max(window.contentMinSize.width, fittedContentSize.width),
-            height: max(window.contentMinSize.height, fittedContentSize.height)
+            width: max(geometry.minimumSize.width, fittedContentSize.width),
+            height: max(geometry.minimumSize.height, fittedContentSize.height)
         )
         var frame = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize))
         frame.origin = NSPoint(x: window.frame.midX - frame.width / 2, y: window.frame.midY - frame.height / 2)
         frame.origin.x = max(visibleFrame.minX, min(frame.origin.x, visibleFrame.maxX - frame.width))
         frame.origin.y = max(visibleFrame.minY, min(frame.origin.y, visibleFrame.maxY - frame.height))
         window.setFrame(frame, display: true, animate: true)
-    }
-
-    private func configureNonVideoWindow() {
-        guard let window = playerWindow else { return }
-        let minimumLength: CGFloat = snapshot.item == nil ? 600 : 300
-        let minimumSize = NSSize(width: minimumLength, height: minimumLength)
-        guard window.contentAspectRatio != .zero || window.contentMinSize != minimumSize else { return }
-        window.contentAspectRatio = .zero
-        applyMinimumWindowSize(minimumSize)
-    }
-
-    private func applyMinimumWindowSize(_ minimumSize: NSSize) {
-        guard let window = playerWindow else { return }
-        window.contentMinSize = minimumSize
-        window.minSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumSize)).size
     }
 
     private func showError(_ message: String) {

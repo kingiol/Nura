@@ -27,6 +27,7 @@ struct NuraMacApp: App {
         }
         .defaultSize(width: 1080, height: 680)
         .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentMinSize)
         WindowGroup("Nura", id: "player", for: String.self) { sessionID in
             AdditionalPlayerWindow(
                 sessionID: sessionID.wrappedValue,
@@ -36,6 +37,7 @@ struct NuraMacApp: App {
         }
         .defaultSize(width: 1080, height: 680)
         .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentMinSize)
         Settings {
             NuraSettingsView(settings: settings, model: mainModel)
         }
@@ -65,6 +67,7 @@ private struct MainPlayerWindow: View {
                 playerWindows.register(window: window, model: model)
             }
         )
+        .frame(minWidth: 600, minHeight: 360)
     }
 }
 
@@ -89,6 +92,7 @@ private struct AdditionalPlayerWindow: View {
                 playerWindows.register(window: window, model: model)
             }
         )
+        .frame(minWidth: 600, minHeight: 360)
     }
 }
 
