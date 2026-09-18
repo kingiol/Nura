@@ -247,6 +247,11 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
             return Ok(());
         };
         if self.snapshot.position_seconds > 3.0 {
+            if self.snapshot.ab_loop_start_seconds.is_some()
+                && self.snapshot.ab_loop_end_seconds.is_some()
+            {
+                self.set_ab_loop(None, None)?;
+            }
             return self.seek(0.0);
         }
         if index > 0 {
@@ -767,6 +772,7 @@ mod tests {
         events: VecDeque<EngineEvent>,
         loaded_at: f64,
         ab_loop: (Option<f64>, Option<f64>),
+        seek_position: Option<f64>,
         relative_seek: f64,
         frame_steps: usize,
         frame_back_steps: usize,
@@ -784,7 +790,8 @@ mod tests {
         fn pause(&mut self) -> Result<(), EngineError> {
             Ok(())
         }
-        fn seek(&mut self, _: f64) -> Result<(), EngineError> {
+        fn seek(&mut self, position: f64) -> Result<(), EngineError> {
+            self.seek_position = Some(position);
             Ok(())
         }
         fn seek_relative(&mut self, offset: f64) -> Result<(), EngineError> {
@@ -1181,6 +1188,40 @@ mod tests {
         assert!(session.set_ab_loop(Some(24.0), Some(12.0)).is_err());
         session.set_ab_loop(None, None).unwrap();
         assert_eq!(session.engine.ab_loop, (None, None));
+    }
+
+    #[test]
+    fn previous_clears_completed_ab_loop_before_restarting_current_item() {
+        let item = MediaItem::from_url("https://example.com/video.mp4").unwrap();
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        session.snapshot.playlist = vec![item];
+        session.snapshot.playlist_index = Some(0);
+        session.snapshot.position_seconds = 4.0;
+        session.set_ab_loop(Some(1.0), Some(3.0)).unwrap();
+
+        session.previous().unwrap();
+
+        assert_eq!(session.engine.ab_loop, (None, None));
+        assert_eq!(session.snapshot.ab_loop_start_seconds, None);
+        assert_eq!(session.snapshot.ab_loop_end_seconds, None);
+        assert_eq!(session.engine.seek_position, Some(0.0));
+    }
+
+    #[test]
+    fn previous_preserves_a_only_selection_when_restarting_current_item() {
+        let item = MediaItem::from_url("https://example.com/video.mp4").unwrap();
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+        session.snapshot.playlist = vec![item];
+        session.snapshot.playlist_index = Some(0);
+        session.snapshot.position_seconds = 4.0;
+        session.set_ab_loop(Some(1.0), None).unwrap();
+
+        session.previous().unwrap();
+
+        assert_eq!(session.engine.ab_loop, (Some(1.0), None));
+        assert_eq!(session.snapshot.ab_loop_start_seconds, Some(1.0));
+        assert_eq!(session.snapshot.ab_loop_end_seconds, None);
+        assert_eq!(session.engine.seek_position, Some(0.0));
     }
 
     #[test]
