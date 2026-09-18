@@ -3,6 +3,7 @@ import XCTest
 
 @testable import Nura
 
+@MainActor
 final class PlayerViewModelTests: XCTestCase {
     func testVideoMinimumSizePreservesAspectForWideVideo() {
         let geometry = VideoGeometry(width: 960, height: 400)
@@ -29,5 +30,157 @@ final class PlayerViewModelTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(minimumSize.width, 600)
         XCTAssertGreaterThanOrEqual(minimumSize.height, 360)
         XCTAssertEqual(minimumSize.width / minimumSize.height, 16 / 9, accuracy: 0.001)
+    }
+
+    func testABLoopIgnoresRepeatedCommandUntilMatchingSnapshotArrives() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 10, start: nil, end: nil))]
+        model.processPlaybackEvents()
+
+        model.advanceABLoop()
+        model.advanceABLoop()
+
+        XCTAssertEqual(runtime.commands, [.setABLoop(10, nil)])
+
+        runtime.queuedEvents = [.state(snapshot(position: 15, start: 10, end: nil))]
+        model.processPlaybackEvents()
+        model.advanceABLoop()
+
+        XCTAssertEqual(runtime.commands, [.setABLoop(10, nil), .setABLoop(10, 15)])
+    }
+
+    func testAbsoluteSeekOutsideCompletedRangeClearsBeforeSeeking() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 12, start: 10, end: 20))]
+        model.processPlaybackEvents()
+
+        model.seek(to: 30)
+
+        XCTAssertEqual(runtime.commands, [.setABLoop(nil, nil), .seek(30)])
+    }
+
+    func testRelativeSeekInsideCompletedRangeDoesNotClear() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 12, start: 10, end: 20))]
+        model.processPlaybackEvents()
+
+        XCTAssertTrue(model.seekRelative(3))
+
+        XCTAssertEqual(runtime.commands, [.seekRelative(3)])
+    }
+
+    func testRelativeSeekOutsideCompletedRangeClearsBeforeSeeking() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 12, start: 10, end: 20))]
+        model.processPlaybackEvents()
+
+        XCTAssertTrue(model.seekRelative(20))
+
+        XCTAssertEqual(runtime.commands, [.setABLoop(nil, nil), .seekRelative(20)])
+    }
+
+    func testSeekToCompletedRangeBoundaryRetainsLoop() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 12, start: 10, end: 20))]
+        model.processPlaybackEvents()
+
+        model.seek(to: 10)
+        model.seek(to: 20)
+
+        XCTAssertEqual(runtime.commands, [.seek(10), .seek(20)])
+    }
+
+    func testSeekPreservesAOnlySelection() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 12, start: 10, end: nil))]
+        model.processPlaybackEvents()
+
+        model.seek(to: 30)
+
+        XCTAssertEqual(runtime.commands, [.seek(30)])
+    }
+
+    func testNativeErrorReenablesABLoopCommand() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+        runtime.queuedEvents = [.state(snapshot(position: 10, start: nil, end: nil))]
+        model.processPlaybackEvents()
+
+        model.advanceABLoop()
+        runtime.queuedEvents = [.error("A-B loop end must be after its start")]
+        model.processPlaybackEvents()
+        model.advanceABLoop()
+
+        XCTAssertEqual(runtime.commands, [.setABLoop(10, nil), .setABLoop(10, nil)])
+    }
+
+    private func snapshot(position: Double, start: Double?, end: Double?) -> PlaybackSnapshot {
+        PlaybackSnapshot(
+            item: MediaItem(source: .publicURL("https://example.com/video.mp4"), title: "video.mp4"),
+            playlist: [],
+            recentItems: [],
+            historyItems: [],
+            playlistIndex: nil,
+            chapters: [],
+            playlistLoop: false,
+            abLoopStartSeconds: start,
+            abLoopEndSeconds: end,
+            status: "paused",
+            positionSeconds: position,
+            durationSeconds: 120,
+            videoWidth: 1920,
+            videoHeight: 1080,
+            speed: 1,
+            audioDelaySeconds: 0,
+            subtitleDelaySeconds: 0,
+            subtitlesVisible: true,
+            subtitleScale: 1,
+            subtitlePosition: 100,
+            videoAspect: "Auto",
+            videoRotationDegrees: 0,
+            videoFlipped: false,
+            bufferingPercent: nil,
+            volume: 100,
+            muted: false,
+            videoTracks: [],
+            audioTracks: [],
+            audioDevices: [],
+            subtitleTracks: [],
+            error: nil
+        )
+    }
+}
+
+private final class FakePlaybackRuntime: PlaybackRuntime {
+    enum Command: Equatable {
+        case setABLoop(Double?, Double?)
+        case seek(Double)
+        case seekRelative(Double)
+    }
+
+    var commands: [Command] = []
+    var queuedEvents: [PlayerEvent] = []
+
+    func events() -> [PlayerEvent] {
+        defer { queuedEvents = [] }
+        return queuedEvents
+    }
+
+    func setABLoop(start: Double?, end: Double?) throws {
+        commands.append(.setABLoop(start, end))
+    }
+
+    func seek(_ position: Double) throws {
+        commands.append(.seek(position))
+    }
+
+    func seekRelative(_ offset: Double) throws {
+        commands.append(.seekRelative(offset))
     }
 }

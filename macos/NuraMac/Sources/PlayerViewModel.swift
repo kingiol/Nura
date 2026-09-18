@@ -88,6 +88,7 @@ final class PlayerViewModel {
     private(set) var isPictureInPictureActive = false
     private var pendingPlaybackState: Bool?
     private var pendingMutedState: Bool?
+    private var pendingABLoop: (start: Double?, end: Double?)?
     private(set) var onlineSubtitleResults: [OnlineSubtitleResult] = []
     private(set) var isSearchingOnlineSubtitles = false
     private(set) var localTranscriptState: LocalTranscriptState = .unavailable
@@ -107,6 +108,7 @@ final class PlayerViewModel {
     private(set) var noteCaptureRequestID = 0
 
     private var bridge: PlayerBridge?
+    private let testingRuntime: (any PlaybackRuntime)?
     private var timer: Timer?
     private var renderErrorReported = false
     private var pendingVolume: Double?
@@ -166,12 +168,22 @@ final class PlayerViewModel {
         defaults = launchConfiguration.defaults
         disableWindowResize = launchConfiguration.disableWindowResize
         self.settings = settings ?? NuraSettings(defaults: launchConfiguration.defaults)
+        testingRuntime = nil
         startRuntime()
         if let mediaURL = launchConfiguration.mediaURL, bridge != nil {
             DispatchQueue.main.async { [weak self] in
                 self?.open(mediaURL)
             }
         }
+    }
+
+    init(testingRuntime: any PlaybackRuntime) {
+        let defaults = UserDefaults(suiteName: "Nura.PlayerViewModelTests.\(UUID().uuidString)")!
+        stateDirectory = nil
+        self.defaults = defaults
+        disableWindowResize = true
+        settings = NuraSettings(defaults: defaults)
+        self.testingRuntime = testingRuntime
     }
 
     var title: String {
@@ -225,6 +237,10 @@ final class PlayerViewModel {
 
     var canSeek: Bool {
         snapshot.item != nil && snapshot.status != "loading" && snapshot.status != "failed"
+    }
+
+    var canAdvanceABLoop: Bool {
+        canPlaybackControl && pendingABLoop == nil
     }
 
     var canNavigateItems: Bool {
@@ -1084,14 +1100,15 @@ final class PlayerViewModel {
     }
 
     func advanceABLoop() {
+        guard canAdvanceABLoop else { return }
         let position = max(0, snapshot.positionSeconds)
         do {
             if snapshot.abLoopStartSeconds == nil {
-                try bridge?.setABLoop(start: position, end: nil)
+                try setABLoop(start: position, end: nil)
             } else if snapshot.abLoopEndSeconds == nil {
-                try bridge?.setABLoop(start: snapshot.abLoopStartSeconds, end: position)
+                try setABLoop(start: snapshot.abLoopStartSeconds, end: position)
             } else {
-                try bridge?.setABLoop(start: nil, end: nil)
+                try setABLoop(start: nil, end: nil)
             }
             lastError = nil
         } catch {
@@ -1126,7 +1143,8 @@ final class PlayerViewModel {
         hideSeekPreview()
         guard generation == seekPreviewGeneration else { return }
         do {
-            try bridge?.seek(seekPosition)
+            try clearABLoopIfNeeded(beforeSeekingTo: seekPosition)
+            try requirePlaybackRuntime().seek(seekPosition)
             lastError = nil
         } catch {
             showError(error.localizedDescription)
@@ -1138,7 +1156,8 @@ final class PlayerViewModel {
         let clamped = min(max(position, 0), duration)
         seekPosition = clamped
         do {
-            try bridge?.seek(clamped)
+            try clearABLoopIfNeeded(beforeSeekingTo: clamped)
+            try requirePlaybackRuntime().seek(clamped)
             lastError = nil
         } catch {
             showError(error.localizedDescription)
@@ -1215,7 +1234,8 @@ final class PlayerViewModel {
         let effectiveOffset = targetPosition - currentPosition
         guard abs(effectiveOffset) > 0.000_001 else { return false }
         do {
-            try bridge?.seekRelative(effectiveOffset)
+            try clearABLoopIfNeeded(beforeSeekingTo: targetPosition)
+            try requirePlaybackRuntime().seekRelative(effectiveOffset)
             seekPosition = targetPosition
             lastError = nil
             return true
@@ -1472,7 +1492,7 @@ final class PlayerViewModel {
         setSpeed(settings.defaultPlaybackSpeed)
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.pollEvents()
+                self?.processPlaybackEvents()
             }
         }
     }
@@ -1494,12 +1514,13 @@ final class PlayerViewModel {
         }
     }
 
-    private func pollEvents() {
-        for event in bridge?.events() ?? [] {
+    func processPlaybackEvents() {
+        for event in playbackRuntime?.events() ?? [] {
             switch event {
             case .state(let snapshot):
                 apply(snapshot)
             case .error(let message):
+                pendingABLoop = nil
                 requestedMediaIdentity = nil
                 showError(message)
             }
@@ -1517,6 +1538,11 @@ final class PlayerViewModel {
             resetLocalAnalysis()
         }
         self.snapshot = snapshot
+        if let pendingABLoop,
+           snapshot.abLoopStartSeconds == pendingABLoop.start,
+           snapshot.abLoopEndSeconds == pendingABLoop.end {
+            self.pendingABLoop = nil
+        }
         if let localURL = Self.localURL(for: snapshot.item), mediaFingerprint == nil {
             loadLocalAnalysis(for: localURL)
         }
@@ -1542,6 +1568,36 @@ final class PlayerViewModel {
         }
         nowPlaying.update(snapshot: snapshot, enabled: settings.nowPlayingEnabled)
         pictureInPicture.invalidatePlaybackState()
+    }
+
+    private var playbackRuntime: (any PlaybackRuntime)? {
+        testingRuntime ?? bridge
+    }
+
+    private func requirePlaybackRuntime() throws -> any PlaybackRuntime {
+        guard let playbackRuntime else {
+            throw PlayerBridgeError.unavailable(L10n.text("Player is unavailable"))
+        }
+        return playbackRuntime
+    }
+
+    private func setABLoop(start: Double?, end: Double?) throws {
+        pendingABLoop = (start, end)
+        do {
+            try requirePlaybackRuntime().setABLoop(start: start, end: end)
+        } catch {
+            pendingABLoop = nil
+            throw error
+        }
+    }
+
+    private func clearABLoopIfNeeded(beforeSeekingTo target: Double) throws {
+        guard let start = snapshot.abLoopStartSeconds,
+              let end = snapshot.abLoopEndSeconds,
+              target < start || target > end else {
+            return
+        }
+        try setABLoop(start: nil, end: nil)
     }
 
     private func resetLocalAnalysis() {

@@ -390,6 +390,13 @@ enum PlayerEvent: Decodable {
     }
 }
 
+protocol PlaybackRuntime: AnyObject {
+    func events() -> [PlayerEvent]
+    func setABLoop(start: Double?, end: Double?) throws
+    func seek(_ position: Double) throws
+    func seekRelative(_ offset: Double) throws
+}
+
 enum PlayerBridgeError: LocalizedError {
     case unavailable(String)
     case command(String)
@@ -401,7 +408,7 @@ enum PlayerBridgeError: LocalizedError {
     }
 }
 
-final class PlayerBridge {
+final class PlayerBridge: PlaybackRuntime {
     private var handle: NuraHandle?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
