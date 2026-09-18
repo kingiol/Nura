@@ -1117,9 +1117,9 @@ final class PlayerViewModel {
     }
 
     var abLoopLabel: String {
-        if snapshot.abLoopStartSeconds == nil { return L10n.text("Set A-B loop start") }
-        if snapshot.abLoopEndSeconds == nil { return L10n.text("Set A-B loop end") }
-        return L10n.text("Clear A-B loop")
+        if snapshot.abLoopStartSeconds == nil { return L10n.text("Set Loop Start") }
+        if snapshot.abLoopEndSeconds == nil { return L10n.text("Set Loop End") }
+        return L10n.text("Clear Loop")
     }
 
     var abLoopSymbol: String {

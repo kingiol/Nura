@@ -139,6 +139,23 @@ final class PlayerViewModelTests: XCTestCase {
         XCTAssertNil(geometry?.end)
     }
 
+    func testABLoopLabelReflectsCurrentNativeState() {
+        let runtime = FakePlaybackRuntime()
+        let model = PlayerViewModel(testingRuntime: runtime)
+
+        runtime.queuedEvents = [.state(snapshot(position: 10, start: nil, end: nil))]
+        model.processPlaybackEvents()
+        XCTAssertEqual(model.abLoopLabel, "Set Loop Start")
+
+        runtime.queuedEvents = [.state(snapshot(position: 10, start: 10, end: nil))]
+        model.processPlaybackEvents()
+        XCTAssertEqual(model.abLoopLabel, "Set Loop End")
+
+        runtime.queuedEvents = [.state(snapshot(position: 10, start: 10, end: 20))]
+        model.processPlaybackEvents()
+        XCTAssertEqual(model.abLoopLabel, "Clear Loop")
+    }
+
     private func snapshot(position: Double, start: Double?, end: Double?) -> PlaybackSnapshot {
         PlaybackSnapshot(
             item: MediaItem(source: .publicURL("https://example.com/video.mp4"), title: "video.mp4"),

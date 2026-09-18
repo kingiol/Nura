@@ -162,6 +162,7 @@ struct PlayerView: View {
         Button(model.snapshot.playlistLoop ? "Disable Playlist Loop" : "Loop Playlist", action: model.togglePlaylistLoop)
         Button("Shuffle Playlist", action: model.shufflePlaylist)
         Button(model.abLoopLabel, action: model.advanceABLoop)
+            .disabled(!model.canAdvanceABLoop)
         Divider()
         Button("Load External Subtitle", action: model.openExternalSubtitle)
         Button("Take Screenshot", action: model.screenshot)

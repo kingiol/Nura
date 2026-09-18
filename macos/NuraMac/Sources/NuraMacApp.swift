@@ -164,6 +164,11 @@ private struct NuraPlayerCommands: Commands {
                 .disabled(!(playerWindows.activeModel?.canSeek ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .seekForward), modifiers: settings.modifiers(for: .seekForward))
             Divider()
+            Button(playerWindows.activeModel?.abLoopLabel ?? "Set Loop Start") {
+                playerWindows.activeModel?.advanceABLoop()
+            }
+            .disabled(!(playerWindows.activeModel?.canAdvanceABLoop ?? false))
+            .keyboardShortcut("l", modifiers: [.option])
             Button("Take Screenshot", action: { playerWindows.activeModel?.screenshot() })
                 .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
                 .keyboardShortcut(settings.keyEquivalent(for: .screenshot), modifiers: settings.modifiers(for: .screenshot))
