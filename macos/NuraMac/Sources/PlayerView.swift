@@ -260,6 +260,9 @@ struct PlayerView: View {
                 SeekPreviewSlider(
                     value: $model.seekPosition,
                     duration: model.duration,
+                    mediaDuration: model.snapshot.durationSeconds,
+                    abLoopStart: model.snapshot.abLoopStartSeconds,
+                    abLoopEnd: model.snapshot.abLoopEndSeconds,
                     previewImage: model.seekPreviewImage,
                     previewPosition: model.seekPreviewPosition,
                     previewVisible: model.isSeekPreviewVisible,

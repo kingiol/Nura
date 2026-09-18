@@ -1,11 +1,33 @@
 import AppKit
 import SwiftUI
 
+struct ABLoopProgressGeometry: Equatable {
+    let start: CGFloat
+    let end: CGFloat?
+
+    static func resolve(duration: Double?, start: Double?, end: Double?) -> Self? {
+        guard let duration, duration.isFinite, duration > 0,
+              let start, start.isFinite else {
+            return nil
+        }
+
+        let normalizedStart = CGFloat(min(max(start / duration, 0), 1))
+        let normalizedEnd = end.flatMap { end -> CGFloat? in
+            guard end.isFinite else { return nil }
+            return CGFloat(min(max(end / duration, 0), 1))
+        }
+        return Self(start: normalizedStart, end: normalizedEnd)
+    }
+}
+
 struct SeekPreviewSlider: View {
     private let previewBubbleSize = CGSize(width: 192, height: 136)
 
     @Binding var value: Double
     let duration: Double
+    let mediaDuration: Double?
+    let abLoopStart: Double?
+    let abLoopEnd: Double?
     let previewImage: NSImage?
     let previewPosition: Double?
     let previewVisible: Bool
@@ -43,12 +65,23 @@ struct SeekPreviewSlider: View {
                 .accessibilityLabel(L10n.text("Playback position"))
                 .accessibilityValue(L10n.format("%@ of %@", formatTime(previewPosition ?? value), formatTime(duration)))
 
+                if let loopGeometry = ABLoopProgressGeometry.resolve(
+                    duration: mediaDuration,
+                    start: abLoopStart,
+                    end: abLoopEnd
+                ) {
+                    loopOverlay(loopGeometry, in: proxy.size)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .zIndex(1)
+                }
+
                 if previewVisible, previewImage != nil {
                     previewBubble
                         .frame(width: previewBubbleSize.width, height: previewBubbleSize.height)
                         .position(x: previewX(in: proxy.size.width), y: -64)
                         .allowsHitTesting(false)
-                        .zIndex(1)
+                        .zIndex(2)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -95,6 +128,40 @@ struct SeekPreviewSlider: View {
         .padding(6)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+    }
+
+    private func loopOverlay(_ geometry: ABLoopProgressGeometry, in size: CGSize) -> some View {
+        let startX = geometry.start * size.width
+        let endX = geometry.end.map { $0 * size.width }
+
+        return ZStack(alignment: .topLeading) {
+            if let endX {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.45))
+                    .frame(width: max(0, endX - startX), height: 3)
+                    .position(x: (startX + endX) / 2, y: size.height / 2)
+            }
+
+            loopMarker("A", at: startX)
+
+            if let endX {
+                loopMarker("B", at: endX)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func loopMarker(_ label: String, at x: CGFloat) -> some View {
+        VStack(spacing: 1) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tint)
+            Capsule()
+                .fill(Color.accentColor)
+                .frame(width: 2, height: 9)
+        }
+        .frame(width: 16, height: 22)
+        .position(x: x, y: 11)
     }
 
     private func previewX(in width: CGFloat) -> CGFloat {

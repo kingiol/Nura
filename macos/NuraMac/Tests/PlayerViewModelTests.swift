@@ -120,6 +120,25 @@ final class PlayerViewModelTests: XCTestCase {
         XCTAssertEqual(runtime.commands, [.setABLoop(10, nil), .setABLoop(10, nil)])
     }
 
+    func testABLoopProgressGeometryReturnsNilWithoutFiniteDuration() {
+        XCTAssertNil(ABLoopProgressGeometry.resolve(duration: nil, start: 5, end: 10))
+        XCTAssertNil(ABLoopProgressGeometry.resolve(duration: .infinity, start: 5, end: 10))
+    }
+
+    func testABLoopProgressGeometryNormalizesAndClampsMarkers() {
+        let geometry = ABLoopProgressGeometry.resolve(duration: 100, start: -5, end: 120)
+
+        XCTAssertEqual(geometry?.start, 0)
+        XCTAssertEqual(geometry?.end, 1)
+    }
+
+    func testABLoopProgressGeometrySupportsStartOnlyMarker() {
+        let geometry = ABLoopProgressGeometry.resolve(duration: 100, start: 25, end: nil)
+
+        XCTAssertEqual(geometry?.start, 0.25)
+        XCTAssertNil(geometry?.end)
+    }
+
     private func snapshot(position: Double, start: Double?, end: Double?) -> PlaybackSnapshot {
         PlaybackSnapshot(
             item: MediaItem(source: .publicURL("https://example.com/video.mp4"), title: "video.mp4"),
