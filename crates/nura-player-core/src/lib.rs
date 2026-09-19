@@ -534,6 +534,9 @@ impl<E: PlaybackEngine, H: HistoryRepository> PlayerSession<E, H> {
         self.engine.set_ab_loop(start, end)?;
         self.snapshot.ab_loop_start_seconds = start;
         self.snapshot.ab_loop_end_seconds = end;
+        if let (Some(start), Some(_)) = (start, end) {
+            return self.seek(start);
+        }
         self.emit_state();
         Ok(())
     }
@@ -1191,13 +1194,24 @@ mod tests {
     }
 
     #[test]
+    fn completed_ab_loop_restarts_playback_at_its_start() {
+        let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
+
+        session.set_ab_loop(Some(12.0), Some(24.0)).unwrap();
+
+        assert_eq!(session.engine.ab_loop, (Some(12.0), Some(24.0)));
+        assert_eq!(session.engine.seek_position, Some(12.0));
+        assert_eq!(session.snapshot.position_seconds, 12.0);
+    }
+
+    #[test]
     fn previous_clears_completed_ab_loop_before_restarting_current_item() {
         let item = MediaItem::from_url("https://example.com/video.mp4").unwrap();
         let mut session = PlayerSession::new(FakeEngine::default(), MemoryHistory { resume: None });
         session.snapshot.playlist = vec![item];
         session.snapshot.playlist_index = Some(0);
-        session.snapshot.position_seconds = 4.0;
         session.set_ab_loop(Some(1.0), Some(3.0)).unwrap();
+        session.snapshot.position_seconds = 4.0;
 
         session.previous().unwrap();
 
