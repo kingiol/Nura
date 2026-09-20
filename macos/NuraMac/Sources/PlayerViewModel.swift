@@ -107,6 +107,9 @@ final class PlayerViewModel {
     private(set) var noteDraft: NoteDraft?
     private(set) var deletedNote: InstantNote?
     private(set) var noteCaptureRequestID = 0
+    private(set) var osdMessage: OSDMessage?
+    private(set) var isOSDVisible = false
+    private var osdHideTask: Task<Void, Never>?
 
     private var bridge: PlayerBridge?
     private let testingRuntime: (any PlaybackRuntime)?
@@ -383,11 +386,13 @@ final class PlayerViewModel {
             case .media(let urls):
                 guard let first = urls.first else { return }
                 try bridge?.open(first)
+                showOSD(.open(Self.displayName(for: first)))
                 for url in urls.dropFirst() {
                     try bridge?.enqueue(url)
                 }
             case .url(let value):
                 try bridge?.openURL(value)
+                showOSD(.open(value))
             }
             lastError = nil
         } catch {
@@ -463,6 +468,7 @@ final class PlayerViewModel {
         do {
             try bridge?.clearHistory()
             lastError = nil
+            showOSD(.historyCleared)
         } catch {
             showError(error.localizedDescription)
         }
@@ -509,6 +515,7 @@ final class PlayerViewModel {
                 }
             }
             lastError = nil
+            showOSD(.playlistAdded(expanded.count))
         } catch {
             showError(error.localizedDescription)
         }
@@ -550,6 +557,7 @@ final class PlayerViewModel {
             try bridge?.clearPlaylist()
             loopEnabled = false
             lastError = nil
+            showOSD(.playlistCleared)
         } catch {
             showError(error.localizedDescription)
         }
@@ -565,6 +573,7 @@ final class PlayerViewModel {
 
     func sortPlaylist(by key: PlaylistSortKey, ascending: Bool) {
         guard snapshot.playlist.count > 1 else { return }
+        showOSD(.playlistSorted)
         let sortedIDs = snapshot.playlist.enumerated().sorted { lhs, rhs in
             let left = key.value(for: lhs.element)
             let right = key.value(for: rhs.element)
@@ -593,6 +602,7 @@ final class PlayerViewModel {
             do {
                 try bridge?.addExternalSubtitle(url)
                 lastError = nil
+                showOSD(.subtitleDownloaded(url.lastPathComponent))
             } catch {
                 showError(error.localizedDescription)
             }
@@ -620,6 +630,7 @@ final class PlayerViewModel {
         do {
             try importTranscriptSubtitle(at: url)
             lastError = nil
+            showOSD(.transcriptImport(url.lastPathComponent))
         } catch {
             showError(error.localizedDescription)
         }
@@ -684,6 +695,7 @@ final class PlayerViewModel {
                 self.applyTranscript(document)
                 self.embeddedSubtitleMessage = nil
                 self.lastError = nil
+                self.showOSD(.transcriptExtracted)
             } catch {
                 guard let self, self.localAnalysisGeneration == generation else { return }
                 self.embeddedSubtitleMessage = error.localizedDescription
@@ -812,6 +824,7 @@ final class PlayerViewModel {
                 )
                 try bridge?.updateNote(updated)
                 replaceNote(updated)
+                showOSD(.noteSaved)
             } else {
                 let saved = try bridge?.createNote(
                     NewInstantNote(
@@ -827,6 +840,7 @@ final class PlayerViewModel {
                     notes.append(saved)
                     sortNotes()
                 }
+                showOSD(.noteSaved)
             }
             noteDraft = nil
             lastError = nil
@@ -843,6 +857,7 @@ final class PlayerViewModel {
                 deletedNote = deleted
             }
             lastError = nil
+            showOSD(.noteDeleted)
         } catch {
             showError(error.localizedDescription)
         }
@@ -867,6 +882,7 @@ final class PlayerViewModel {
             }
             self.deletedNote = nil
             lastError = nil
+            showOSD(.noteRestored)
         } catch {
             showError(error.localizedDescription)
         }
@@ -879,6 +895,7 @@ final class PlayerViewModel {
         }
         isSearchingOnlineSubtitles = true
         onlineSubtitleResults = []
+        showOSD(.searchingSubtitles)
         let query = URL(fileURLWithPath: item.title).deletingPathExtension().lastPathComponent
         let language = settings.subtitleSearchLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = settings.openSubtitlesAPIKey
@@ -892,6 +909,7 @@ final class PlayerViewModel {
                 guard let self else { return }
                 onlineSubtitleResults = results
                 isSearchingOnlineSubtitles = false
+                showOSD(.subtitlesFound(results.count))
             } catch {
                 guard let self else { return }
                 isSearchingOnlineSubtitles = false
@@ -902,12 +920,14 @@ final class PlayerViewModel {
 
     func loadOnlineSubtitle(_ result: OnlineSubtitleResult) {
         let apiKey = settings.openSubtitlesAPIKey
+        showOSD(.searchingSubtitles)
         Task { [weak self] in
             do {
                 let url = try await OpenSubtitlesClient().download(result: result, apiKey: apiKey)
                 guard let self else { return }
                 try bridge?.addExternalSubtitle(url)
                 lastError = nil
+                showOSD(.subtitleDownloaded(url.lastPathComponent))
             } catch {
                 guard let self else { return }
                 showError(error.localizedDescription)
@@ -920,6 +940,9 @@ final class PlayerViewModel {
         do {
             try bridge?.playPlaylistIndex(index)
             lastError = nil
+            if snapshot.playlist.indices.contains(index) {
+                showOSD(.playing(snapshot.playlist[index].title))
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -930,6 +953,10 @@ final class PlayerViewModel {
         do {
             try bridge?.next()
             lastError = nil
+            if let index = snapshot.playlistIndex,
+               snapshot.playlist.indices.contains(index + 1) {
+                showOSD(.playing(snapshot.playlist[index + 1].title))
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -940,6 +967,10 @@ final class PlayerViewModel {
         do {
             try bridge?.previous()
             lastError = nil
+            if let index = snapshot.playlistIndex,
+               snapshot.playlist.indices.contains(index - 1) {
+                showOSD(.playing(snapshot.playlist[index - 1].title))
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -951,6 +982,7 @@ final class PlayerViewModel {
         do {
             try bridge?.toggle()
             lastError = nil
+            showOSD(.playback(target))
         } catch {
             pendingPlaybackState = nil
             showError(error.localizedDescription)
@@ -963,6 +995,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setMuted(target)
             lastError = nil
+            showOSD(.muted(target))
         } catch {
             pendingMutedState = nil
             showError(error.localizedDescription)
@@ -973,6 +1006,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setSpeed(speed)
             lastError = nil
+            showOSD(.speed(speed))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1025,6 +1059,7 @@ final class PlayerViewModel {
             }
             try? FileManager.default.removeItem(at: url)
             lastError = nil
+            showOSD(.screenshot("Copied"))
         } catch {
             try? FileManager.default.removeItem(at: url)
             showError(error.localizedDescription)
@@ -1061,6 +1096,7 @@ final class PlayerViewModel {
     }
 
     private func notifyScreenshotSaved(at url: URL) {
+        showOSD(.screenshot("Saved"))
         let content = UNMutableNotificationContent()
         content.title = L10n.text("Screenshot saved")
         content.body = url.path
@@ -1074,6 +1110,7 @@ final class PlayerViewModel {
             try bridge?.setLoop(enabled)
             loopEnabled = enabled
             lastError = nil
+            showOSD(.loop(enabled, false))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1084,6 +1121,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setPlaylistLoop(enabled)
             lastError = nil
+            showOSD(.loop(false, enabled))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1108,6 +1146,7 @@ final class PlayerViewModel {
                 try bridge?.setPlaylistLoop(true)
                 loopEnabled = false
                 lastError = nil
+                showOSD(.loop(false, true))
             } catch {
                 showError(error.localizedDescription)
             }
@@ -1115,6 +1154,7 @@ final class PlayerViewModel {
             do {
                 try bridge?.setPlaylistLoop(false)
                 lastError = nil
+                showOSD(.loop(false, false))
             } catch {
                 showError(error.localizedDescription)
             }
@@ -1123,6 +1163,7 @@ final class PlayerViewModel {
                 try bridge?.setLoop(true)
                 loopEnabled = true
                 lastError = nil
+                showOSD(.loop(true, false))
             } catch {
                 showError(error.localizedDescription)
             }
@@ -1133,6 +1174,7 @@ final class PlayerViewModel {
         do {
             try bridge?.shuffle()
             lastError = nil
+            showOSD(.shuffle(true))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1150,6 +1192,15 @@ final class PlayerViewModel {
                 try setABLoop(start: nil, end: nil)
             }
             lastError = nil
+            let label: String
+            if snapshot.abLoopStartSeconds == nil {
+                label = L10n.text("A Set")
+            } else if snapshot.abLoopEndSeconds == nil {
+                label = L10n.text("B Set")
+            } else {
+                label = L10n.text("Cleared")
+            }
+            showOSD(.abLoop(label, snapshot.abLoopStartSeconds, snapshot.abLoopEndSeconds))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1185,6 +1236,7 @@ final class PlayerViewModel {
             try clearABLoopIfNeeded(beforeSeekingTo: seekPosition)
             try requirePlaybackRuntime().seek(seekPosition)
             lastError = nil
+            showOSD(.seek(to: seekPosition, duration: snapshot.durationSeconds))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1277,6 +1329,7 @@ final class PlayerViewModel {
             try requirePlaybackRuntime().seekRelative(effectiveOffset)
             seekPosition = targetPosition
             lastError = nil
+            showOSD(.seekRelative(effectiveOffset, targetPosition, snapshot.durationSeconds, nil))
             return true
         } catch {
             showError(error.localizedDescription)
@@ -1289,6 +1342,7 @@ final class PlayerViewModel {
         do {
             try bridge?.frameStep()
             lastError = nil
+            showOSD(.frameStep(false))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1299,6 +1353,7 @@ final class PlayerViewModel {
         do {
             try bridge?.frameBackStep()
             lastError = nil
+            showOSD(.frameStep(true))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1310,6 +1365,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setVolume(volume)
             lastError = nil
+            showOSD(.volume(volume))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1319,6 +1375,11 @@ final class PlayerViewModel {
         do {
             try bridge?.selectAudioTrack(id)
             lastError = nil
+            if let track = snapshot.audioTracks.first(where: { $0.id == id }) {
+                showOSD(.track(kind: "audio", title: track.title ?? track.language ?? L10n.format("Track %d", id)))
+            } else if id < 0 {
+                showOSD(.track(kind: "audio", title: L10n.text("Audio: Off")))
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -1328,6 +1389,11 @@ final class PlayerViewModel {
         do {
             try bridge?.selectSubtitleTrack(id)
             lastError = nil
+            if let track = snapshot.subtitleTracks.first(where: { $0.id == id }) {
+                showOSD(.track(kind: "sub", title: track.title ?? track.language ?? L10n.format("Track %d", id)))
+            } else if id < 0 {
+                showOSD(.track(kind: "sub", title: L10n.text("Subtitles: Off")))
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -1337,6 +1403,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setSubtitleDelay(delay)
             lastError = nil
+            showOSD(.subtitleDelay(delay))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1346,6 +1413,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setAudioDelay(delay)
             lastError = nil
+            showOSD(.audioDelay(delay))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1355,6 +1423,8 @@ final class PlayerViewModel {
         do {
             try bridge?.setAudioDevice(deviceID)
             lastError = nil
+            let name = snapshot.audioDevices.first(where: { $0.id == deviceID })?.name ?? L10n.text("Default Output")
+            showOSD(.audioDevice(name))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1364,6 +1434,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setSubtitlesVisible(visible)
             lastError = nil
+            showOSD(.subtitles(visible))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1373,6 +1444,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setSubtitleScale(scale)
             lastError = nil
+            showOSD(.subtitleScale(scale))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1382,6 +1454,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setSubtitlePosition(position)
             lastError = nil
+            showOSD(.subtitlePosition(position))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1391,6 +1464,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setVideoAspect(aspect == "Auto" ? "no" : aspect)
             lastError = nil
+            showOSD(.aspect(aspect))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1401,6 +1475,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setVideoRotation(degrees)
             lastError = nil
+            showOSD(.rotate(degrees))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1410,6 +1485,7 @@ final class PlayerViewModel {
         do {
             try bridge?.setVideoFlipped(!snapshot.videoFlipped)
             lastError = nil
+            showOSD(.flip(!snapshot.videoFlipped))
         } catch {
             showError(error.localizedDescription)
         }
@@ -1419,6 +1495,11 @@ final class PlayerViewModel {
         do {
             try bridge?.selectVideoTrack(id)
             lastError = nil
+            if let track = snapshot.videoTracks.first(where: { $0.id == id }) {
+                showOSD(.track(kind: "video", title: track.title ?? track.language ?? L10n.format("Track %d", id)))
+            } else if id < 0 {
+                showOSD(.track(kind: "video", title: L10n.text("Video: Off")))
+            }
         } catch {
             showError(error.localizedDescription)
         }
@@ -1461,6 +1542,7 @@ final class PlayerViewModel {
             showError(L10n.text("Open a video before starting Picture in Picture"))
             return
         }
+        showOSD(.piP(!isPictureInPictureActive))
         pictureInPicture.toggle()
     }
 
@@ -1503,11 +1585,13 @@ final class PlayerViewModel {
         windowVideoGeometry = geometry
         windowVideoSidebarWidth = sidebarWidth
         lastError = nil
+        showOSD(.fitWindow)
     }
 
     func toggleAlwaysOnTop() {
         alwaysOnTop.toggle()
         playerWindow?.level = alwaysOnTop ? .floating : .normal
+        showOSD(.windowOnTop(alwaysOnTop))
     }
 
     private func configureBridge(stateDirectory: URL?) {
@@ -1713,6 +1797,13 @@ final class PlayerViewModel {
         localTranscriptState = .transcript
     }
 
+    private static func displayName(for url: URL) -> String {
+        if url.isFileURL {
+            return url.lastPathComponent
+        }
+        return url.host ?? url.absoluteString
+    }
+
     private enum CloudAnalysisAction {
         case initial
         case resume
@@ -1767,6 +1858,7 @@ final class PlayerViewModel {
             updateCloudFailure("Open media before analyzing audio.", generation: generation)
             return
         }
+        showOSD(.transcriptAnalysis("Started"))
         let taskID = UUID()
         let task = Task { [weak self] in
             guard let self else { return }
@@ -1865,6 +1957,7 @@ final class PlayerViewModel {
 
             try bridge.saveAnalysisRun(run)
             updateCloudProcessing(run: run, generation: generation)
+            showOSD(.transcriptAnalysis("Processing"))
             let client = TranscriptHTTPClient()
             for plannedChunk in plan.chunks where !run.completedChunkIndexes.contains(Int64(plannedChunk.index)) {
                 try Task.checkCancellation()
@@ -1924,6 +2017,7 @@ final class PlayerViewModel {
                     cloudAnalysisProgress = .idle
                     lastError = nil
                 }
+                showOSD(.transcriptReady)
                 return
             }
 
@@ -1943,14 +2037,17 @@ final class PlayerViewModel {
                 cloudAnalysisProgress = .idle
                 lastError = nil
             }
+            showOSD(.transcriptReady)
         } catch is CancellationError {
             await persistCloudInterruption(key: target.key, status: .cancelled, message: nil, generation: generation)
+            showOSD(.transcriptCancelled)
         } catch {
             if Task.isCancelled {
                 await persistCloudInterruption(key: target.key, status: .cancelled, message: nil, generation: generation)
             } else {
                 await persistCloudInterruption(key: target.key, status: .failed, message: error.localizedDescription, generation: generation)
             }
+            showOSD(.error(error.localizedDescription))
         }
     }
 
@@ -2160,6 +2257,28 @@ final class PlayerViewModel {
 
     private func showError(_ message: String) {
         lastError = message
+        showOSD(.error(message))
+    }
+
+    /// Show a transient on-screen message over the video surface.
+    func showOSD(_ message: OSDMessage) {
+        osdMessage = message
+        isOSDVisible = true
+        osdHideTask?.cancel()
+        osdHideTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+            self.isOSDVisible = false
+            self.osdMessage = nil
+        }
+    }
+
+    func hideOSD() {
+        osdHideTask?.cancel()
+        osdHideTask = nil
+        isOSDVisible = false
+        osdMessage = nil
     }
 
     static func expandMediaURLs(_ urls: [URL]) -> [URL] {

@@ -64,6 +64,13 @@ struct PlayerView: View {
                         .transition(.opacity)
                 }
 
+                if model.isOSDVisible, let message = model.osdMessage {
+                    OSDView(message: message)
+                    .padding(.bottom, 86)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(10)
+                }
+
                 if !model.showsWelcomeScreen, let sidebar, sidebar != .transcript, sidebar != .notes {
                     Group {
                         if sidebar == .settings {
