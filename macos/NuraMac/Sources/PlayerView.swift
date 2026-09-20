@@ -895,9 +895,6 @@ private struct SettingsSidebarView: View {
                 Label(model.alwaysOnTop ? "Release Window" : "Keep Window on Top", systemImage: model.alwaysOnTop ? "pin.fill" : "pin")
             }
             Button(action: onTogglePiP) { Label("Picture in Picture", systemImage: "pip") }
-            Button(action: model.screenshot) { Label("Screenshot", systemImage: "camera") }
-            Button(action: model.copyScreenshot) { Label("Copy Screenshot", systemImage: "doc.on.doc") }
-            Button(action: model.chooseScreenshotDirectory) { Label("Choose Screenshot Folder", systemImage: "folder.badge.gearshape") }
         }
     }
 

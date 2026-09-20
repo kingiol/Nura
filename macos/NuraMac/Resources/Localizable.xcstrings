@@ -338,6 +338,7 @@
 
     },
     "Choose a destination from the player settings when saving screenshots." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1270,6 +1271,17 @@
         }
       }
     },
+    "Open media before taking a screenshot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先打开媒体，再保存截图"
+          }
+        }
+      }
+    },
     "Open Recent" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1793,6 +1805,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缩放"
+          }
+        }
+      }
+    },
+    "Screenshot saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截图已保存"
           }
         }
       }

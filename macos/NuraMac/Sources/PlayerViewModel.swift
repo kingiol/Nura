@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import Observation
 import UniformTypeIdentifiers
 
@@ -978,8 +979,19 @@ final class PlayerViewModel {
     }
 
     func screenshot() {
+        guard snapshot.item != nil else {
+            showError(L10n.text("Open media before taking a screenshot"))
+            return
+        }
+        guard let bridge else {
+            showError(L10n.text("Player is unavailable"))
+            return
+        }
         do {
-            try bridge?.screenshot()
+            let directory = try screenshotDirectory()
+            let url = directory.appendingPathComponent(screenshotFileName())
+            try bridge.screenshotToFile(url)
+            notifyScreenshotSaved(at: url)
             lastError = nil
         } catch {
             showError(error.localizedDescription)
@@ -1027,6 +1039,33 @@ final class PlayerViewModel {
         if panel.runModal() == .OK, let url = panel.url {
             setScreenshotDirectory(url)
         }
+    }
+
+    private func screenshotFileName() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return "screenshot-\(formatter.string(from: Date())).png"
+    }
+
+    private func screenshotDirectory() throws -> URL {
+        let directory: URL
+        if let stored = defaults.string(forKey: screenshotDirectoryKey) {
+            directory = URL(fileURLWithPath: stored)
+        } else {
+            let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
+            directory = pictures.appendingPathComponent("Nura Screenshots", isDirectory: true)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func notifyScreenshotSaved(at url: URL) {
+        let content = UNMutableNotificationContent()
+        content.title = L10n.text("Screenshot saved")
+        content.body = url.path
+        let request = UNNotificationRequest(identifier: "screenshot-saved-\(UUID().uuidString)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     func toggleLoop() {
@@ -1498,14 +1537,13 @@ final class PlayerViewModel {
     }
 
     private func configureScreenshotDirectory() {
-        let defaultDirectory = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-        let directory = defaults.string(forKey: screenshotDirectoryKey).map(URL.init(fileURLWithPath:)) ?? defaultDirectory
+        guard let directory = try? screenshotDirectory() else { return }
         setScreenshotDirectory(directory)
     }
 
     private func setScreenshotDirectory(_ url: URL) {
         do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             try bridge?.setScreenshotDirectory(url)
             defaults.set(url.path, forKey: screenshotDirectoryKey)
             lastError = nil

@@ -12,6 +12,8 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
     case seekBackward
     case seekForward
     case screenshot
+    case copyScreenshot
+    case chooseScreenshotFolder
     case toggleFullscreen
 
     var id: String { rawValue }
@@ -26,6 +28,8 @@ enum ShortcutAction: String, CaseIterable, Codable, Identifiable {
         case .seekBackward: L10n.text("Seek Backward")
         case .seekForward: L10n.text("Seek Forward")
         case .screenshot: L10n.text("Take Screenshot")
+        case .copyScreenshot: L10n.text("Copy Screenshot")
+        case .chooseScreenshotFolder: L10n.text("Choose Screenshot Folder")
         case .toggleFullscreen: L10n.text("Toggle Full Screen")
         }
     }
@@ -73,6 +77,8 @@ struct ShortcutBinding: Codable, Equatable {
         .seekBackward: ShortcutBinding(key: "leftArrow", modifier: .none),
         .seekForward: ShortcutBinding(key: "rightArrow", modifier: .none),
         .screenshot: ShortcutBinding(key: "s", modifier: .none),
+        .copyScreenshot: ShortcutBinding(key: "c", modifier: .option),
+        .chooseScreenshotFolder: ShortcutBinding(key: "s", modifier: .option),
         .toggleFullscreen: ShortcutBinding(key: "f", modifier: .none),
     ]
 }

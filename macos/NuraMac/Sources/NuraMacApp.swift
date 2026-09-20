@@ -169,11 +169,19 @@ private struct NuraPlayerCommands: Commands {
             }
             .disabled(!(playerWindows.activeModel?.canAdvanceABLoop ?? false))
             .keyboardShortcut("l", modifiers: [.option])
-            Button("Take Screenshot", action: { playerWindows.activeModel?.screenshot() })
-                .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
-                .keyboardShortcut(settings.keyEquivalent(for: .screenshot), modifiers: settings.modifiers(for: .screenshot))
             Button("Toggle Full Screen", action: { playerWindows.activeModel?.toggleFullscreen() })
                 .keyboardShortcut(settings.keyEquivalent(for: .toggleFullscreen), modifiers: settings.modifiers(for: .toggleFullscreen))
+            Divider()
+            Menu("Screenshot") {
+                Button("Take Screenshot", action: { playerWindows.activeModel?.screenshot() })
+                    .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
+                    .keyboardShortcut(settings.keyEquivalent(for: .screenshot), modifiers: settings.modifiers(for: .screenshot))
+                Button("Copy Screenshot", action: { playerWindows.activeModel?.copyScreenshot() })
+                    .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
+                    .keyboardShortcut(settings.keyEquivalent(for: .copyScreenshot), modifiers: settings.modifiers(for: .copyScreenshot))
+                Button("Choose Screenshot Folder", action: { playerWindows.activeModel?.chooseScreenshotDirectory() })
+                    .keyboardShortcut(settings.keyEquivalent(for: .chooseScreenshotFolder), modifiers: settings.modifiers(for: .chooseScreenshotFolder))
+            }
         }
         CommandMenu("Window") {
             Button("Picture in Picture", action: { playerWindows.activeModel?.togglePiP() })

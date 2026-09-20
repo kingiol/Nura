@@ -111,8 +111,7 @@ private struct GeneralSettingsPage: View {
                 ))
             }
             Section("Screenshots") {
-                Text("Choose a destination from the player settings when saving screenshots.")
-                    .foregroundStyle(.secondary)
+                Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
             }
         }
         .formStyle(.grouped)
