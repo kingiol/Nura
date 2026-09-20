@@ -349,7 +349,7 @@ struct PlayerView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 12) {
-                    SpeedMenu(speed: model.snapshot.speed, onSelect: model.setSpeed)
+                    SpeedMenu(speed: model.snapshot.speed, onSelect: { model.setSpeed($0) })
                         .help("Playback speed")
                         .accessibilityIdentifier("player.speed-menu")
                         .accessibilityLabel("Playback speed")
@@ -951,7 +951,7 @@ private struct SettingsSidebarView: View {
                 leadingLabel: "0.25x",
                 trailingLabel: "16x",
                 valueLabel: { "\(formatDecimal($0))x" },
-                onChange: model.setSpeed
+                onChange: { model.setSpeed($0) }
             )
         }
     }

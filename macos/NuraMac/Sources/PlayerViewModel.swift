@@ -1002,11 +1002,11 @@ final class PlayerViewModel {
         }
     }
 
-    func setSpeed(_ speed: Double) {
+    func setSpeed(_ speed: Double, notifyOSD: Bool = true) {
         do {
             try bridge?.setSpeed(speed)
             lastError = nil
-            showOSD(.speed(speed))
+            if notifyOSD { showOSD(.speed(speed)) }
         } catch {
             showError(error.localizedDescription)
         }
@@ -1359,13 +1359,13 @@ final class PlayerViewModel {
         }
     }
 
-    func setVolume(_ volume: Double) {
+    func setVolume(_ volume: Double, notifyOSD: Bool = true) {
         self.volume = volume
         pendingVolume = volume
         do {
             try bridge?.setVolume(volume)
             lastError = nil
-            showOSD(.volume(volume))
+            if notifyOSD { showOSD(.volume(volume)) }
         } catch {
             showError(error.localizedDescription)
         }
@@ -1611,8 +1611,8 @@ final class PlayerViewModel {
         guard bridge != nil else { return }
 
         configureScreenshotDirectory()
-        setVolume(settings.defaultVolume)
-        setSpeed(settings.defaultPlaybackSpeed)
+        setVolume(settings.defaultVolume, notifyOSD: false)
+        setSpeed(settings.defaultPlaybackSpeed, notifyOSD: false)
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.processPlaybackEvents()
@@ -1622,17 +1622,21 @@ final class PlayerViewModel {
 
     private func configureScreenshotDirectory() {
         guard let directory = try? screenshotDirectory() else { return }
-        setScreenshotDirectory(directory)
+        setScreenshotDirectory(directory, notifyOSD: false)
     }
 
-    private func setScreenshotDirectory(_ url: URL) {
+    private func setScreenshotDirectory(_ url: URL, notifyOSD: Bool = true) {
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             try bridge?.setScreenshotDirectory(url)
             defaults.set(url.path, forKey: screenshotDirectoryKey)
             lastError = nil
         } catch {
-            showError(error.localizedDescription)
+            if notifyOSD {
+                showError(error.localizedDescription)
+            } else {
+                lastError = error.localizedDescription
+            }
         }
     }
 
