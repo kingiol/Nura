@@ -76,8 +76,7 @@ struct PlayerView: View {
                         if sidebar == .settings {
                             SettingsSidebarView(
                                 model: model,
-                                onClose: { self.sidebar = nil },
-                                onTogglePiP: togglePiP
+                                onClose: { self.sidebar = nil }
                             )
                         } else {
                             SidebarView(
@@ -809,7 +808,6 @@ func showOpenURLPanel(open: @escaping (String) -> Void) {
 private struct SettingsSidebarView: View {
     let model: PlayerViewModel
     let onClose: () -> Void
-    let onTogglePiP: () -> Void
 
     @State private var selectedTab: SettingsTab = .general
 
@@ -901,7 +899,6 @@ private struct SettingsSidebarView: View {
             Button(action: model.toggleAlwaysOnTop) {
                 Label(model.alwaysOnTop ? "Release Window" : "Keep Window on Top", systemImage: model.alwaysOnTop ? "pin.fill" : "pin")
             }
-            Button(action: onTogglePiP) { Label("Picture in Picture", systemImage: "pip") }
         }
     }
 
