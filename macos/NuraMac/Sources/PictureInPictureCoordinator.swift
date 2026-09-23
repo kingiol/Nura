@@ -11,6 +11,7 @@ private typealias GLSize = Int32
 private typealias GLEnum = UInt32
 
 @_silgen_name("glGetIntegerv") private func nura_glGetIntegerv(_ name: GLEnum, _ value: UnsafeMutablePointer<GLInt>)
+@_silgen_name("glViewport") private func nura_glViewport(_ x: GLInt, _ y: GLInt, _ width: GLSize, _ height: GLSize)
 @_silgen_name("glBindFramebuffer") private func nura_glBindFramebuffer(_ target: GLEnum, _ framebuffer: GLInt)
 @_silgen_name("glGenFramebuffers") private func nura_glGenFramebuffers(_ count: GLSize, _ framebuffers: UnsafeMutablePointer<GLInt>)
 @_silgen_name("glFramebufferTexture2D") private func nura_glFramebufferTexture2D(
@@ -29,6 +30,7 @@ private let nuraGLDrawFramebufferBinding: GLEnum = 0x8CA6
 private let nuraGLReadFramebufferBinding: GLEnum = 0x8CAA
 private let nuraGLColorAttachment0: GLEnum = 0x8CE0
 private let nuraGLFramebufferComplete: GLEnum = 0x8CD5
+private let nuraGLViewport: GLEnum = 0x0BA2
 
 struct PictureInPictureRenderSize: Equatable {
     let width: Int32
@@ -116,9 +118,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
 
         displayLayer.videoGravity = .resizeAspect
         displayLayer.contentsScale = 1
-        let initialLayerSize = CGSize(width: 320, height: 180)
-        displayLayer.frame = CGRect(origin: .zero, size: initialLayerSize)
-        displayLayer.bounds = CGRect(origin: .zero, size: initialLayerSize)
         var timebase: CMTimebase?
         if CMTimebaseCreateWithSourceClock(
             allocator: kCFAllocatorDefault,
@@ -330,8 +329,19 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             return nil
         }
 
+        var previousViewport = [GLInt](repeating: 0, count: 4)
+        previousViewport.withUnsafeMutableBufferPointer { viewport in
+            nura_glGetIntegerv(nuraGLViewport, viewport.baseAddress!)
+        }
+        nura_glViewport(0, 0, GLSize(width), GLSize(height))
         let rendered = renderFrame(pipFramebuffer, Int32(width), Int32(height))
         nura_glFlush()
+        nura_glViewport(
+            previousViewport[0],
+            previousViewport[1],
+            previousViewport[2],
+            previousViewport[3]
+        )
         nura_glFramebufferTexture2D(nuraGLFramebuffer, nuraGLColorAttachment0, textureTarget, 0, 0)
         restoreFramebuffers(draw: previousDrawFramebuffer, read: previousReadFramebuffer)
         guard rendered else { return nil }
