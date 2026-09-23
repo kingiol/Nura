@@ -28,6 +28,16 @@ final class PlayerViewModelTests: XCTestCase {
         )
     }
 
+    func testPiPRenderSizeUsesBackingPixelsForPIPContent() {
+        XCTAssertEqual(
+            PictureInPictureRenderSize.fromContentSize(
+                CGSize(width: 1220, height: 664),
+                scale: 2
+            ),
+            PictureInPictureRenderSize(width: 2440, height: 1328)
+        )
+    }
+
     func testVideoMinimumSizePreservesAspectForWideVideo() {
         let geometry = VideoGeometry(width: 960, height: 400)
         let minimumSize = geometry.minimumSize

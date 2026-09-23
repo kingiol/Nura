@@ -56,6 +56,17 @@ struct PictureInPictureRenderSize: Equatable {
             height: max(2, height)
         )
     }
+
+    static func fromContentSize(_ size: CGSize, scale: CGFloat) -> Self? {
+        guard size.width.isFinite, size.height.isFinite,
+              scale.isFinite, size.width > 0, size.height > 0, scale > 0 else {
+            return nil
+        }
+        return validated(
+            width: Int32((size.width * scale).rounded()),
+            height: Int32((size.height * scale).rounded())
+        )
+    }
 }
 
 @MainActor
@@ -79,6 +90,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private var loggedFirstFrame = false
     private var loggedReadbackError = false
     private var controlTimebase: CMTimebase?
+    private var pipContentFrameObserver: NSObjectProtocol?
+    private var pipRenderSizeUpdateWorkItem: DispatchWorkItem?
     // macOS mirrors sample-buffer PIP content at its pixel dimensions. Keep
     // this aligned with AVKit's latest render-size callback.
     private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
@@ -139,6 +152,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureEnabled = false
         startRequested = false
         captureStartTime = nil
+        stopTrackingPIPContentSize()
         guard let controller, controller.isPictureInPictureActive else {
             isActive = false
             return
@@ -335,6 +349,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         onActiveChange(true)
         invalidatePlaybackState()
         schedulePIPOverlaySuppression()
+        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -346,6 +361,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureStartTime = nil
         loggedFirstFrame = false
         loggedReadbackError = false
+        stopTrackingPIPContentSize()
         isActive = false
         onActiveChange(false)
         reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
@@ -358,6 +374,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         startRequested = false
         isActive = false
         onActiveChange(false)
+        stopTrackingPIPContentSize()
         displayLayer.flush()
     }
 
@@ -395,6 +412,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         )
         pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
         schedulePIPOverlaySuppression()
+        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -429,6 +447,73 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
                 self?.suppressPIPOverlayIfPresent()
             }
         }
+    }
+
+    private func schedulePIPContentSizeTracking() {
+        for delay in [0.1, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.startTrackingPIPContentSize()
+            }
+        }
+    }
+
+    private func startTrackingPIPContentSize() {
+        guard let contentView = pipContentView else { return }
+        if pipContentFrameObserver == nil {
+            contentView.postsFrameChangedNotifications = true
+            pipContentFrameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
+                object: contentView,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.requestPIPRenderSizeUpdate()
+                }
+            }
+        }
+        updatePIPRenderSize(from: contentView)
+    }
+
+    private func requestPIPRenderSizeUpdate() {
+        pipRenderSizeUpdateWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.updatePIPRenderSizeFromContentView()
+        }
+        pipRenderSizeUpdateWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
+    }
+
+    private func stopTrackingPIPContentSize() {
+        pipRenderSizeUpdateWorkItem?.cancel()
+        pipRenderSizeUpdateWorkItem = nil
+        if let pipContentFrameObserver {
+            NotificationCenter.default.removeObserver(pipContentFrameObserver)
+            self.pipContentFrameObserver = nil
+        }
+    }
+
+    private var pipContentView: NSView? {
+        NSApplication.shared.windows.first(where: {
+            String(describing: type(of: $0)).contains("PIPPanel")
+        })?.contentView
+    }
+
+    private func updatePIPRenderSizeFromContentView() {
+        guard let contentView = pipContentView else { return }
+        updatePIPRenderSize(from: contentView)
+    }
+
+    private func updatePIPRenderSize(from contentView: NSView) {
+        let scale = contentView.window?.backingScaleFactor ?? 1
+        guard let renderSize = PictureInPictureRenderSize.fromContentSize(
+            contentView.bounds.size,
+            scale: scale
+        ) else { return }
+        guard pipRenderSize.width != renderSize.width || pipRenderSize.height != renderSize.height else {
+            return
+        }
+        pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
     }
 
     private func suppressPIPOverlayIfPresent() {
