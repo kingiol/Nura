@@ -19,6 +19,7 @@ struct RenderSurfaceView: NSViewRepresentable {
         Coordinator(model: model)
     }
 
+    @MainActor
     final class Coordinator {
         let model: PlayerViewModel
         private(set) var surface: RenderSurface?

@@ -67,7 +67,7 @@
 		41A317754DB1D2548BB68133 /* SubtitleParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleParser.swift; sourceTree = "<group>"; };
 		443E733149ECDCA15898AF24 /* NuraLocalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraLocalizer.swift; sourceTree = "<group>"; };
 		46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacUITests.swift; sourceTree = "<group>"; };
-		4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NuraMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A6B25D0CE1245CFAFE4A390 /* Nura.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nura.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D7FE4DC1C812A07D99779FC /* OSDMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSDMessageTests.swift; sourceTree = "<group>"; };
 		4EA3F9991C17BF1DD138A10E /* NuraMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NuraMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacApp.swift; sourceTree = "<group>"; };
@@ -139,7 +139,7 @@
 		8489C3E8D2D8D2449EE65E81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */,
+				4A6B25D0CE1245CFAFE4A390 /* Nura.app */,
 				4EA3F9991C17BF1DD138A10E /* NuraMacTests.xctest */,
 				6A9CD6C77A742F3A33A77F12 /* NuraMacUITests.xctest */,
 			);
@@ -234,7 +234,7 @@
 			packageProductDependencies = (
 			);
 			productName = NuraMac;
-			productReference = 4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */;
+			productReference = 4A6B25D0CE1245CFAFE4A390 /* Nura.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -411,9 +411,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(NURA_RUST_LIB_DIR)",
-				);
+				LIBRARY_SEARCH_PATHS = "$(NURA_RUST_LIB_DIR)";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				OTHER_LDFLAGS = (
 					"-lnura_ffi",
 					"-framework",
@@ -517,9 +516,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(NURA_RUST_LIB_DIR)",
-				);
+				LIBRARY_SEARCH_PATHS = "$(NURA_RUST_LIB_DIR)";
+				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				OTHER_LDFLAGS = (
 					"-lnura_ffi",
 					"-framework",

@@ -50,6 +50,7 @@ const MPV_RENDER_PARAM_API_TYPE: c_int = 1;
 const MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: c_int = 2;
 const MPV_RENDER_PARAM_OPENGL_FBO: c_int = 3;
 const MPV_RENDER_PARAM_FLIP_Y: c_int = 4;
+const MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME: c_int = 12;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default)]
@@ -199,12 +200,14 @@ fn mpv_library_candidates(
 
 impl MpvApi {
     unsafe fn load_symbol<T: Copy>(library: &Library, name: &[u8]) -> Result<T, MpvError> {
-        Ok(*library.get::<T>(name).map_err(|error| MpvError::Symbol {
-            name: String::from_utf8_lossy(name)
-                .trim_end_matches('\0')
-                .to_owned(),
-            error: error.to_string(),
-        })?)
+        unsafe {
+            Ok(*library.get::<T>(name).map_err(|error| MpvError::Symbol {
+                name: String::from_utf8_lossy(name)
+                    .trim_end_matches('\0')
+                    .to_owned(),
+                error: error.to_string(),
+            })?)
+        }
     }
 
     fn load() -> Result<Self, MpvError> {
@@ -307,6 +310,10 @@ impl MpvEngine {
             // Keep libmpv's metadata-driven autorotation enabled. `no` would
             // suppress rotation metadata from phone/camera videos.
             ("video-rotate".to_owned(), "0".to_owned()),
+            // The AppKit render callback disables mpv's blocking target-time
+            // wait to avoid hanging the main thread. Keep video timing
+            // immediate as well so A/V sync does not depend on that wait.
+            ("video-timing-offset".to_owned(), "0".to_owned()),
             // Keep online media enabled; the bundled ytdl hook resolves public
             // YouTube/Bilibili URLs before mpv opens the resulting streams.
             (
@@ -491,7 +498,7 @@ impl MpvEngine {
             return Ok(());
         }
         unsafe extern "C" fn get_proc_address(_: *mut c_void, name: *const c_char) -> *mut c_void {
-            libc::dlsym(libc::RTLD_DEFAULT, name)
+            unsafe { libc::dlsym(libc::RTLD_DEFAULT, name) }
         }
         let api_type = CString::new("opengl").unwrap();
         let mut init = MpvOpenGlInitParams {
@@ -549,6 +556,10 @@ impl MpvEngine {
         // render path expects the target to be flipped into that coordinate
         // system; this also keeps display-matrix rotation directions correct.
         let mut flip_y = 1i32;
+        // Do not let libmpv sleep inside the AppKit draw callback waiting for
+        // the next video frame. mpv's event loop still drives redraws, and the
+        // render surface requests frames at 60 Hz.
+        let mut block_for_target_time = 0i32;
         let params = [
             MpvRenderParam {
                 param_type: MPV_RENDER_PARAM_OPENGL_FBO,
@@ -557,6 +568,10 @@ impl MpvEngine {
             MpvRenderParam {
                 param_type: MPV_RENDER_PARAM_FLIP_Y,
                 data: (&mut flip_y as *mut i32).cast(),
+            },
+            MpvRenderParam {
+                param_type: MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME,
+                data: (&mut block_for_target_time as *mut i32).cast(),
             },
             MpvRenderParam {
                 param_type: 0,

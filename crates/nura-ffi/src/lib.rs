@@ -21,41 +21,15 @@ const NURA_RENDER_SKIPPED: c_int = 1;
 
 enum Command {
     Open(PathBuf, Reply),
-    Enqueue(PathBuf, Reply),
-    ClearPlaylist(Reply),
-    RemoveIndex(usize, Reply),
-    MoveIndex {
-        from: usize,
-        to: usize,
-        reply: Reply,
-    },
-    PlayIndex(usize, Reply),
-    Next(Reply),
-    Previous(Reply),
     Play(Reply),
     Pause(Reply),
     Toggle(Reply),
     Seek(f64, Reply),
-    SeekRelative(f64, Reply),
-    FrameStep(Reply),
-    FrameBackStep(Reply),
     Volume(f64, Reply),
     Mute(bool, Reply),
-    Speed(f64, Reply),
-    Loop(bool, Reply),
-    PlaylistLoop(bool, Reply),
-    Shuffle(Reply),
-    AbLoop {
-        start: Option<f64>,
-        end: Option<f64>,
-        reply: Reply,
-    },
-    SubtitleDelay(f64, Reply),
-    Screenshot(Reply),
     ScreenshotToFile(PathBuf, Reply),
     AudioTrack(Option<i64>, Reply),
     SubtitleTrack(Option<i64>, Reply),
-    VideoTrack(Option<i64>, Reply),
     AnalysisLoad {
         key: AnalysisKey,
         reply: JsonReply,
@@ -299,25 +273,6 @@ fn handle_command(
 ) -> bool {
     let (operation, reply) = match command {
         Command::Open(path, reply) => (open_locator(session, path), reply),
-        Command::Enqueue(path, reply) => {
-            let locator = path.to_string_lossy().into_owned();
-            let result = if locator.starts_with("http://") || locator.starts_with("https://") {
-                nura_domain::MediaItem::from_url(locator)
-                    .map_err(nura_player_core::PlayerError::Domain)
-                    .and_then(|item| session.enqueue_item(item))
-            } else {
-                nura_domain::MediaItem::from_path(path)
-                    .map_err(nura_player_core::PlayerError::Domain)
-                    .and_then(|item| session.enqueue_item(item))
-            };
-            (result, reply)
-        }
-        Command::ClearPlaylist(reply) => (session.clear_playlist(), reply),
-        Command::RemoveIndex(index, reply) => (session.remove_playlist_index(index), reply),
-        Command::MoveIndex { from, to, reply } => (session.move_playlist_item(from, to), reply),
-        Command::PlayIndex(index, reply) => (session.play_playlist_index(index), reply),
-        Command::Next(reply) => (session.next(), reply),
-        Command::Previous(reply) => (session.previous(), reply),
         Command::Play(reply) => (session.play(), reply),
         Command::Pause(reply) => (session.pause(), reply),
         Command::Toggle(reply) => (session.toggle_playback(), reply),
@@ -326,28 +281,11 @@ fn handle_command(
             return false;
         }
         Command::Seek(position, reply) => (session.seek(position), reply),
-        Command::SeekRelative(offset, reply) => (session.seek_relative(offset), reply),
-        Command::FrameStep(reply) => (session.frame_step(), reply),
-        Command::FrameBackStep(reply) => (session.frame_back_step(), reply),
         Command::Volume(volume, reply) => (session.set_volume(volume), reply),
         Command::Mute(muted, reply) => (session.set_mute(muted), reply),
-        Command::Speed(speed, reply) => (session.set_speed(speed), reply),
-        Command::Loop(enabled, reply) => (session.set_loop(enabled), reply),
-        Command::PlaylistLoop(enabled, reply) => {
-            session.set_playlist_loop(enabled);
-            (Ok(()), reply)
-        }
-        Command::Shuffle(reply) => {
-            session.shuffle_playlist();
-            (Ok(()), reply)
-        }
-        Command::AbLoop { start, end, reply } => (session.set_ab_loop(start, end), reply),
-        Command::SubtitleDelay(delay, reply) => (session.set_subtitle_delay(delay), reply),
-        Command::Screenshot(reply) => (session.screenshot(), reply),
         Command::ScreenshotToFile(path, reply) => (session.screenshot_to_file(path), reply),
         Command::AudioTrack(id, reply) => (session.select_track(TrackKind::Audio, id), reply),
         Command::SubtitleTrack(id, reply) => (session.select_track(TrackKind::Subtitle, id), reply),
-        Command::VideoTrack(id, reply) => (session.select_track(TrackKind::Video, id), reply),
         Command::AnalysisLoad { key, reply } => {
             let result = analysis
                 .complete_transcript(&key)
@@ -509,18 +447,22 @@ fn try_lock_for_render<T>(mutex: &Mutex<T>) -> Result<Option<MutexGuard<'_, T>>,
 }
 
 unsafe fn read_string(value: *const c_char) -> Result<String, String> {
-    if value.is_null() {
-        return Err("received a null string".to_owned());
+    unsafe {
+        if value.is_null() {
+            return Err("received a null string".to_owned());
+        }
+        CStr::from_ptr(value)
+            .to_str()
+            .map(|value| value.to_owned())
+            .map_err(|_| "received invalid UTF-8".to_owned())
     }
-    CStr::from_ptr(value)
-        .to_str()
-        .map(|value| value.to_owned())
-        .map_err(|_| "received invalid UTF-8".to_owned())
 }
 
 unsafe fn read_json<T: serde::de::DeserializeOwned>(value: *const c_char) -> Result<T, String> {
-    let value = read_string(value)?;
-    serde_json::from_str(&value).map_err(|error| format!("received invalid JSON: {error}"))
+    unsafe {
+        let value = read_string(value)?;
+        serde_json::from_str(&value).map_err(|error| format!("received invalid JSON: {error}"))
+    }
 }
 
 fn json_result(result: Result<String, String>) -> *mut c_char {
@@ -593,17 +535,19 @@ pub extern "C" fn nura_player_create(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_destroy(player: *mut NuraPlayer) {
-    if player.is_null() {
-        return;
-    }
-    let player = Box::from_raw(player);
-    std::thread::spawn(move || {
-        let mut player = player;
-        let _ = send_command(&player, Command::Shutdown);
-        if let Some(worker) = player.worker.take() {
-            let _ = worker.join();
+    unsafe {
+        if player.is_null() {
+            return;
         }
-    });
+        let player = Box::from_raw(player);
+        std::thread::spawn(move || {
+            let mut player = player;
+            let _ = send_command(&player, Command::Shutdown);
+            if let Some(worker) = player.worker.take() {
+                let _ = worker.join();
+            }
+        });
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -611,13 +555,15 @@ pub unsafe extern "C" fn nura_analysis_load_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> *mut c_char {
-    let key = match read_json(input) {
-        Ok(key) => key,
-        Err(error) => return json_result(Err(error)),
-    };
-    json_result(query_command_result(player, |reply| {
-        Command::AnalysisLoad { key, reply }
-    }))
+    unsafe {
+        let key = match read_json(input) {
+            Ok(key) => key,
+            Err(error) => return json_result(Err(error)),
+        };
+        json_result(query_command_result(player, |reply| {
+            Command::AnalysisLoad { key, reply }
+        }))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -625,13 +571,15 @@ pub unsafe extern "C" fn nura_analysis_search_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> *mut c_char {
-    let request = match read_json(input) {
-        Ok(request) => request,
-        Err(error) => return json_result(Err(error)),
-    };
-    json_result(query_command_result(player, |reply| {
-        Command::AnalysisSearch { request, reply }
-    }))
+    unsafe {
+        let request = match read_json(input) {
+            Ok(request) => request,
+            Err(error) => return json_result(Err(error)),
+        };
+        json_result(query_command_result(player, |reply| {
+            Command::AnalysisSearch { request, reply }
+        }))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -639,14 +587,16 @@ pub unsafe extern "C" fn nura_analysis_promote_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> c_int {
-    let document = match read_json(input) {
-        Ok(document) => document,
-        Err(error) => {
-            set_last_error(error);
-            return -1;
-        }
-    };
-    command_result(player, |reply| Command::AnalysisPromote(document, reply))
+    unsafe {
+        let document = match read_json(input) {
+            Ok(document) => document,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        command_result(player, |reply| Command::AnalysisPromote(document, reply))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -654,13 +604,15 @@ pub unsafe extern "C" fn nura_analysis_load_run_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> *mut c_char {
-    let key = match read_json(input) {
-        Ok(key) => key,
-        Err(error) => return json_result(Err(error)),
-    };
-    json_result(query_command_result(player, |reply| {
-        Command::AnalysisLoadRun { key, reply }
-    }))
+    unsafe {
+        let key = match read_json(input) {
+            Ok(key) => key,
+            Err(error) => return json_result(Err(error)),
+        };
+        json_result(query_command_result(player, |reply| {
+            Command::AnalysisLoadRun { key, reply }
+        }))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -668,14 +620,16 @@ pub unsafe extern "C" fn nura_analysis_save_run_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> c_int {
-    let run = match read_json(input) {
-        Ok(run) => run,
-        Err(error) => {
-            set_last_error(error);
-            return -1;
-        }
-    };
-    command_result(player, |reply| Command::AnalysisSaveRun(run, reply))
+    unsafe {
+        let run = match read_json(input) {
+            Ok(run) => run,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        command_result(player, |reply| Command::AnalysisSaveRun(run, reply))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -683,14 +637,16 @@ pub unsafe extern "C" fn nura_analysis_delete_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> c_int {
-    let key = match read_json(input) {
-        Ok(key) => key,
-        Err(error) => {
-            set_last_error(error);
-            return -1;
-        }
-    };
-    command_result(player, |reply| Command::AnalysisDelete(key, reply))
+    unsafe {
+        let key = match read_json(input) {
+            Ok(key) => key,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        command_result(player, |reply| Command::AnalysisDelete(key, reply))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -698,21 +654,23 @@ pub unsafe extern "C" fn nura_analysis_list_notes_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> *mut c_char {
-    #[derive(Deserialize)]
-    struct ListNotesRequest {
-        media_fingerprint: String,
-    }
-
-    let request: ListNotesRequest = match read_json(input) {
-        Ok(request) => request,
-        Err(error) => return json_result(Err(error)),
-    };
-    json_result(query_command_result(player, |reply| {
-        Command::AnalysisListNotes {
-            media_fingerprint: request.media_fingerprint,
-            reply,
+    unsafe {
+        #[derive(Deserialize)]
+        struct ListNotesRequest {
+            media_fingerprint: String,
         }
-    }))
+
+        let request: ListNotesRequest = match read_json(input) {
+            Ok(request) => request,
+            Err(error) => return json_result(Err(error)),
+        };
+        json_result(query_command_result(player, |reply| {
+            Command::AnalysisListNotes {
+                media_fingerprint: request.media_fingerprint,
+                reply,
+            }
+        }))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -720,13 +678,15 @@ pub unsafe extern "C" fn nura_analysis_create_note_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> *mut c_char {
-    let note = match read_json(input) {
-        Ok(note) => note,
-        Err(error) => return json_result(Err(error)),
-    };
-    json_result(query_command_result(player, |reply| {
-        Command::AnalysisCreateNote { note, reply }
-    }))
+    unsafe {
+        let note = match read_json(input) {
+            Ok(note) => note,
+            Err(error) => return json_result(Err(error)),
+        };
+        json_result(query_command_result(player, |reply| {
+            Command::AnalysisCreateNote { note, reply }
+        }))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -734,14 +694,16 @@ pub unsafe extern "C" fn nura_analysis_update_note_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> c_int {
-    let note = match read_json(input) {
-        Ok(note) => note,
-        Err(error) => {
-            set_last_error(error);
-            return -1;
-        }
-    };
-    command_result(player, |reply| Command::AnalysisUpdateNote(note, reply))
+    unsafe {
+        let note = match read_json(input) {
+            Ok(note) => note,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        command_result(player, |reply| Command::AnalysisUpdateNote(note, reply))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -749,35 +711,39 @@ pub unsafe extern "C" fn nura_analysis_delete_note_json(
     player: *mut NuraPlayer,
     input: *const c_char,
 ) -> *mut c_char {
-    #[derive(Deserialize)]
-    struct DeleteNoteRequest {
-        id: i64,
-    }
-
-    let request: DeleteNoteRequest = match read_json(input) {
-        Ok(request) => request,
-        Err(error) => return json_result(Err(error)),
-    };
-    json_result(query_command_result(player, |reply| {
-        Command::AnalysisDeleteNote {
-            id: request.id,
-            reply,
+    unsafe {
+        #[derive(Deserialize)]
+        struct DeleteNoteRequest {
+            id: i64,
         }
-    }))
+
+        let request: DeleteNoteRequest = match read_json(input) {
+            Ok(request) => request,
+            Err(error) => return json_result(Err(error)),
+        };
+        json_result(query_command_result(player, |reply| {
+            Command::AnalysisDeleteNote {
+                id: request.id,
+                reply,
+            }
+        }))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_open(player: *mut NuraPlayer, path: *const c_char) -> c_int {
-    let path = match read_string(path) {
-        Ok(path) => path,
-        Err(error) => {
-            set_last_error(error);
-            return -1;
-        }
-    };
-    command_result(player, move |reply| {
-        Command::Open(PathBuf::from(path), reply)
-    })
+    unsafe {
+        let path = match read_string(path) {
+            Ok(path) => path,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        command_result(player, move |reply| {
+            Command::Open(PathBuf::from(path), reply)
+        })
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -785,18 +751,20 @@ pub unsafe extern "C" fn nura_player_open_async(
     player: *mut NuraPlayer,
     path: *const c_char,
 ) -> c_int {
-    let path = match read_string(path) {
-        Ok(path) => path,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let path = match read_string(path) {
+            Ok(path) => path,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Open(PathBuf::from(path)))
+        };
+        async_command_result(player, AsyncCommand::Open(PathBuf::from(path)))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -804,18 +772,20 @@ pub unsafe extern "C" fn nura_player_open_url_async(
     player: *mut NuraPlayer,
     url: *const c_char,
 ) -> c_int {
-    let url = match read_string(url) {
-        Ok(url) => url,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let url = match read_string(url) {
+            Ok(url) => url,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Open(PathBuf::from(url)))
+        };
+        async_command_result(player, AsyncCommand::Open(PathBuf::from(url)))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -823,27 +793,31 @@ pub unsafe extern "C" fn nura_player_enqueue_async(
     player: *mut NuraPlayer,
     locator: *const c_char,
 ) -> c_int {
-    let locator = match read_string(locator) {
-        Ok(locator) => locator,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let locator = match read_string(locator) {
+            Ok(locator) => locator,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Enqueue(PathBuf::from(locator)))
+        };
+        async_command_result(player, AsyncCommand::Enqueue(PathBuf::from(locator)))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_clear_playlist_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::ClearPlaylist)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::ClearPlaylist)
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -851,11 +825,13 @@ pub unsafe extern "C" fn nura_player_remove_index_async(
     player: *mut NuraPlayer,
     index: usize,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::RemoveIndex(index))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::RemoveIndex(index))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -864,11 +840,13 @@ pub unsafe extern "C" fn nura_player_move_index_async(
     from: usize,
     to: usize,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::MoveIndex { from, to })
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::MoveIndex { from, to })
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -876,143 +854,167 @@ pub unsafe extern "C" fn nura_player_play_index_async(
     player: *mut NuraPlayer,
     index: usize,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::PlayIndex(index))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::PlayIndex(index))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_next_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Next)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Next)
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_previous_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Previous)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Previous)
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_play(player: *mut NuraPlayer) -> c_int {
-    command_result(player, Command::Play)
+    unsafe { command_result(player, Command::Play) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_pause(player: *mut NuraPlayer) -> c_int {
-    command_result(player, Command::Pause)
+    unsafe { command_result(player, Command::Pause) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_toggle(player: *mut NuraPlayer) -> c_int {
-    command_result(player, Command::Toggle)
+    unsafe { command_result(player, Command::Toggle) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_toggle_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Toggle)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Toggle)
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_seek(player: *mut NuraPlayer, position: f64) -> c_int {
-    command_result(player, |reply| Command::Seek(position, reply))
+    unsafe { command_result(player, |reply| Command::Seek(position, reply)) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_seek_async(player: *mut NuraPlayer, position: f64) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Seek(position))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Seek(position))
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_seek_relative_async(
     player: *mut NuraPlayer,
     offset: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::SeekRelative(offset))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::SeekRelative(offset))
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_frame_step_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::FrameStep)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::FrameStep)
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_frame_back_step_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::FrameBackStep)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::FrameBackStep)
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_volume(player: *mut NuraPlayer, volume: f64) -> c_int {
-    command_result(player, |reply| Command::Volume(volume, reply))
+    unsafe { command_result(player, |reply| Command::Volume(volume, reply)) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_volume_async(
     player: *mut NuraPlayer,
     volume: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    match set_pending_volume(&player.pending_volume, volume) {
-        Ok(()) => 0,
-        Err(error) => {
-            set_last_error(error);
-            -1
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        match set_pending_volume(&player.pending_volume, volume) {
+            Ok(()) => 0,
+            Err(error) => {
+                set_last_error(error);
+                -1
+            }
         }
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_mute(player: *mut NuraPlayer, muted: c_int) -> c_int {
-    command_result(player, |reply| Command::Mute(muted != 0, reply))
+    unsafe { command_result(player, |reply| Command::Mute(muted != 0, reply)) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_mute_async(
     player: *mut NuraPlayer,
     muted: c_int,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Mute(muted != 0))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Mute(muted != 0))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_set_speed_async(player: *mut NuraPlayer, speed: f64) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Speed(speed))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Speed(speed))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_screenshot_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Screenshot)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Screenshot)
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1020,16 +1022,18 @@ pub unsafe extern "C" fn nura_player_screenshot_to_file(
     player: *mut NuraPlayer,
     path: *const c_char,
 ) -> c_int {
-    let path = match read_string(path) {
-        Ok(path) => path,
-        Err(error) => {
-            set_last_error(error);
-            return -1;
-        }
-    };
-    command_result(player, move |reply| {
-        Command::ScreenshotToFile(PathBuf::from(path), reply)
-    })
+    unsafe {
+        let path = match read_string(path) {
+            Ok(path) => path,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        command_result(player, move |reply| {
+            Command::ScreenshotToFile(PathBuf::from(path), reply)
+        })
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1037,11 +1041,13 @@ pub unsafe extern "C" fn nura_player_set_loop_async(
     player: *mut NuraPlayer,
     enabled: c_int,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Loop(enabled != 0))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Loop(enabled != 0))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1049,20 +1055,24 @@ pub unsafe extern "C" fn nura_player_set_playlist_loop_async(
     player: *mut NuraPlayer,
     enabled: c_int,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::PlaylistLoop(enabled != 0))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::PlaylistLoop(enabled != 0))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_shuffle_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::Shuffle)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::Shuffle)
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1071,13 +1081,15 @@ pub unsafe extern "C" fn nura_player_set_ab_loop_async(
     start: f64,
     end: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    let start = start.is_finite().then_some(start);
-    let end = end.is_finite().then_some(end);
-    async_command_result(player, AsyncCommand::AbLoop { start, end })
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        let start = start.is_finite().then_some(start);
+        let end = end.is_finite().then_some(end);
+        async_command_result(player, AsyncCommand::AbLoop { start, end })
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1085,11 +1097,13 @@ pub unsafe extern "C" fn nura_player_set_subtitle_delay_async(
     player: *mut NuraPlayer,
     delay: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::SubtitleDelay(delay))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::SubtitleDelay(delay))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1097,11 +1111,13 @@ pub unsafe extern "C" fn nura_player_set_audio_delay_async(
     player: *mut NuraPlayer,
     delay: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::AudioDelay(delay))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::AudioDelay(delay))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1109,18 +1125,20 @@ pub unsafe extern "C" fn nura_player_set_audio_device_async(
     player: *mut NuraPlayer,
     device_id: *const c_char,
 ) -> c_int {
-    let device_id = match read_string(device_id) {
-        Ok(value) => value,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let device_id = match read_string(device_id) {
+            Ok(value) => value,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::AudioDevice(device_id))
+        };
+        async_command_result(player, AsyncCommand::AudioDevice(device_id))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1128,11 +1146,13 @@ pub unsafe extern "C" fn nura_player_set_subtitle_visibility_async(
     player: *mut NuraPlayer,
     visible: c_int,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::SubtitleVisibility(visible != 0))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::SubtitleVisibility(visible != 0))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1140,11 +1160,13 @@ pub unsafe extern "C" fn nura_player_set_subtitle_scale_async(
     player: *mut NuraPlayer,
     scale: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::SubtitleScale(scale))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::SubtitleScale(scale))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1152,11 +1174,13 @@ pub unsafe extern "C" fn nura_player_set_subtitle_position_async(
     player: *mut NuraPlayer,
     position: f64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::SubtitlePosition(position))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::SubtitlePosition(position))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1164,18 +1188,20 @@ pub unsafe extern "C" fn nura_player_set_video_aspect_async(
     player: *mut NuraPlayer,
     aspect: *const c_char,
 ) -> c_int {
-    let aspect = match read_string(aspect) {
-        Ok(value) => value,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let aspect = match read_string(aspect) {
+            Ok(value) => value,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::VideoAspect(aspect))
+        };
+        async_command_result(player, AsyncCommand::VideoAspect(aspect))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1183,11 +1209,13 @@ pub unsafe extern "C" fn nura_player_set_video_rotation_async(
     player: *mut NuraPlayer,
     degrees: c_int,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::VideoRotation(degrees))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::VideoRotation(degrees))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1195,11 +1223,13 @@ pub unsafe extern "C" fn nura_player_set_video_flip_async(
     player: *mut NuraPlayer,
     flipped: c_int,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::VideoFlip(flipped != 0))
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::VideoFlip(flipped != 0))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1207,67 +1237,77 @@ pub unsafe extern "C" fn nura_player_set_screenshot_directory_async(
     player: *mut NuraPlayer,
     directory: *const c_char,
 ) -> c_int {
-    let directory = match read_string(directory) {
-        Ok(value) => value,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let directory = match read_string(directory) {
+            Ok(value) => value,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(
-        player,
-        AsyncCommand::ScreenshotDirectory(PathBuf::from(directory)),
-    )
+        };
+        async_command_result(
+            player,
+            AsyncCommand::ScreenshotDirectory(PathBuf::from(directory)),
+        )
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_audio_track(
     player: *mut NuraPlayer,
     track_id: i64,
 ) -> c_int {
-    command_result(player, |reply| {
-        Command::AudioTrack((track_id >= 0).then_some(track_id), reply)
-    })
+    unsafe {
+        command_result(player, |reply| {
+            Command::AudioTrack((track_id >= 0).then_some(track_id), reply)
+        })
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_audio_track_async(
     player: *mut NuraPlayer,
     track_id: i64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(
-        player,
-        AsyncCommand::AudioTrack((track_id >= 0).then_some(track_id)),
-    )
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(
+            player,
+            AsyncCommand::AudioTrack((track_id >= 0).then_some(track_id)),
+        )
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_subtitle_track(
     player: *mut NuraPlayer,
     track_id: i64,
 ) -> c_int {
-    command_result(player, |reply| {
-        Command::SubtitleTrack((track_id >= 0).then_some(track_id), reply)
-    })
+    unsafe {
+        command_result(player, |reply| {
+            Command::SubtitleTrack((track_id >= 0).then_some(track_id), reply)
+        })
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_select_subtitle_track_async(
     player: *mut NuraPlayer,
     track_id: i64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(
-        player,
-        AsyncCommand::SubtitleTrack((track_id >= 0).then_some(track_id)),
-    )
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(
+            player,
+            AsyncCommand::SubtitleTrack((track_id >= 0).then_some(track_id)),
+        )
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1275,14 +1315,16 @@ pub unsafe extern "C" fn nura_player_select_video_track_async(
     player: *mut NuraPlayer,
     track_id: i64,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(
-        player,
-        AsyncCommand::VideoTrack((track_id >= 0).then_some(track_id)),
-    )
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(
+            player,
+            AsyncCommand::VideoTrack((track_id >= 0).then_some(track_id)),
+        )
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1290,18 +1332,20 @@ pub unsafe extern "C" fn nura_player_add_external_subtitle_async(
     player: *mut NuraPlayer,
     path: *const c_char,
 ) -> c_int {
-    let path = match read_string(path) {
-        Ok(path) => path,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let path = match read_string(path) {
+            Ok(path) => path,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::ExternalSubtitle(PathBuf::from(path)))
+        };
+        async_command_result(player, AsyncCommand::ExternalSubtitle(PathBuf::from(path)))
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1309,70 +1353,78 @@ pub unsafe extern "C" fn nura_player_remove_history_item_async(
     player: *mut NuraPlayer,
     path_key: *const c_char,
 ) -> c_int {
-    let path_key = match read_string(path_key) {
-        Ok(value) => value,
-        Err(error) => {
-            set_last_error(error);
+    unsafe {
+        let path_key = match read_string(path_key) {
+            Ok(value) => value,
+            Err(error) => {
+                set_last_error(error);
+                return -1;
+            }
+        };
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
             return -1;
-        }
-    };
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::RemoveHistoryItem(path_key))
+        };
+        async_command_result(player, AsyncCommand::RemoveHistoryItem(path_key))
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_clear_history_async(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    async_command_result(player, AsyncCommand::ClearHistory)
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        async_command_result(player, AsyncCommand::ClearHistory)
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_attach_opengl_context(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        return -1;
-    };
-    match player
-        .engine
-        .0
-        .lock()
-        .map_err(|_| "player lock poisoned".to_owned())
-        .and_then(|mut engine| {
-            engine
-                .attach_opengl_context()
-                .map_err(|error| error.to_string())
-        }) {
-        Ok(()) => 0,
-        Err(error) => {
-            set_last_error(error.to_string());
-            -1
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            return -1;
+        };
+        match player
+            .engine
+            .0
+            .lock()
+            .map_err(|_| "player lock poisoned".to_owned())
+            .and_then(|mut engine| {
+                engine
+                    .attach_opengl_context()
+                    .map_err(|error| error.to_string())
+            }) {
+            Ok(()) => 0,
+            Err(error) => {
+                set_last_error(error.to_string());
+                -1
+            }
         }
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_detach_opengl_context(player: *mut NuraPlayer) -> c_int {
-    let Some(player) = player.as_ref() else {
-        return -1;
-    };
-    match player
-        .engine
-        .0
-        .lock()
-        .map_err(|_| "player lock poisoned".to_owned())
-    {
-        Ok(mut engine) => {
-            engine.detach_opengl_context();
-            0
-        }
-        Err(error) => {
-            set_last_error(error);
-            -1
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            return -1;
+        };
+        match player
+            .engine
+            .0
+            .lock()
+            .map_err(|_| "player lock poisoned".to_owned())
+        {
+            Ok(mut engine) => {
+                engine.detach_opengl_context();
+                0
+            }
+            Err(error) => {
+                set_last_error(error);
+                -1
+            }
         }
     }
 }
@@ -1384,59 +1436,67 @@ pub unsafe extern "C" fn nura_player_render_opengl(
     width: i32,
     height: i32,
 ) -> c_int {
-    let Some(player) = player.as_ref() else {
-        return -1;
-    };
-    match try_lock_for_render(&player.engine.0) {
-        Ok(Some(mut engine)) => match engine.render_opengl(fbo, width, height) {
-            Ok(()) => 0,
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            return -1;
+        };
+        match try_lock_for_render(&player.engine.0) {
+            Ok(Some(mut engine)) => match engine.render_opengl(fbo, width, height) {
+                Ok(()) => 0,
+                Err(error) => {
+                    set_last_error(error.to_string());
+                    -1
+                }
+            },
+            Ok(None) => NURA_RENDER_SKIPPED,
             Err(error) => {
-                set_last_error(error.to_string());
+                set_last_error(error);
                 -1
             }
-        },
-        Ok(None) => NURA_RENDER_SKIPPED,
-        Err(error) => {
-            set_last_error(error);
-            -1
         }
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_player_next_event(player: *mut NuraPlayer) -> *mut c_char {
-    let Some(player) = player.as_ref() else {
-        return std::ptr::null_mut();
-    };
-    let event = player
-        .events
-        .lock()
-        .ok()
-        .and_then(|mut queue| queue.pop_front());
-    event
-        .and_then(|event| serde_json::to_string(&event).ok())
-        .and_then(|event| CString::new(event).ok())
-        .map(CString::into_raw)
-        .unwrap_or(std::ptr::null_mut())
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            return std::ptr::null_mut();
+        };
+        let event = player
+            .events
+            .lock()
+            .ok()
+            .and_then(|mut queue| queue.pop_front());
+        event
+            .and_then(|event| serde_json::to_string(&event).ok())
+            .and_then(|event| CString::new(event).ok())
+            .map(CString::into_raw)
+            .unwrap_or(std::ptr::null_mut())
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nura_string_free(value: *mut c_char) {
-    if !value.is_null() {
-        drop(CString::from_raw(value));
+    unsafe {
+        if !value.is_null() {
+            drop(CString::from_raw(value));
+        }
     }
 }
 
 unsafe fn command_result(player: *mut NuraPlayer, command: impl FnOnce(Reply) -> Command) -> c_int {
-    let Some(player) = player.as_ref() else {
-        set_last_error("player is unavailable");
-        return -1;
-    };
-    match send_command(player, command) {
-        Ok(()) => 0,
-        Err(error) => {
-            set_last_error(error);
-            -1
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            set_last_error("player is unavailable");
+            return -1;
+        };
+        match send_command(player, command) {
+            Ok(()) => 0,
+            Err(error) => {
+                set_last_error(error);
+                -1
+            }
         }
     }
 }
@@ -1445,17 +1505,19 @@ unsafe fn query_command_result(
     player: *mut NuraPlayer,
     command: impl FnOnce(JsonReply) -> Command,
 ) -> Result<String, String> {
-    let Some(player) = player.as_ref() else {
-        return Err("player is unavailable".to_owned());
-    };
-    let (sender, receiver) = mpsc::sync_channel(1);
-    player
-        .commands
-        .send(command(sender))
-        .map_err(|_| "player worker has stopped".to_owned())?;
-    receiver
-        .recv()
-        .map_err(|_| "player worker did not reply".to_owned())?
+    unsafe {
+        let Some(player) = player.as_ref() else {
+            return Err("player is unavailable".to_owned());
+        };
+        let (sender, receiver) = mpsc::sync_channel(1);
+        player
+            .commands
+            .send(command(sender))
+            .map_err(|_| "player worker has stopped".to_owned())?;
+        receiver
+            .recv()
+            .map_err(|_| "player worker did not reply".to_owned())?
+    }
 }
 
 fn async_command_result(player: &NuraPlayer, command: AsyncCommand) -> c_int {

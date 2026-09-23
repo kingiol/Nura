@@ -1241,7 +1241,7 @@ private func formatDecimal(_ value: Double) -> String {
 private struct AnalysisSidebarView: View {
     @Bindable var model: PlayerViewModel
     let tab: SidebarTab
-    let onSelectTab: (SidebarTab) -> Void
+    let onSelectTab: @MainActor @Sendable (SidebarTab) -> Void
     let onClose: () -> Void
 
     @State private var isChoosingEmbeddedTrack = false
@@ -1453,7 +1453,7 @@ private struct AnalysisSidebarView: View {
                 .disabled(!model.canUseLocalTranscriptTools)
         }
 
-        if let deleted = model.deletedNote {
+        if model.deletedNote != nil {
             HStack {
                 Text("Note deleted")
                     .font(.caption)
@@ -1570,7 +1570,7 @@ private struct AnalysisSidebarView: View {
 
 private struct NoteEditor: View {
     let draft: NoteDraft
-    let onChangeBody: (String) -> Void
+    let onChangeBody: @MainActor @Sendable (String) -> Void
     let onSave: () -> Void
     let onCancel: () -> Void
 

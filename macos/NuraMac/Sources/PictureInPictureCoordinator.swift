@@ -1,3 +1,4 @@
+import AppKit
 @preconcurrency import AVFoundation
 import AVKit
 import CoreVideo
@@ -19,11 +20,17 @@ private typealias GLEnum = UInt32
     _ pixels: UnsafeMutableRawPointer?
 )
 @_silgen_name("glBindFramebuffer") private func nura_glBindFramebuffer(_ target: GLEnum, _ framebuffer: GLInt)
+@_silgen_name("glReadBuffer") private func nura_glReadBuffer(_ mode: GLEnum)
+@_silgen_name("glGetError") private func nura_glGetError() -> GLEnum
 
 private let nuraGLRGBA: GLEnum = 0x1908
 private let nuraGLUnsignedByte: GLEnum = 0x1401
+private let nuraGLNoError: GLEnum = 0
+private let nuraGLBack: GLEnum = 0x0405
+private let nuraGLColorAttachment0: GLEnum = 0x8CE0
 
-final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
+@MainActor
+final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPictureControllerDelegate, @MainActor AVPictureInPictureSampleBufferPlaybackDelegate {
     private let logger = Logger(subsystem: "com.nura.Nura", category: "PictureInPicture")
     private let displayLayer = AVSampleBufferDisplayLayer()
     private let onPlayingChange: (Bool) -> Void
@@ -41,12 +48,12 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
     private var lastFrameTime: CFTimeInterval = 0
     private var captureStartTime: CFTimeInterval?
     private var loggedFirstFrame = false
+    private var loggedReadbackError = false
     private var controlTimebase: CMTimebase?
-    // macOS mirrors AVSampleBufferDisplayLayer at 1:1 pixels in PiP. Keep the
-    // source below the smallest standard PiP container to avoid CALayerHost
-    // cropping on Retina systems.
+    private var pipContentFrameObserver: NSObjectProtocol?
+    // AVKit reports the PiP content size in pixels. Render frames at that size
+    // so the sample-buffer layer fills the PiP window after every resize.
     private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
-    private let maxPiPRenderSize = CMVideoDimensions(width: 320, height: 180)
     private(set) var isActive = false
 
     init(
@@ -92,6 +99,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         captureStartTime = nil
         lastFrameTime = 0
         loggedFirstFrame = false
+        loggedReadbackError = false
         if let controlTimebase {
             CMTimebaseSetTime(controlTimebase, time: .zero)
             CMTimebaseSetRate(controlTimebase, rate: 1)
@@ -103,6 +111,7 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         captureEnabled = false
         startRequested = false
         captureStartTime = nil
+        stopTrackingPIPContentSize()
         guard let controller, controller.isPictureInPictureActive else {
             isActive = false
             return
@@ -126,6 +135,9 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         let now = CACurrentMediaTime()
         guard now - lastFrameTime >= (1.0 / 30.0) else { return }
         lastFrameTime = now
+        // video-out-params/dw and dh include mpv's active aspect override and
+        // rotation. Crop the player viewport to this region so its letterbox
+        // bars never become part of the PiP sample buffer.
         let captureRegion = videoCaptureRegion(
             viewportWidth: Int(width),
             viewportHeight: Int(height),
@@ -136,18 +148,29 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         if readbackBuffer.count != pixelCount {
             readbackBuffer = [UInt8](repeating: 0, count: pixelCount)
         }
-        // AVKit mirrors this layer into the PiP window on macOS. Keep a
-        // concrete, non-zero geometry so the mirrored layer has a render size.
-        let outputSize = outputDimensions(for: captureRegion)
-        let layerWidth = CGFloat(outputSize.width)
-        let layerHeight = CGFloat(outputSize.height)
-        displayLayer.frame = CGRect(x: 0, y: 0, width: layerWidth, height: layerHeight)
-        displayLayer.bounds = CGRect(x: 0, y: 0, width: layerWidth, height: layerHeight)
         ensureController()
         nura_glBindFramebuffer(0x8D40, framebuffer)
+        // mpv may leave GL_READ_BUFFER pointing at an attachment that is not
+        // valid for the default framebuffer. Set it explicitly before reading
+        // or glReadPixels can fail and leave an all-zero frame for AVKit.
+        nura_glReadBuffer(framebuffer == 0 ? nuraGLBack : nuraGLColorAttachment0)
+        while nura_glGetError() != nuraGLNoError {}
         readbackBuffer.withUnsafeMutableBytes { bytes in
             nura_glReadPixels(0, 0, width, height, nuraGLRGBA, nuraGLUnsignedByte, bytes.baseAddress)
         }
+        let readbackError = nura_glGetError()
+        if readbackError != nuraGLNoError {
+            if !loggedReadbackError {
+                loggedReadbackError = true
+                logger.error("PiP framebuffer readback failed with OpenGL error \(readbackError)")
+            }
+            return
+        }
+
+        let outputSize = outputDimensions(for: captureRegion)
+        let layerSize = CGSize(width: outputSize.width, height: outputSize.height)
+        displayLayer.frame = CGRect(origin: .zero, size: layerSize)
+        displayLayer.bounds = CGRect(origin: .zero, size: layerSize)
 
         guard let pixelBuffer = makePixelBuffer(
             sourceWidth: width,
@@ -279,6 +302,84 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         return pixelBuffer
     }
 
+    func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
+
+    func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        isActive = true
+        onActiveChange(true)
+        invalidatePlaybackState()
+        schedulePIPOverlaySuppression()
+        schedulePIPContentSizeTracking()
+    }
+
+    func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        failedToStartPictureInPictureWithError error: Error
+    ) {
+        captureEnabled = false
+        startRequested = false
+        captureStartTime = nil
+        loggedFirstFrame = false
+        loggedReadbackError = false
+        stopTrackingPIPContentSize()
+        isActive = false
+        onActiveChange(false)
+        reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
+    }
+
+    func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
+
+    func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        captureEnabled = false
+        startRequested = false
+        isActive = false
+        onActiveChange(false)
+        stopTrackingPIPContentSize()
+        displayLayer.flush()
+    }
+
+    func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    ) {
+        completionHandler(true)
+    }
+
+    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {
+        onPlayingChange(playing)
+    }
+
+    func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
+        let duration = currentPlaybackState().duration
+        guard duration.isFinite, duration > 0 else {
+            return CMTimeRange(start: .zero, duration: .positiveInfinity)
+        }
+        return CMTimeRange(start: .zero, duration: CMTime(seconds: duration, preferredTimescale: 600))
+    }
+
+    func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool {
+        !currentPlaybackState().isPlaying
+    }
+
+    func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        didTransitionToRenderSize newRenderSize: CMVideoDimensions
+    ) {
+        guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
+        pipRenderSize = newRenderSize
+        schedulePIPOverlaySuppression()
+        updatePIPRenderSizeFromContentView()
+    }
+
+    func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        skipByInterval skipInterval: CMTime,
+        completion completionHandler: @escaping () -> Void
+    ) {
+        onSeekRelative(skipInterval.seconds)
+        completionHandler()
+    }
+
     private func outputDimensions(
         for region: (originX: Int, originY: Int, width: Int, height: Int)
     ) -> (width: Int, height: Int) {
@@ -306,8 +407,6 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
             return (0, 0, viewportWidth, viewportHeight)
         }
         let viewportAspect = Double(viewportWidth) / Double(viewportHeight)
-        // video-out-params/dw and dh include mpv's current aspect override
-        // and rotation, so this is the same aspect shown in the player.
         let videoAspect = Double(videoWidth) / Double(videoHeight)
         guard viewportAspect.isFinite, videoAspect.isFinite, viewportAspect > 0, videoAspect > 0 else {
             return (0, 0, viewportWidth, viewportHeight)
@@ -322,79 +421,87 @@ final class PictureInPictureCoordinator: NSObject, AVPictureInPictureControllerD
         return (0, (viewportHeight - croppedHeight) / 2, viewportWidth, croppedHeight)
     }
 
-    func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
-
-    func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        isActive = true
-        onActiveChange(true)
-        invalidatePlaybackState()
-    }
-
-    func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        failedToStartPictureInPictureWithError error: Error
-    ) {
-        captureEnabled = false
-        startRequested = false
-        captureStartTime = nil
-        loggedFirstFrame = false
-        isActive = false
-        onActiveChange(false)
-        reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
-    }
-
-    func pictureInPictureControllerWillStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
-
-    func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
-        captureEnabled = false
-        startRequested = false
-        isActive = false
-        onActiveChange(false)
-        displayLayer.flush()
-    }
-
-    func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
-    ) {
-        completionHandler(true)
-    }
-
-    func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {
-        onPlayingChange(playing)
-    }
-
-    func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
-        let duration = currentPlaybackState().duration
-        guard duration.isFinite, duration > 0 else {
-            // A transiently unknown duration must not make AVKit show an
-            // endless loading state while the first frames are already queued.
-            return CMTimeRange(start: .zero, duration: .positiveInfinity)
+    private func schedulePIPOverlaySuppression() {
+        for delay in [0.1, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.suppressPIPOverlayIfPresent()
+            }
         }
-        return CMTimeRange(start: .zero, duration: CMTime(seconds: duration, preferredTimescale: 600))
     }
 
-    func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool {
-        !currentPlaybackState().isPlaying
+    private func schedulePIPContentSizeTracking() {
+        for delay in [0.1, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.startTrackingPIPContentSize()
+            }
+        }
     }
 
-    func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        didTransitionToRenderSize newRenderSize: CMVideoDimensions
-    ) {
-        guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
-        pipRenderSize = CMVideoDimensions(
-            width: min(newRenderSize.width, maxPiPRenderSize.width),
-            height: min(newRenderSize.height, maxPiPRenderSize.height)
-        )
+    private func startTrackingPIPContentSize() {
+        guard pipContentFrameObserver == nil,
+              let contentView = pipContentView else {
+            updatePIPRenderSizeFromContentView()
+            return
+        }
+
+        contentView.postsFrameChangedNotifications = true
+        pipContentFrameObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification,
+            object: contentView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updatePIPRenderSizeFromContentView()
+            }
+        }
+        updatePIPRenderSize(from: contentView)
     }
 
-    func pictureInPictureController(
-        _ pictureInPictureController: AVPictureInPictureController,
-        skipByInterval skipInterval: CMTime,
-        completion completionHandler: @escaping () -> Void
-    ) {
-        onSeekRelative(skipInterval.seconds)
-        completionHandler()
+    private func stopTrackingPIPContentSize() {
+        if let pipContentFrameObserver {
+            NotificationCenter.default.removeObserver(pipContentFrameObserver)
+            self.pipContentFrameObserver = nil
+        }
     }
+
+    private var pipContentView: NSView? {
+        NSApplication.shared.windows.first(where: {
+            String(describing: type(of: $0)).contains("PIPPanel")
+        })?.contentView
+    }
+
+    private func updatePIPRenderSizeFromContentView() {
+        guard let contentView = pipContentView else { return }
+        updatePIPRenderSize(from: contentView)
+    }
+
+    private func updatePIPRenderSize(from contentView: NSView) {
+        let size = contentView.bounds.size
+        let scale = contentView.window?.backingScaleFactor ?? 1
+        let width = Int32((size.width * scale).rounded())
+        let height = Int32((size.height * scale).rounded())
+        guard width > 0, height > 0 else { return }
+        pipRenderSize = CMVideoDimensions(width: width, height: height)
+        let layerSize = CGSize(width: Int(width), height: Int(height))
+        displayLayer.frame = CGRect(origin: .zero, size: layerSize)
+        displayLayer.bounds = CGRect(origin: .zero, size: layerSize)
+    }
+
+    private func suppressPIPOverlayIfPresent() {
+        guard let pipWindow = NSApplication.shared.windows.first(where: {
+            String(describing: type(of: $0)).contains("PIPPanel")
+        }), let contentView = pipWindow.contentView else { return }
+        suppressPIPOverlay(in: contentView)
+    }
+
+    private func suppressPIPOverlay(in view: NSView) {
+        if String(describing: type(of: view)) == "AVPictureInPictureCALayerHostView" {
+            view.isHidden = true
+            return
+        }
+        for subview in view.subviews {
+            suppressPIPOverlay(in: subview)
+        }
+    }
+
 }

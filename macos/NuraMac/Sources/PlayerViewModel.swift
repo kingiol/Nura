@@ -12,8 +12,6 @@ struct VideoGeometry: Equatable {
     }
 
     var minimumSize: NSSize {
-        let scale = 600 / max(width, height)
-        let size = NSSize(width: width * scale, height: height * scale)
         let minimumScale: CGFloat
         if width >= height {
             minimumScale = max(600 / width, 360 / height)
