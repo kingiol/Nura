@@ -38,6 +38,30 @@ final class PlayerViewModelTests: XCTestCase {
         )
     }
 
+    func testPiPContentRectCentersWideVideoInsideTarget() {
+        XCTAssertEqual(
+            PictureInPictureContentRect.aspectFit(
+                sourceWidth: 2400,
+                sourceHeight: 1000,
+                targetWidth: 1600,
+                targetHeight: 900
+            ),
+            PictureInPictureContentRect(originX: 0, originY: 116, width: 1600, height: 667)
+        )
+    }
+
+    func testPiPContentRectCentersTallVideoInsideTarget() {
+        XCTAssertEqual(
+            PictureInPictureContentRect.aspectFit(
+                sourceWidth: 1000,
+                sourceHeight: 2400,
+                targetWidth: 1600,
+                targetHeight: 900
+            ),
+            PictureInPictureContentRect(originX: 612, originY: 0, width: 375, height: 900)
+        )
+    }
+
     func testVideoMinimumSizePreservesAspectForWideVideo() {
         let geometry = VideoGeometry(width: 960, height: 400)
         let minimumSize = geometry.minimumSize

@@ -59,8 +59,9 @@ final class RenderSurface: NSOpenGLView {
         attachRendererIfNeeded()
         var framebuffer: GLInt = 0
         nura_glGetIntegerv(nuraGLDrawFramebufferBinding, &framebuffer)
-        let width = Int32(bounds.width * windowScale)
-        let height = Int32(bounds.height * windowScale)
+        let backingBounds = convertToBacking(bounds)
+        let width = max(1, Int32(backingBounds.width.rounded()))
+        let height = max(1, Int32(backingBounds.height.rounded()))
         nura_glViewport(0, 0, width, height)
         nura_glClearColor(0.035, 0.04, 0.05, 1.0)
         nura_glClear(nuraGLColorBufferBit)
@@ -70,8 +71,6 @@ final class RenderSurface: NSOpenGLView {
         captureFrame?(Int32(framebuffer), width, height)
         context.flushBuffer()
     }
-
-    private var windowScale: CGFloat { window?.backingScaleFactor ?? 1.0 }
 
     private func attachRendererIfNeeded() {
         guard !rendererAttached, let attachRenderer else { return }

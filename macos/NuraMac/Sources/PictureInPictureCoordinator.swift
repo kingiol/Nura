@@ -69,6 +69,44 @@ struct PictureInPictureRenderSize: Equatable {
     }
 }
 
+struct PictureInPictureContentRect: Equatable {
+    let originX: Int
+    let originY: Int
+    let width: Int
+    let height: Int
+
+    static func aspectFit(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        targetWidth: Int,
+        targetHeight: Int
+    ) -> Self {
+        let safeSourceWidth = max(1, sourceWidth)
+        let safeSourceHeight = max(1, sourceHeight)
+        let safeTargetWidth = max(1, targetWidth)
+        let safeTargetHeight = max(1, targetHeight)
+        let sourceAspect = Double(safeSourceWidth) / Double(safeSourceHeight)
+        let targetAspect = Double(safeTargetWidth) / Double(safeTargetHeight)
+
+        let fittedWidth: Int
+        let fittedHeight: Int
+        if sourceAspect > targetAspect {
+            fittedWidth = safeTargetWidth
+            fittedHeight = max(1, Int((Double(safeTargetWidth) / sourceAspect).rounded()))
+        } else {
+            fittedWidth = max(1, Int((Double(safeTargetHeight) * sourceAspect).rounded()))
+            fittedHeight = safeTargetHeight
+        }
+
+        return Self(
+            originX: (safeTargetWidth - fittedWidth) / 2,
+            originY: (safeTargetHeight - fittedHeight) / 2,
+            width: fittedWidth,
+            height: fittedHeight
+        )
+    }
+}
+
 @MainActor
 final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPictureControllerDelegate, @MainActor AVPictureInPictureSampleBufferPlaybackDelegate {
     private let logger = Logger(subsystem: "com.nura.Nura", category: "PictureInPicture")
@@ -174,8 +212,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         let now = CACurrentMediaTime()
         guard now - lastFrameTime >= (1.0 / 30.0) else { return }
         lastFrameTime = now
-        // Preserve the complete rendered viewport. The sample layer applies
-        // its own aspect-fit scaling inside the system PiP window.
+        // Preserve the complete rendered viewport. The output frame below
+        // keeps the PiP target dimensions and centers this viewport inside it.
         let captureRegion = PictureInPictureCaptureRegion.resolve(
             viewportWidth: Int(width),
             viewportHeight: Int(height)
@@ -203,7 +241,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             return
         }
 
-        let outputSize = outputDimensions(for: captureRegion)
+        let outputSize = outputDimensions()
 
         guard let pixelBuffer = makePixelBuffer(
             sourceWidth: width,
@@ -323,18 +361,38 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         let sourceRowBytes = Int(sourceWidth) * 4
         let destinationRowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
         let destinationBytes = destination.assumingMemoryBound(to: UInt8.self)
+        let contentRect = PictureInPictureContentRect.aspectFit(
+            sourceWidth: cropWidth,
+            sourceHeight: cropHeight,
+            targetWidth: width,
+            targetHeight: height
+        )
         for row in 0..<height {
-            let sourceCropRow = min(cropHeight - 1, (row * cropHeight) / height)
-            let sourceRow = Int(sourceHeight) - cropTop - sourceCropRow - 1
-            let sourceOffset = sourceRow * sourceRowBytes + cropX * 4
             let destinationOffset = row * destinationRowBytes
+            let rowInContent = row >= contentRect.originY && row < contentRect.originY + contentRect.height
+            let sourceOffset: Int
+            if rowInContent {
+                let contentRow = row - contentRect.originY
+                let sourceCropRow = min(cropHeight - 1, (contentRow * cropHeight) / contentRect.height)
+                let sourceRow = Int(sourceHeight) - cropTop - sourceCropRow - 1
+                sourceOffset = sourceRow * sourceRowBytes + cropX * 4
+            } else {
+                sourceOffset = 0
+            }
             for column in 0..<width {
-                let sourceColumn = min(cropWidth - 1, (column * cropWidth) / width)
-                let source = sourceOffset + sourceColumn * 4
                 let target = destinationOffset + column * 4
-                destinationBytes[target] = readbackBuffer[source + 2]
-                destinationBytes[target + 1] = readbackBuffer[source + 1]
-                destinationBytes[target + 2] = readbackBuffer[source]
+                let columnInContent = column >= contentRect.originX && column < contentRect.originX + contentRect.width
+                if rowInContent && columnInContent {
+                    let sourceColumn = min(cropWidth - 1, ((column - contentRect.originX) * cropWidth) / contentRect.width)
+                    let source = sourceOffset + sourceColumn * 4
+                    destinationBytes[target] = readbackBuffer[source + 2]
+                    destinationBytes[target + 1] = readbackBuffer[source + 1]
+                    destinationBytes[target + 2] = readbackBuffer[source]
+                } else {
+                    destinationBytes[target] = 0
+                    destinationBytes[target + 1] = 0
+                    destinationBytes[target + 2] = 0
+                }
                 destinationBytes[target + 3] = 255
             }
         }
@@ -348,7 +406,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         isActive = true
         onActiveChange(true)
         invalidatePlaybackState()
-        schedulePIPOverlaySuppression()
         schedulePIPContentSizeTracking()
     }
 
@@ -411,7 +468,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             height: newRenderSize.height
         )
         pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
-        schedulePIPOverlaySuppression()
         schedulePIPContentSizeTracking()
     }
 
@@ -424,29 +480,10 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         completionHandler()
     }
 
-    private func outputDimensions(
-        for region: PictureInPictureCaptureRegion
-    ) -> (width: Int, height: Int) {
-        let sourceAspect = Double(region.width) / Double(region.height)
+    private func outputDimensions() -> (width: Int, height: Int) {
         let targetWidth = max(2, Int(pipRenderSize.width))
         let targetHeight = max(2, Int(pipRenderSize.height))
-        let targetAspect = Double(targetWidth) / Double(targetHeight)
-        guard sourceAspect.isFinite, sourceAspect > 0, targetAspect.isFinite, targetAspect > 0 else {
-            return (targetWidth, targetHeight)
-        }
-
-        if sourceAspect > targetAspect {
-            return (targetWidth, max(2, Int((Double(targetWidth) / sourceAspect).rounded())))
-        }
-        return (max(2, Int((Double(targetHeight) * sourceAspect).rounded())), targetHeight)
-    }
-
-    private func schedulePIPOverlaySuppression() {
-        for delay in [0.1, 0.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.suppressPIPOverlayIfPresent()
-            }
-        }
+        return (targetWidth, targetHeight)
     }
 
     private func schedulePIPContentSizeTracking() {
@@ -514,23 +551,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             return
         }
         pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
-    }
-
-    private func suppressPIPOverlayIfPresent() {
-        guard let pipWindow = NSApplication.shared.windows.first(where: {
-            String(describing: type(of: $0)).contains("PIPPanel")
-        }), let contentView = pipWindow.contentView else { return }
-        suppressPIPOverlay(in: contentView)
-    }
-
-    private func suppressPIPOverlay(in view: NSView) {
-        if String(describing: type(of: view)) == "AVPictureInPictureCALayerHostView" {
-            view.isHidden = true
-            return
-        }
-        for subview in view.subviews {
-            suppressPIPOverlay(in: subview)
-        }
     }
 
 }
