@@ -58,12 +58,12 @@ struct RenderSurfaceView: NSViewRepresentable {
                     model?.render(fbo: fbo, width: width, height: height) ?? false
                 }
             }
-            surface.captureFrame = { [weak model] framebuffer, width, height in
+            surface.captureFrame = { [weak model] width, height, openGLContext in
                 MainActor.assumeIsolated {
                     model?.capturePiPFrame(
-                        framebuffer: framebuffer,
                         width: width,
-                        height: height
+                        height: height,
+                        openGLContext: openGLContext
                     )
                 }
             }

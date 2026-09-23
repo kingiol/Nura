@@ -157,11 +157,19 @@ final class PlayerViewModel {
         reportError: { [weak self] message in
             self?.showError(message)
         },
+        videoDimensions: { [weak self] in
+            guard let self,
+                  let width = self.snapshot.videoWidth,
+                  let height = self.snapshot.videoHeight else {
+                return nil
+            }
+            return (Int32(width), Int32(height))
+        },
+        renderFrame: { [weak self] framebuffer, width, height in
+            self?.render(fbo: framebuffer, width: width, height: height, flipY: false) ?? false
+        },
         onActiveChange: { [weak self] active in
             self?.isPictureInPictureActive = active
-        },
-        sourceWindow: { [weak self] in
-            self?.playerWindow
         }
     )
 
@@ -1517,10 +1525,10 @@ final class PlayerViewModel {
         }
     }
 
-    func render(fbo: Int32, width: Int32, height: Int32) -> Bool {
+    func render(fbo: Int32, width: Int32, height: Int32, flipY: Bool = true) -> Bool {
         guard let bridge else { return false }
         do {
-            let rendered = try bridge.render(fbo: fbo, width: width, height: height)
+            let rendered = try bridge.render(fbo: fbo, width: width, height: height, flipY: flipY)
             if rendered {
                 renderErrorReported = false
             }
@@ -1551,11 +1559,11 @@ final class PlayerViewModel {
         pictureInPicture.stop()
     }
 
-    func capturePiPFrame(framebuffer: Int32, width: Int32, height: Int32) {
+    func capturePiPFrame(width: Int32, height: Int32, openGLContext: NSOpenGLContext) {
         pictureInPicture.appendFrame(
-            framebuffer: framebuffer,
             width: width,
-            height: height
+            height: height,
+            openGLContext: openGLContext
         )
     }
 

@@ -541,6 +541,16 @@ impl MpvEngine {
     }
 
     pub fn render_opengl(&mut self, fbo: i32, width: i32, height: i32) -> Result<(), EngineError> {
+        self.render_opengl_with_flip(fbo, width, height, true)
+    }
+
+    pub fn render_opengl_with_flip(
+        &mut self,
+        fbo: i32,
+        width: i32,
+        height: i32,
+        flip_y: bool,
+    ) -> Result<(), EngineError> {
         if self.render_context.is_null() {
             return Err(EngineError::Message(
                 "libmpv render context is not initialized".to_owned(),
@@ -555,7 +565,7 @@ impl MpvEngine {
         // NSOpenGLView uses the bottom-left OpenGL origin. libmpv's Cocoa
         // render path expects the target to be flipped into that coordinate
         // system; this also keeps display-matrix rotation directions correct.
-        let mut flip_y = 1i32;
+        let mut flip_y = i32::from(flip_y);
         // Do not let libmpv sleep inside the AppKit draw callback waiting for
         // the next video frame. mpv's event loop still drives redraws, and the
         // render surface requests frames at 60 Hz.

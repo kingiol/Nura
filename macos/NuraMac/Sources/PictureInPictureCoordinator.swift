@@ -10,41 +10,25 @@ private typealias GLInt = Int32
 private typealias GLSize = Int32
 private typealias GLEnum = UInt32
 
-@_silgen_name("glReadPixels") private func nura_glReadPixels(
-    _ x: GLInt,
-    _ y: GLInt,
-    _ width: GLSize,
-    _ height: GLSize,
-    _ format: GLEnum,
-    _ type: GLEnum,
-    _ pixels: UnsafeMutableRawPointer?
-)
+@_silgen_name("glGetIntegerv") private func nura_glGetIntegerv(_ name: GLEnum, _ value: UnsafeMutablePointer<GLInt>)
 @_silgen_name("glBindFramebuffer") private func nura_glBindFramebuffer(_ target: GLEnum, _ framebuffer: GLInt)
-@_silgen_name("glReadBuffer") private func nura_glReadBuffer(_ mode: GLEnum)
-@_silgen_name("glGetError") private func nura_glGetError() -> GLEnum
-
-private let nuraGLRGBA: GLEnum = 0x1908
-private let nuraGLUnsignedByte: GLEnum = 0x1401
-private let nuraGLNoError: GLEnum = 0
-private let nuraGLBack: GLEnum = 0x0405
+@_silgen_name("glGenFramebuffers") private func nura_glGenFramebuffers(_ count: GLSize, _ framebuffers: UnsafeMutablePointer<GLInt>)
+@_silgen_name("glFramebufferTexture2D") private func nura_glFramebufferTexture2D(
+    _ target: GLEnum,
+    _ attachment: GLEnum,
+    _ textureTarget: GLEnum,
+    _ texture: UInt32,
+    _ level: GLInt
+)
+@_silgen_name("glCheckFramebufferStatus") private func nura_glCheckFramebufferStatus(_ target: GLEnum) -> GLEnum
+@_silgen_name("glFlush") private func nura_glFlush()
+private let nuraGLFramebuffer: GLEnum = 0x8D40
+private let nuraGLDrawFramebuffer: GLEnum = 0x8CA9
+private let nuraGLReadFramebuffer: GLEnum = 0x8CA8
+private let nuraGLDrawFramebufferBinding: GLEnum = 0x8CA6
+private let nuraGLReadFramebufferBinding: GLEnum = 0x8CAA
 private let nuraGLColorAttachment0: GLEnum = 0x8CE0
-
-struct PictureInPictureCaptureRegion: Equatable {
-    let originX: Int
-    let originY: Int
-    let width: Int
-    let height: Int
-
-    static func resolve(
-        viewportWidth: Int,
-        viewportHeight: Int
-    ) -> Self {
-        // The OpenGL viewport is the authoritative rendered image. Video
-        // metadata can describe a different display matrix, aspect override,
-        // zoom, or rotation, so cropping from it can remove valid pixels.
-        return Self(originX: 0, originY: 0, width: viewportWidth, height: viewportHeight)
-    }
-}
+private let nuraGLFramebufferComplete: GLEnum = 0x8CD5
 
 struct PictureInPictureRenderSize: Equatable {
     let width: Int32
@@ -57,52 +41,29 @@ struct PictureInPictureRenderSize: Equatable {
         )
     }
 
-    static func fromContentSize(_ size: CGSize, scale: CGFloat) -> Self? {
-        guard size.width.isFinite, size.height.isFinite,
-              scale.isFinite, size.width > 0, size.height > 0, scale > 0 else {
-            return nil
-        }
-        return validated(
-            width: Int32((size.width * scale).rounded()),
-            height: Int32((size.height * scale).rounded())
-        )
-    }
-}
-
-struct PictureInPictureContentRect: Equatable {
-    let originX: Int
-    let originY: Int
-    let width: Int
-    let height: Int
-
     static func aspectFit(
-        sourceWidth: Int,
-        sourceHeight: Int,
-        targetWidth: Int,
-        targetHeight: Int
+        sourceWidth: Int32,
+        sourceHeight: Int32,
+        targetWidth: Int32,
+        targetHeight: Int32
     ) -> Self {
         let safeSourceWidth = max(1, sourceWidth)
         let safeSourceHeight = max(1, sourceHeight)
-        let safeTargetWidth = max(1, targetWidth)
-        let safeTargetHeight = max(1, targetHeight)
+        let safeTargetWidth = max(2, targetWidth)
+        let safeTargetHeight = max(2, targetHeight)
         let sourceAspect = Double(safeSourceWidth) / Double(safeSourceHeight)
         let targetAspect = Double(safeTargetWidth) / Double(safeTargetHeight)
 
-        let fittedWidth: Int
-        let fittedHeight: Int
         if sourceAspect > targetAspect {
-            fittedWidth = safeTargetWidth
-            fittedHeight = max(1, Int((Double(safeTargetWidth) / sourceAspect).rounded()))
-        } else {
-            fittedWidth = max(1, Int((Double(safeTargetHeight) * sourceAspect).rounded()))
-            fittedHeight = safeTargetHeight
+            return validated(
+                width: safeTargetWidth,
+                height: max(2, Int32((Double(safeTargetWidth) / sourceAspect).rounded()))
+            )
         }
 
-        return Self(
-            originX: (safeTargetWidth - fittedWidth) / 2,
-            originY: (safeTargetHeight - fittedHeight) / 2,
-            width: fittedWidth,
-            height: fittedHeight
+        return validated(
+            width: max(2, Int32((Double(safeTargetHeight) * sourceAspect).rounded())),
+            height: safeTargetHeight
         )
     }
 }
@@ -116,10 +77,12 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private let currentPlaybackState: () -> (isPlaying: Bool, duration: Double)
     private let reportError: (String) -> Void
     private let onActiveChange: (Bool) -> Void
-    private let sourceWindow: () -> NSWindow?
+    private let videoDimensions: () -> (width: Int32, height: Int32)?
+    private let renderFrame: (Int32, Int32, Int32) -> Bool
 
     private var controller: AVPictureInPictureController?
-    private var readbackBuffer: [UInt8] = []
+    private var textureCache: CVOpenGLTextureCache?
+    private var pipFramebuffer: GLInt = 0
     private var currentFormatDescription: CMVideoFormatDescription?
     private var currentDimensions: CMVideoDimensions = .init(width: 0, height: 0)
     private var captureEnabled = false
@@ -127,12 +90,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private var lastFrameTime: CFTimeInterval = 0
     private var captureStartTime: CFTimeInterval?
     private var loggedFirstFrame = false
-    private var loggedReadbackError = false
     private var controlTimebase: CMTimebase?
-    private var pipContentFrameObserver: NSObjectProtocol?
-    private var pipRenderSizeUpdateWorkItem: DispatchWorkItem?
-    private var savedSourceWindowFrame: NSRect?
-    private var savedSourceWindowAlpha: CGFloat?
     // macOS mirrors sample-buffer PIP content at its pixel dimensions. Keep
     // this aligned with AVKit's latest render-size callback.
     private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
@@ -143,19 +101,24 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         onSeekRelative: @escaping (Double) -> Void,
         currentPlaybackState: @escaping () -> (isPlaying: Bool, duration: Double),
         reportError: @escaping (String) -> Void,
-        onActiveChange: @escaping (Bool) -> Void = { _ in },
-        sourceWindow: @escaping () -> NSWindow? = { nil }
+        videoDimensions: @escaping () -> (width: Int32, height: Int32)? = { nil },
+        renderFrame: @escaping (Int32, Int32, Int32) -> Bool,
+        onActiveChange: @escaping (Bool) -> Void = { _ in }
     ) {
         self.onPlayingChange = onPlayingChange
         self.onSeekRelative = onSeekRelative
         self.currentPlaybackState = currentPlaybackState
         self.reportError = reportError
+        self.videoDimensions = videoDimensions
+        self.renderFrame = renderFrame
         self.onActiveChange = onActiveChange
-        self.sourceWindow = sourceWindow
         super.init()
 
         displayLayer.videoGravity = .resizeAspect
         displayLayer.contentsScale = 1
+        let initialLayerSize = CGSize(width: 320, height: 180)
+        displayLayer.frame = CGRect(origin: .zero, size: initialLayerSize)
+        displayLayer.bounds = CGRect(origin: .zero, size: initialLayerSize)
         var timebase: CMTimebase?
         if CMTimebaseCreateWithSourceClock(
             allocator: kCFAllocatorDefault,
@@ -183,7 +146,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureStartTime = nil
         lastFrameTime = 0
         loggedFirstFrame = false
-        loggedReadbackError = false
         if let controlTimebase {
             CMTimebaseSetTime(controlTimebase, time: .zero)
             CMTimebaseSetRate(controlTimebase, rate: 1)
@@ -195,9 +157,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureEnabled = false
         startRequested = false
         captureStartTime = nil
-        stopTrackingPIPContentSize()
         guard let controller, controller.isPictureInPictureActive else {
-            restoreSourceWindow()
             isActive = false
             return
         }
@@ -210,63 +170,26 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
 
     /// Called while the model's OpenGL context is current.
     func appendFrame(
-        framebuffer: Int32,
         width: Int32,
-        height: Int32
+        height: Int32,
+        openGLContext: NSOpenGLContext
     ) {
         guard captureEnabled, width > 0, height > 0 else { return }
         let now = CACurrentMediaTime()
         guard now - lastFrameTime >= (1.0 / 30.0) else { return }
         lastFrameTime = now
-        // Preserve the complete rendered viewport. The output frame below
-        // keeps the PiP target dimensions and centers this viewport inside it.
-        let captureRegion = PictureInPictureCaptureRegion.resolve(
-            viewportWidth: Int(width),
-            viewportHeight: Int(height)
-        )
-        let pixelCount = Int(width) * Int(height) * 4
-        if readbackBuffer.count != pixelCount {
-            readbackBuffer = [UInt8](repeating: 0, count: pixelCount)
-        }
         ensureController()
-        nura_glBindFramebuffer(0x8D40, framebuffer)
-        // mpv may leave GL_READ_BUFFER pointing at an attachment that is not
-        // valid for the default framebuffer. Set it explicitly before reading
-        // or glReadPixels can fail and leave an all-zero frame for AVKit.
-        nura_glReadBuffer(framebuffer == 0 ? nuraGLBack : nuraGLColorAttachment0)
-        while nura_glGetError() != nuraGLNoError {}
-        readbackBuffer.withUnsafeMutableBytes { bytes in
-            nura_glReadPixels(0, 0, width, height, nuraGLRGBA, nuraGLUnsignedByte, bytes.baseAddress)
-        }
-        let readbackError = nura_glGetError()
-        if readbackError != nuraGLNoError {
-            if !loggedReadbackError {
-                loggedReadbackError = true
-                logger.error("PiP framebuffer readback failed with OpenGL error \(readbackError)")
-            }
-            return
-        }
-
         let outputSize = outputDimensions()
-
-        guard let pixelBuffer = makePixelBuffer(
-            sourceWidth: width,
-            sourceHeight: height,
-            cropX: captureRegion.originX,
-            cropTop: captureRegion.originY,
-            cropWidth: captureRegion.width,
-            cropHeight: captureRegion.height,
+        guard let pixelBuffer = renderPixelBuffer(
             width: outputSize.width,
-            height: outputSize.height
+            height: outputSize.height,
+            openGLContext: openGLContext
         ) else { return }
         var formatDescription = currentFormatDescription
         let outputWidth = Int32(outputSize.width)
         let outputHeight = Int32(outputSize.height)
         let dimensionsChanged = currentDimensions.width != outputWidth || currentDimensions.height != outputHeight
         if dimensionsChanged {
-            let layerSize = CGSize(width: outputSize.width, height: outputSize.height)
-            displayLayer.frame = CGRect(origin: .zero, size: layerSize)
-            displayLayer.bounds = CGRect(origin: .zero, size: layerSize)
             displayLayer.flush()
         }
         if dimensionsChanged || formatDescription == nil {
@@ -311,7 +234,9 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         displayLayer.enqueue(sampleBuffer)
         if !loggedFirstFrame {
             loggedFirstFrame = true
-            logger.info("queued first PiP frame \(outputWidth)x\(outputHeight), layerStatus=\(String(describing: self.displayLayer.status.rawValue)), ready=\(self.displayLayer.isReadyForMoreMediaData)")
+            logger.info(
+                "queued first PiP frame sourceViewport=\(width)x\(height), output=\(outputWidth)x\(outputHeight), layerStatus=\(String(describing: self.displayLayer.status.rawValue)), ready=\(self.displayLayer.isReadyForMoreMediaData)"
+            )
         }
         startIfPossible()
     }
@@ -334,20 +259,15 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         controller = newController
     }
 
-    private func makePixelBuffer(
-        sourceWidth: Int32,
-        sourceHeight: Int32,
-        cropX: Int,
-        cropTop: Int,
-        cropWidth: Int,
-        cropHeight: Int,
+    private func renderPixelBuffer(
         width: Int,
-        height: Int
+        height: Int,
+        openGLContext: NSOpenGLContext
     ) -> CVPixelBuffer? {
         var pixelBuffer: CVPixelBuffer?
         let attributes: [String: Any] = [
             kCVPixelBufferIOSurfacePropertiesKey as String: [:],
-            kCVPixelBufferMetalCompatibilityKey as String: true,
+            kCVPixelBufferOpenGLCompatibilityKey as String: true,
         ]
         guard CVPixelBufferCreate(
             kCFAllocatorDefault,
@@ -356,54 +276,71 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             kCVPixelFormatType_32BGRA,
             attributes as CFDictionary,
             &pixelBuffer
-        ) == kCVReturnSuccess,
-              let pixelBuffer,
-              CVPixelBufferLockBaseAddress(pixelBuffer, []) == kCVReturnSuccess else { return nil }
-        guard let destination = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        ) == kCVReturnSuccess else { return nil }
+        guard let pixelBuffer else { return nil }
+
+        if textureCache == nil {
+            guard let cglContext = openGLContext.cglContextObj,
+                  let cglPixelFormat = openGLContext.pixelFormat.cglPixelFormatObj else {
+                return nil
+            }
+            var cache: CVOpenGLTextureCache?
+            guard CVOpenGLTextureCacheCreate(
+                kCFAllocatorDefault,
+                nil,
+                cglContext,
+                cglPixelFormat,
+                nil,
+                &cache
+            ) == kCVReturnSuccess else { return nil }
+            textureCache = cache
+        }
+        guard let textureCache else { return nil }
+        var texture: CVOpenGLTexture?
+        guard CVOpenGLTextureCacheCreateTextureFromImage(
+            kCFAllocatorDefault,
+            textureCache,
+            pixelBuffer,
+            nil,
+            &texture
+        ) == kCVReturnSuccess, let texture else { return nil }
+
+        var previousDrawFramebuffer: GLInt = 0
+        var previousReadFramebuffer: GLInt = 0
+        nura_glGetIntegerv(nuraGLDrawFramebufferBinding, &previousDrawFramebuffer)
+        nura_glGetIntegerv(nuraGLReadFramebufferBinding, &previousReadFramebuffer)
+        if pipFramebuffer == 0 {
+            nura_glGenFramebuffers(1, &pipFramebuffer)
+        }
+        guard pipFramebuffer != 0 else { return nil }
+        nura_glBindFramebuffer(nuraGLFramebuffer, pipFramebuffer)
+        let textureTarget = CVOpenGLTextureGetTarget(texture)
+        nura_glFramebufferTexture2D(
+            nuraGLFramebuffer,
+            nuraGLColorAttachment0,
+            textureTarget,
+            CVOpenGLTextureGetName(texture),
+            0
+        )
+        let framebufferStatus = nura_glCheckFramebufferStatus(nuraGLFramebuffer)
+        guard framebufferStatus == nuraGLFramebufferComplete else {
+            nura_glFramebufferTexture2D(nuraGLFramebuffer, nuraGLColorAttachment0, textureTarget, 0, 0)
+            restoreFramebuffers(draw: previousDrawFramebuffer, read: previousReadFramebuffer)
+            logger.error("PiP pixel-buffer framebuffer is incomplete: \(framebufferStatus)")
             return nil
         }
 
-        let sourceRowBytes = Int(sourceWidth) * 4
-        let destinationRowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        let destinationBytes = destination.assumingMemoryBound(to: UInt8.self)
-        let contentRect = PictureInPictureContentRect.aspectFit(
-            sourceWidth: cropWidth,
-            sourceHeight: cropHeight,
-            targetWidth: width,
-            targetHeight: height
-        )
-        for row in 0..<height {
-            let destinationOffset = row * destinationRowBytes
-            let rowInContent = row >= contentRect.originY && row < contentRect.originY + contentRect.height
-            let sourceOffset: Int
-            if rowInContent {
-                let contentRow = row - contentRect.originY
-                let sourceCropRow = min(cropHeight - 1, (contentRow * cropHeight) / contentRect.height)
-                let sourceRow = Int(sourceHeight) - cropTop - sourceCropRow - 1
-                sourceOffset = sourceRow * sourceRowBytes + cropX * 4
-            } else {
-                sourceOffset = 0
-            }
-            for column in 0..<width {
-                let target = destinationOffset + column * 4
-                let columnInContent = column >= contentRect.originX && column < contentRect.originX + contentRect.width
-                if rowInContent && columnInContent {
-                    let sourceColumn = min(cropWidth - 1, ((column - contentRect.originX) * cropWidth) / contentRect.width)
-                    let source = sourceOffset + sourceColumn * 4
-                    destinationBytes[target] = readbackBuffer[source + 2]
-                    destinationBytes[target + 1] = readbackBuffer[source + 1]
-                    destinationBytes[target + 2] = readbackBuffer[source]
-                } else {
-                    destinationBytes[target] = 0
-                    destinationBytes[target + 1] = 0
-                    destinationBytes[target + 2] = 0
-                }
-                destinationBytes[target + 3] = 255
-            }
-        }
-        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        let rendered = renderFrame(pipFramebuffer, Int32(width), Int32(height))
+        nura_glFlush()
+        nura_glFramebufferTexture2D(nuraGLFramebuffer, nuraGLColorAttachment0, textureTarget, 0, 0)
+        restoreFramebuffers(draw: previousDrawFramebuffer, read: previousReadFramebuffer)
+        guard rendered else { return nil }
         return pixelBuffer
+    }
+
+    private func restoreFramebuffers(draw: GLInt, read: GLInt) {
+        nura_glBindFramebuffer(nuraGLDrawFramebuffer, draw)
+        nura_glBindFramebuffer(nuraGLReadFramebuffer, read)
     }
 
     func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {}
@@ -412,9 +349,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         isActive = true
         onActiveChange(true)
         invalidatePlaybackState()
-        schedulePIPSourceWindowSynchronization()
-        schedulePIPOverlaySuppression()
-        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -425,9 +359,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         startRequested = false
         captureStartTime = nil
         loggedFirstFrame = false
-        loggedReadbackError = false
-        stopTrackingPIPContentSize()
-        restoreSourceWindow()
         isActive = false
         onActiveChange(false)
         reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
@@ -440,8 +371,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         startRequested = false
         isActive = false
         onActiveChange(false)
-        stopTrackingPIPContentSize()
-        restoreSourceWindow()
         displayLayer.flush()
     }
 
@@ -473,14 +402,12 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
     ) {
         guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
+        logger.info("PiP render size changed to \(newRenderSize.width)x\(newRenderSize.height)")
         let renderSize = PictureInPictureRenderSize.validated(
             width: newRenderSize.width,
             height: newRenderSize.height
         )
         pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
-        schedulePIPSourceWindowSynchronization()
-        schedulePIPOverlaySuppression()
-        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -495,151 +422,19 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private func outputDimensions() -> (width: Int, height: Int) {
         let targetWidth = max(2, Int(pipRenderSize.width))
         let targetHeight = max(2, Int(pipRenderSize.height))
-        return (targetWidth, targetHeight)
-    }
-
-    private func schedulePIPSourceWindowSynchronization() {
-        for delay in [0.1, 0.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.synchronizeSourceWindowWithPIPContent()
-            }
-        }
-    }
-
-    private func schedulePIPOverlaySuppression() {
-        for delay in [0.1, 0.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.suppressPIPOverlayIfPresent()
-            }
-        }
-    }
-
-    private func schedulePIPContentSizeTracking() {
-        for delay in [0.1, 0.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.startTrackingPIPContentSize()
-            }
-        }
-    }
-
-    private func startTrackingPIPContentSize() {
-        guard let contentView = pipContentView else { return }
-        if pipContentFrameObserver == nil {
-            contentView.postsFrameChangedNotifications = true
-            pipContentFrameObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: contentView,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.requestPIPResizeUpdate()
-                }
-            }
-        }
-        updatePIPRenderSize(from: contentView)
-    }
-
-    private func requestPIPResizeUpdate() {
-        pipRenderSizeUpdateWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.updatePIPRenderSizeAndSourceWindow()
-            self.suppressPIPOverlayIfPresent()
-        }
-        pipRenderSizeUpdateWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
-    }
-
-    private func stopTrackingPIPContentSize() {
-        pipRenderSizeUpdateWorkItem?.cancel()
-        pipRenderSizeUpdateWorkItem = nil
-        if let pipContentFrameObserver {
-            NotificationCenter.default.removeObserver(pipContentFrameObserver)
-            self.pipContentFrameObserver = nil
-        }
-    }
-
-    private var pipContentView: NSView? {
-        NSApplication.shared.windows.first(where: {
-            String(describing: type(of: $0)).contains("PIPPanel")
-        })?.contentView
-    }
-
-    private func updatePIPRenderSizeAndSourceWindow() {
-        guard let contentView = pipContentView else { return }
-        updatePIPRenderSize(from: contentView)
-        synchronizeSourceWindow(with: contentView)
-    }
-
-    private func updatePIPRenderSize(from contentView: NSView) {
-        let scale = contentView.window?.backingScaleFactor ?? 1
-        guard let renderSize = PictureInPictureRenderSize.fromContentSize(
-            contentView.bounds.size,
-            scale: scale
-        ) else { return }
-        guard pipRenderSize.width != renderSize.width || pipRenderSize.height != renderSize.height else {
-            return
-        }
-        pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
-    }
-
-    private func synchronizeSourceWindowWithPIPContent() {
-        guard let contentView = pipContentView else { return }
-        synchronizeSourceWindow(with: contentView)
-    }
-
-    private func synchronizeSourceWindow(with contentView: NSView) {
-        guard let window = sourceWindow() else { return }
-        let contentSize = contentView.bounds.size
-        guard contentSize.width > 0, contentSize.height > 0 else { return }
-        if savedSourceWindowFrame == nil {
-            savedSourceWindowFrame = window.frame
-            savedSourceWindowAlpha = window.alphaValue
+        guard let videoDimensions = videoDimensions(),
+              videoDimensions.width > 0,
+              videoDimensions.height > 0 else {
+            return (targetWidth, targetHeight)
         }
 
-        let targetFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize))
-        var frame = window.frame
-        frame.size = targetFrame.size
-        frame.origin.y = window.frame.maxY - frame.height
-        window.alphaValue = 0
-        let minimumSize = window.minSize
-        window.minSize = NSSize(width: 1, height: 1)
-        window.setFrame(frame, display: false, animate: false)
-        window.minSize = minimumSize
-        window.contentView?.layoutSubtreeIfNeeded()
-    }
-
-    private func restoreSourceWindow() {
-        guard let window = sourceWindow() else {
-            savedSourceWindowFrame = nil
-            savedSourceWindowAlpha = nil
-            return
-        }
-        if let savedSourceWindowFrame {
-            window.setFrame(savedSourceWindowFrame, display: true, animate: false)
-        }
-        if let savedSourceWindowAlpha {
-            window.alphaValue = savedSourceWindowAlpha
-        }
-        self.savedSourceWindowFrame = nil
-        savedSourceWindowAlpha = nil
-    }
-
-    private func suppressPIPOverlayIfPresent() {
-        guard let pipWindow = NSApplication.shared.windows.first(where: {
-            String(describing: type(of: $0)).contains("PIPPanel")
-        }), let contentView = pipWindow.contentView else { return }
-        suppressPIPOverlay(in: contentView)
-    }
-
-    private func suppressPIPOverlay(in view: NSView) {
-        if String(describing: type(of: view)) == "AVPictureInPictureCALayerHostView" {
-            view.isHidden = true
-            return
-        }
-        for subview in view.subviews {
-            suppressPIPOverlay(in: subview)
-        }
+        let renderSize = PictureInPictureRenderSize.aspectFit(
+            sourceWidth: videoDimensions.width,
+            sourceHeight: videoDimensions.height,
+            targetWidth: Int32(targetWidth),
+            targetHeight: Int32(targetHeight)
+        )
+        return (Int(renderSize.width), Int(renderSize.height))
     }
 
 }

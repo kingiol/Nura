@@ -98,6 +98,8 @@ private func nura_player_attach_opengl_context(_ player: NuraHandle?) -> Int32
 private func nura_player_detach_opengl_context(_ player: NuraHandle?) -> Int32
 @_silgen_name("nura_player_render_opengl")
 private func nura_player_render_opengl(_ player: NuraHandle?, _ fbo: Int32, _ width: Int32, _ height: Int32) -> Int32
+@_silgen_name("nura_player_render_opengl_with_flip")
+private func nura_player_render_opengl_with_flip(_ player: NuraHandle?, _ fbo: Int32, _ width: Int32, _ height: Int32, _ flipY: Int32) -> Int32
 @_silgen_name("nura_player_next_event")
 private func nura_player_next_event(_ player: NuraHandle?) -> UnsafeMutablePointer<CChar>?
 @_silgen_name("nura_string_free")
@@ -543,8 +545,8 @@ final class PlayerBridge: PlaybackRuntime {
         try query(DeleteNoteRequest(id: id), invoke: nura_analysis_delete_note_json)
     }
 
-    func render(fbo: Int32, width: Int32, height: Int32) throws -> Bool {
-        switch nura_player_render_opengl(handle, fbo, width, height) {
+    func render(fbo: Int32, width: Int32, height: Int32, flipY: Bool = true) throws -> Bool {
+        switch nura_player_render_opengl_with_flip(handle, fbo, width, height, flipY ? 1 : 0) {
         case 0:
             return true
         case nuraRenderSkipped:

@@ -1436,18 +1436,31 @@ pub unsafe extern "C" fn nura_player_render_opengl(
     width: i32,
     height: i32,
 ) -> c_int {
+    unsafe { nura_player_render_opengl_with_flip(player, fbo, width, height, 1) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nura_player_render_opengl_with_flip(
+    player: *mut NuraPlayer,
+    fbo: i32,
+    width: i32,
+    height: i32,
+    flip_y: i32,
+) -> c_int {
     unsafe {
         let Some(player) = player.as_ref() else {
             return -1;
         };
         match try_lock_for_render(&player.engine.0) {
-            Ok(Some(mut engine)) => match engine.render_opengl(fbo, width, height) {
-                Ok(()) => 0,
-                Err(error) => {
-                    set_last_error(error.to_string());
-                    -1
+            Ok(Some(mut engine)) => {
+                match engine.render_opengl_with_flip(fbo, width, height, flip_y != 0) {
+                    Ok(()) => 0,
+                    Err(error) => {
+                        set_last_error(error.to_string());
+                        -1
+                    }
                 }
-            },
+            }
             Ok(None) => NURA_RENDER_SKIPPED,
             Err(error) => {
                 set_last_error(error);

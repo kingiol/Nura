@@ -5,18 +5,6 @@ import XCTest
 
 @MainActor
 final class PlayerViewModelTests: XCTestCase {
-    func testPiPCaptureRegionPreservesEntireRenderedViewport() {
-        let region = PictureInPictureCaptureRegion.resolve(
-            viewportWidth: 1200,
-            viewportHeight: 800
-        )
-
-        XCTAssertEqual(
-            region,
-            PictureInPictureCaptureRegion(originX: 0, originY: 0, width: 1200, height: 800)
-        )
-    }
-
     func testPiPRenderSizeKeepsSystemRenderDimensions() {
         XCTAssertEqual(
             PictureInPictureRenderSize.validated(width: 1280, height: 720),
@@ -28,37 +16,32 @@ final class PlayerViewModelTests: XCTestCase {
         )
     }
 
-    func testPiPRenderSizeUsesBackingPixelsForPIPContent() {
+    func testPiPRenderSizeClampsInvalidDimensions() {
         XCTAssertEqual(
-            PictureInPictureRenderSize.fromContentSize(
-                CGSize(width: 1220, height: 664),
-                scale: 2
-            ),
-            PictureInPictureRenderSize(width: 2440, height: 1328)
+            PictureInPictureRenderSize.validated(width: 0, height: -1),
+            PictureInPictureRenderSize(width: 2, height: 2)
         )
     }
 
-    func testPiPContentRectCentersWideVideoInsideTarget() {
+    func testPiPRenderSizeFitsVideoAspectInsideSystemRenderDimensions() {
         XCTAssertEqual(
-            PictureInPictureContentRect.aspectFit(
-                sourceWidth: 2400,
-                sourceHeight: 1000,
-                targetWidth: 1600,
-                targetHeight: 900
+            PictureInPictureRenderSize.aspectFit(
+                sourceWidth: 1440,
+                sourceHeight: 1080,
+                targetWidth: 1280,
+                targetHeight: 720
             ),
-            PictureInPictureContentRect(originX: 0, originY: 116, width: 1600, height: 667)
+            PictureInPictureRenderSize(width: 960, height: 720)
         )
-    }
 
-    func testPiPContentRectCentersTallVideoInsideTarget() {
         XCTAssertEqual(
-            PictureInPictureContentRect.aspectFit(
-                sourceWidth: 1000,
-                sourceHeight: 2400,
-                targetWidth: 1600,
-                targetHeight: 900
+            PictureInPictureRenderSize.aspectFit(
+                sourceWidth: 2560,
+                sourceHeight: 1080,
+                targetWidth: 1280,
+                targetHeight: 720
             ),
-            PictureInPictureContentRect(originX: 612, originY: 0, width: 375, height: 900)
+            PictureInPictureRenderSize(width: 1280, height: 540)
         )
     }
 
