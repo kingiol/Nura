@@ -17,13 +17,13 @@ final class PlayerViewModelTests: XCTestCase {
         )
     }
 
-    func testPiPRenderSizeClampsToSafeSourceDimensions() {
+    func testPiPRenderSizeKeepsSystemRenderDimensions() {
         XCTAssertEqual(
-            PictureInPictureRenderSize.clamped(width: 1280, height: 720),
-            PictureInPictureRenderSize(width: 320, height: 180)
+            PictureInPictureRenderSize.validated(width: 1280, height: 720),
+            PictureInPictureRenderSize(width: 1280, height: 720)
         )
         XCTAssertEqual(
-            PictureInPictureRenderSize.clamped(width: 160, height: 90),
+            PictureInPictureRenderSize.validated(width: 160, height: 90),
             PictureInPictureRenderSize(width: 160, height: 90)
         )
     }

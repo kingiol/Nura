@@ -47,16 +47,13 @@ struct PictureInPictureCaptureRegion: Equatable {
 }
 
 struct PictureInPictureRenderSize: Equatable {
-    static let maximumWidth: Int32 = 320
-    static let maximumHeight: Int32 = 180
-
     let width: Int32
     let height: Int32
 
-    static func clamped(width: Int32, height: Int32) -> Self {
+    static func validated(width: Int32, height: Int32) -> Self {
         Self(
-            width: min(maximumWidth, max(2, width)),
-            height: min(maximumHeight, max(2, height))
+            width: max(2, width),
+            height: max(2, height)
         )
     }
 }
@@ -82,9 +79,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private var loggedFirstFrame = false
     private var loggedReadbackError = false
     private var controlTimebase: CMTimebase?
-    private var pipContentFrameObserver: NSObjectProtocol?
-    // Keep the source below the smallest standard PiP container. AVKit scales
-    // this stable source into the current PiP render target.
+    // macOS mirrors sample-buffer PIP content at its pixel dimensions. Keep
+    // this aligned with AVKit's latest render-size callback.
     private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
     private(set) var isActive = false
 
@@ -104,9 +100,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
 
         displayLayer.videoGravity = .resizeAspect
         displayLayer.contentsScale = 1
-        let fallbackLayerSize = CGSize(width: 320, height: 180)
-        displayLayer.frame = CGRect(origin: .zero, size: fallbackLayerSize)
-        displayLayer.bounds = CGRect(origin: .zero, size: fallbackLayerSize)
         var timebase: CMTimebase?
         if CMTimebaseCreateWithSourceClock(
             allocator: kCFAllocatorDefault,
@@ -146,7 +139,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureEnabled = false
         startRequested = false
         captureStartTime = nil
-        stopTrackingPIPContentSize()
         guard let controller, controller.isPictureInPictureActive else {
             isActive = false
             return
@@ -214,6 +206,9 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         let outputHeight = Int32(outputSize.height)
         let dimensionsChanged = currentDimensions.width != outputWidth || currentDimensions.height != outputHeight
         if dimensionsChanged {
+            let layerSize = CGSize(width: outputSize.width, height: outputSize.height)
+            displayLayer.frame = CGRect(origin: .zero, size: layerSize)
+            displayLayer.bounds = CGRect(origin: .zero, size: layerSize)
             displayLayer.flush()
         }
         if dimensionsChanged || formatDescription == nil {
@@ -340,7 +335,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         onActiveChange(true)
         invalidatePlaybackState()
         schedulePIPOverlaySuppression()
-        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -352,7 +346,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureStartTime = nil
         loggedFirstFrame = false
         loggedReadbackError = false
-        stopTrackingPIPContentSize()
         isActive = false
         onActiveChange(false)
         reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
@@ -365,7 +358,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         startRequested = false
         isActive = false
         onActiveChange(false)
-        stopTrackingPIPContentSize()
         displayLayer.flush()
     }
 
@@ -397,13 +389,12 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
     ) {
         guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
-        let safeRenderSize = PictureInPictureRenderSize.clamped(
+        let renderSize = PictureInPictureRenderSize.validated(
             width: newRenderSize.width,
             height: newRenderSize.height
         )
-        pipRenderSize = CMVideoDimensions(width: safeRenderSize.width, height: safeRenderSize.height)
+        pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
         schedulePIPOverlaySuppression()
-        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -438,59 +429,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
                 self?.suppressPIPOverlayIfPresent()
             }
         }
-    }
-
-    private func schedulePIPContentSizeTracking() {
-        for delay in [0.1, 0.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.startTrackingPIPContentSize()
-            }
-        }
-    }
-
-    private func startTrackingPIPContentSize() {
-        guard let contentView = pipContentView else { return }
-        if pipContentFrameObserver == nil {
-            contentView.postsFrameChangedNotifications = true
-            pipContentFrameObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: contentView,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.updatePIPLayerGeometryFromContentView()
-                }
-            }
-        }
-        updatePIPLayerGeometry(from: contentView)
-    }
-
-    private func stopTrackingPIPContentSize() {
-        if let pipContentFrameObserver {
-            NotificationCenter.default.removeObserver(pipContentFrameObserver)
-            self.pipContentFrameObserver = nil
-        }
-    }
-
-    private var pipContentView: NSView? {
-        NSApplication.shared.windows.first(where: {
-            String(describing: type(of: $0)).contains("PIPPanel")
-        })?.contentView
-    }
-
-    private func updatePIPLayerGeometryFromContentView() {
-        guard let contentView = pipContentView else { return }
-        updatePIPLayerGeometry(from: contentView)
-    }
-
-    private func updatePIPLayerGeometry(from contentView: NSView) {
-        let size = contentView.bounds.size
-        guard size.width > 0, size.height > 0 else { return }
-        // NSView bounds are in points. Do not multiply by the backing scale:
-        // the layer is hosted in the PIP view hierarchy, which scales its
-        // contents independently from the sample-buffer pixel dimensions.
-        displayLayer.frame = CGRect(origin: .zero, size: size)
-        displayLayer.bounds = CGRect(origin: .zero, size: size)
     }
 
     private func suppressPIPOverlayIfPresent() {
