@@ -5,6 +5,29 @@ import XCTest
 
 @MainActor
 final class PlayerViewModelTests: XCTestCase {
+    func testPiPCaptureRegionPreservesEntireRenderedViewport() {
+        let region = PictureInPictureCaptureRegion.resolve(
+            viewportWidth: 1200,
+            viewportHeight: 800
+        )
+
+        XCTAssertEqual(
+            region,
+            PictureInPictureCaptureRegion(originX: 0, originY: 0, width: 1200, height: 800)
+        )
+    }
+
+    func testPiPRenderSizeClampsToSafeSourceDimensions() {
+        XCTAssertEqual(
+            PictureInPictureRenderSize.clamped(width: 1280, height: 720),
+            PictureInPictureRenderSize(width: 320, height: 180)
+        )
+        XCTAssertEqual(
+            PictureInPictureRenderSize.clamped(width: 160, height: 90),
+            PictureInPictureRenderSize(width: 160, height: 90)
+        )
+    }
+
     func testVideoMinimumSizePreservesAspectForWideVideo() {
         let geometry = VideoGeometry(width: 960, height: 400)
         let minimumSize = geometry.minimumSize

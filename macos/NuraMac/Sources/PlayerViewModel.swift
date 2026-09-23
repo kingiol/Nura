@@ -1552,9 +1552,7 @@ final class PlayerViewModel {
         pictureInPicture.appendFrame(
             framebuffer: framebuffer,
             width: width,
-            height: height,
-            videoWidth: snapshot.videoWidth.map(Int32.init),
-            videoHeight: snapshot.videoHeight.map(Int32.init)
+            height: height
         )
     }
 

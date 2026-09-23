@@ -29,6 +29,38 @@ private let nuraGLNoError: GLEnum = 0
 private let nuraGLBack: GLEnum = 0x0405
 private let nuraGLColorAttachment0: GLEnum = 0x8CE0
 
+struct PictureInPictureCaptureRegion: Equatable {
+    let originX: Int
+    let originY: Int
+    let width: Int
+    let height: Int
+
+    static func resolve(
+        viewportWidth: Int,
+        viewportHeight: Int
+    ) -> Self {
+        // The OpenGL viewport is the authoritative rendered image. Video
+        // metadata can describe a different display matrix, aspect override,
+        // zoom, or rotation, so cropping from it can remove valid pixels.
+        return Self(originX: 0, originY: 0, width: viewportWidth, height: viewportHeight)
+    }
+}
+
+struct PictureInPictureRenderSize: Equatable {
+    static let maximumWidth: Int32 = 320
+    static let maximumHeight: Int32 = 180
+
+    let width: Int32
+    let height: Int32
+
+    static func clamped(width: Int32, height: Int32) -> Self {
+        Self(
+            width: min(maximumWidth, max(2, width)),
+            height: min(maximumHeight, max(2, height))
+        )
+    }
+}
+
 @MainActor
 final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPictureControllerDelegate, @MainActor AVPictureInPictureSampleBufferPlaybackDelegate {
     private let logger = Logger(subsystem: "com.nura.Nura", category: "PictureInPicture")
@@ -50,9 +82,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private var loggedFirstFrame = false
     private var loggedReadbackError = false
     private var controlTimebase: CMTimebase?
-    private var pipContentFrameObserver: NSObjectProtocol?
-    // AVKit reports the PiP content size in pixels. Render frames at that size
-    // so the sample-buffer layer fills the PiP window after every resize.
+    // Keep the source below the smallest standard PiP container. AVKit scales
+    // this stable source into the current PiP render target.
     private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
     private(set) var isActive = false
 
@@ -111,7 +142,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureEnabled = false
         startRequested = false
         captureStartTime = nil
-        stopTrackingPIPContentSize()
         guard let controller, controller.isPictureInPictureActive else {
             isActive = false
             return
@@ -127,22 +157,17 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     func appendFrame(
         framebuffer: Int32,
         width: Int32,
-        height: Int32,
-        videoWidth: Int32?,
-        videoHeight: Int32?
+        height: Int32
     ) {
         guard captureEnabled, width > 0, height > 0 else { return }
         let now = CACurrentMediaTime()
         guard now - lastFrameTime >= (1.0 / 30.0) else { return }
         lastFrameTime = now
-        // video-out-params/dw and dh include mpv's active aspect override and
-        // rotation. Crop the player viewport to this region so its letterbox
-        // bars never become part of the PiP sample buffer.
-        let captureRegion = videoCaptureRegion(
+        // Preserve the complete rendered viewport. The sample layer applies
+        // its own aspect-fit scaling inside the system PiP window.
+        let captureRegion = PictureInPictureCaptureRegion.resolve(
             viewportWidth: Int(width),
-            viewportHeight: Int(height),
-            videoWidth: videoWidth,
-            videoHeight: videoHeight
+            viewportHeight: Int(height)
         )
         let pixelCount = Int(width) * Int(height) * 4
         if readbackBuffer.count != pixelCount {
@@ -185,7 +210,11 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         var formatDescription = currentFormatDescription
         let outputWidth = Int32(outputSize.width)
         let outputHeight = Int32(outputSize.height)
-        if currentDimensions.width != outputWidth || currentDimensions.height != outputHeight || formatDescription == nil {
+        let dimensionsChanged = currentDimensions.width != outputWidth || currentDimensions.height != outputHeight
+        if dimensionsChanged {
+            displayLayer.flush()
+        }
+        if dimensionsChanged || formatDescription == nil {
             guard CMVideoFormatDescriptionCreateForImageBuffer(
                 allocator: nil,
                 imageBuffer: pixelBuffer,
@@ -309,7 +338,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         onActiveChange(true)
         invalidatePlaybackState()
         schedulePIPOverlaySuppression()
-        schedulePIPContentSizeTracking()
     }
 
     func pictureInPictureController(
@@ -321,7 +349,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureStartTime = nil
         loggedFirstFrame = false
         loggedReadbackError = false
-        stopTrackingPIPContentSize()
         isActive = false
         onActiveChange(false)
         reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
@@ -334,7 +361,6 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         startRequested = false
         isActive = false
         onActiveChange(false)
-        stopTrackingPIPContentSize()
         displayLayer.flush()
     }
 
@@ -366,9 +392,12 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
     ) {
         guard newRenderSize.width > 0, newRenderSize.height > 0 else { return }
-        pipRenderSize = newRenderSize
+        let safeRenderSize = PictureInPictureRenderSize.clamped(
+            width: newRenderSize.width,
+            height: newRenderSize.height
+        )
+        pipRenderSize = CMVideoDimensions(width: safeRenderSize.width, height: safeRenderSize.height)
         schedulePIPOverlaySuppression()
-        updatePIPRenderSizeFromContentView()
     }
 
     func pictureInPictureController(
@@ -381,7 +410,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     }
 
     private func outputDimensions(
-        for region: (originX: Int, originY: Int, width: Int, height: Int)
+        for region: PictureInPictureCaptureRegion
     ) -> (width: Int, height: Int) {
         let sourceAspect = Double(region.width) / Double(region.height)
         let targetWidth = max(2, Int(pipRenderSize.width))
@@ -397,94 +426,12 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         return (max(2, Int((Double(targetHeight) * sourceAspect).rounded())), targetHeight)
     }
 
-    private func videoCaptureRegion(
-        viewportWidth: Int,
-        viewportHeight: Int,
-        videoWidth: Int32?,
-        videoHeight: Int32?
-    ) -> (originX: Int, originY: Int, width: Int, height: Int) {
-        guard let videoWidth, let videoHeight, videoWidth > 0, videoHeight > 0 else {
-            return (0, 0, viewportWidth, viewportHeight)
-        }
-        let viewportAspect = Double(viewportWidth) / Double(viewportHeight)
-        let videoAspect = Double(videoWidth) / Double(videoHeight)
-        guard viewportAspect.isFinite, videoAspect.isFinite, viewportAspect > 0, videoAspect > 0 else {
-            return (0, 0, viewportWidth, viewportHeight)
-        }
-
-        if viewportAspect > videoAspect {
-            let croppedWidth = max(2, Int((Double(viewportHeight) * videoAspect).rounded()))
-            return ((viewportWidth - croppedWidth) / 2, 0, croppedWidth, viewportHeight)
-        }
-
-        let croppedHeight = max(2, Int((Double(viewportWidth) / videoAspect).rounded()))
-        return (0, (viewportHeight - croppedHeight) / 2, viewportWidth, croppedHeight)
-    }
-
     private func schedulePIPOverlaySuppression() {
         for delay in [0.1, 0.3] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.suppressPIPOverlayIfPresent()
             }
         }
-    }
-
-    private func schedulePIPContentSizeTracking() {
-        for delay in [0.1, 0.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.startTrackingPIPContentSize()
-            }
-        }
-    }
-
-    private func startTrackingPIPContentSize() {
-        guard pipContentFrameObserver == nil,
-              let contentView = pipContentView else {
-            updatePIPRenderSizeFromContentView()
-            return
-        }
-
-        contentView.postsFrameChangedNotifications = true
-        pipContentFrameObserver = NotificationCenter.default.addObserver(
-            forName: NSView.frameDidChangeNotification,
-            object: contentView,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.updatePIPRenderSizeFromContentView()
-            }
-        }
-        updatePIPRenderSize(from: contentView)
-    }
-
-    private func stopTrackingPIPContentSize() {
-        if let pipContentFrameObserver {
-            NotificationCenter.default.removeObserver(pipContentFrameObserver)
-            self.pipContentFrameObserver = nil
-        }
-    }
-
-    private var pipContentView: NSView? {
-        NSApplication.shared.windows.first(where: {
-            String(describing: type(of: $0)).contains("PIPPanel")
-        })?.contentView
-    }
-
-    private func updatePIPRenderSizeFromContentView() {
-        guard let contentView = pipContentView else { return }
-        updatePIPRenderSize(from: contentView)
-    }
-
-    private func updatePIPRenderSize(from contentView: NSView) {
-        let size = contentView.bounds.size
-        let scale = contentView.window?.backingScaleFactor ?? 1
-        let width = Int32((size.width * scale).rounded())
-        let height = Int32((size.height * scale).rounded())
-        guard width > 0, height > 0 else { return }
-        pipRenderSize = CMVideoDimensions(width: width, height: height)
-        let layerSize = CGSize(width: Int(width), height: Int(height))
-        displayLayer.frame = CGRect(origin: .zero, size: layerSize)
-        displayLayer.bounds = CGRect(origin: .zero, size: layerSize)
     }
 
     private func suppressPIPOverlayIfPresent() {
