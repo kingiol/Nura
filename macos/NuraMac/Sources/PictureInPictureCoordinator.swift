@@ -116,6 +116,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private let currentPlaybackState: () -> (isPlaying: Bool, duration: Double)
     private let reportError: (String) -> Void
     private let onActiveChange: (Bool) -> Void
+    private let sourceWindow: () -> NSWindow?
 
     private var controller: AVPictureInPictureController?
     private var readbackBuffer: [UInt8] = []
@@ -130,6 +131,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
     private var controlTimebase: CMTimebase?
     private var pipContentFrameObserver: NSObjectProtocol?
     private var pipRenderSizeUpdateWorkItem: DispatchWorkItem?
+    private var savedSourceWindowFrame: NSRect?
+    private var savedSourceWindowAlpha: CGFloat?
     // macOS mirrors sample-buffer PIP content at its pixel dimensions. Keep
     // this aligned with AVKit's latest render-size callback.
     private var pipRenderSize = CMVideoDimensions(width: 320, height: 180)
@@ -140,13 +143,15 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         onSeekRelative: @escaping (Double) -> Void,
         currentPlaybackState: @escaping () -> (isPlaying: Bool, duration: Double),
         reportError: @escaping (String) -> Void,
-        onActiveChange: @escaping (Bool) -> Void = { _ in }
+        onActiveChange: @escaping (Bool) -> Void = { _ in },
+        sourceWindow: @escaping () -> NSWindow? = { nil }
     ) {
         self.onPlayingChange = onPlayingChange
         self.onSeekRelative = onSeekRelative
         self.currentPlaybackState = currentPlaybackState
         self.reportError = reportError
         self.onActiveChange = onActiveChange
+        self.sourceWindow = sourceWindow
         super.init()
 
         displayLayer.videoGravity = .resizeAspect
@@ -192,6 +197,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         captureStartTime = nil
         stopTrackingPIPContentSize()
         guard let controller, controller.isPictureInPictureActive else {
+            restoreSourceWindow()
             isActive = false
             return
         }
@@ -406,6 +412,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         isActive = true
         onActiveChange(true)
         invalidatePlaybackState()
+        schedulePIPSourceWindowSynchronization()
+        schedulePIPOverlaySuppression()
         schedulePIPContentSizeTracking()
     }
 
@@ -419,6 +427,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         loggedFirstFrame = false
         loggedReadbackError = false
         stopTrackingPIPContentSize()
+        restoreSourceWindow()
         isActive = false
         onActiveChange(false)
         reportError(L10n.format("Unable to start Picture in Picture: %@", error.localizedDescription))
@@ -432,6 +441,7 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         isActive = false
         onActiveChange(false)
         stopTrackingPIPContentSize()
+        restoreSourceWindow()
         displayLayer.flush()
     }
 
@@ -468,6 +478,8 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             height: newRenderSize.height
         )
         pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
+        schedulePIPSourceWindowSynchronization()
+        schedulePIPOverlaySuppression()
         schedulePIPContentSizeTracking()
     }
 
@@ -484,6 +496,22 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         let targetWidth = max(2, Int(pipRenderSize.width))
         let targetHeight = max(2, Int(pipRenderSize.height))
         return (targetWidth, targetHeight)
+    }
+
+    private func schedulePIPSourceWindowSynchronization() {
+        for delay in [0.1, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.synchronizeSourceWindowWithPIPContent()
+            }
+        }
+    }
+
+    private func schedulePIPOverlaySuppression() {
+        for delay in [0.1, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.suppressPIPOverlayIfPresent()
+            }
+        }
     }
 
     private func schedulePIPContentSizeTracking() {
@@ -504,18 +532,19 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.requestPIPRenderSizeUpdate()
+                    self?.requestPIPResizeUpdate()
                 }
             }
         }
         updatePIPRenderSize(from: contentView)
     }
 
-    private func requestPIPRenderSizeUpdate() {
+    private func requestPIPResizeUpdate() {
         pipRenderSizeUpdateWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.updatePIPRenderSizeFromContentView()
+            self.updatePIPRenderSizeAndSourceWindow()
+            self.suppressPIPOverlayIfPresent()
         }
         pipRenderSizeUpdateWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
@@ -536,9 +565,10 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
         })?.contentView
     }
 
-    private func updatePIPRenderSizeFromContentView() {
+    private func updatePIPRenderSizeAndSourceWindow() {
         guard let contentView = pipContentView else { return }
         updatePIPRenderSize(from: contentView)
+        synchronizeSourceWindow(with: contentView)
     }
 
     private func updatePIPRenderSize(from contentView: NSView) {
@@ -551,6 +581,65 @@ final class PictureInPictureCoordinator: NSObject, @MainActor AVPictureInPicture
             return
         }
         pipRenderSize = CMVideoDimensions(width: renderSize.width, height: renderSize.height)
+    }
+
+    private func synchronizeSourceWindowWithPIPContent() {
+        guard let contentView = pipContentView else { return }
+        synchronizeSourceWindow(with: contentView)
+    }
+
+    private func synchronizeSourceWindow(with contentView: NSView) {
+        guard let window = sourceWindow() else { return }
+        let contentSize = contentView.bounds.size
+        guard contentSize.width > 0, contentSize.height > 0 else { return }
+        if savedSourceWindowFrame == nil {
+            savedSourceWindowFrame = window.frame
+            savedSourceWindowAlpha = window.alphaValue
+        }
+
+        let targetFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: contentSize))
+        var frame = window.frame
+        frame.size = targetFrame.size
+        frame.origin.y = window.frame.maxY - frame.height
+        window.alphaValue = 0
+        let minimumSize = window.minSize
+        window.minSize = NSSize(width: 1, height: 1)
+        window.setFrame(frame, display: false, animate: false)
+        window.minSize = minimumSize
+        window.contentView?.layoutSubtreeIfNeeded()
+    }
+
+    private func restoreSourceWindow() {
+        guard let window = sourceWindow() else {
+            savedSourceWindowFrame = nil
+            savedSourceWindowAlpha = nil
+            return
+        }
+        if let savedSourceWindowFrame {
+            window.setFrame(savedSourceWindowFrame, display: true, animate: false)
+        }
+        if let savedSourceWindowAlpha {
+            window.alphaValue = savedSourceWindowAlpha
+        }
+        self.savedSourceWindowFrame = nil
+        savedSourceWindowAlpha = nil
+    }
+
+    private func suppressPIPOverlayIfPresent() {
+        guard let pipWindow = NSApplication.shared.windows.first(where: {
+            String(describing: type(of: $0)).contains("PIPPanel")
+        }), let contentView = pipWindow.contentView else { return }
+        suppressPIPOverlay(in: contentView)
+    }
+
+    private func suppressPIPOverlay(in view: NSView) {
+        if String(describing: type(of: view)) == "AVPictureInPictureCALayerHostView" {
+            view.isHidden = true
+            return
+        }
+        for subview in view.subviews {
+            suppressPIPOverlay(in: subview)
+        }
     }
 
 }

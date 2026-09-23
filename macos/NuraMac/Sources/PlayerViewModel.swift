@@ -159,6 +159,9 @@ final class PlayerViewModel {
         },
         onActiveChange: { [weak self] active in
             self?.isPictureInPictureActive = active
+        },
+        sourceWindow: { [weak self] in
+            self?.playerWindow
         }
     )
 
