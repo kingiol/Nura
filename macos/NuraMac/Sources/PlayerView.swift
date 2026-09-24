@@ -59,11 +59,6 @@ struct PlayerView: View {
                     .transition(.opacity)
                 }
 
-                if model.isPictureInPictureActive {
-                    PiPPlaceholderView()
-                        .transition(.opacity)
-                }
-
                 if model.isOSDVisible, let message = model.osdMessage {
                     OSDView(message: message)
                     .padding(.bottom, 86)
@@ -136,11 +131,6 @@ struct PlayerView: View {
                     )
                 }
             }
-            .onChange(of: model.isPictureInPictureActive) { _, active in
-                if active {
-                    revealControls()
-                }
-            }
             .onChange(of: model.noteCaptureRequestID) {
                 guard model.noteDraft != nil else { return }
                 sidebar = .notes
@@ -148,7 +138,6 @@ struct PlayerView: View {
             }
             .onDisappear {
                 hideControlsTask?.cancel()
-                model.stopPiP()
             }
         }
     }
@@ -174,7 +163,6 @@ struct PlayerView: View {
         Button("Take Screenshot", action: model.screenshot)
         Button("Copy Screenshot", action: model.copyScreenshot)
         Button("Choose Screenshot Folder", action: model.chooseScreenshotDirectory)
-        Button("Picture in Picture", action: model.togglePiP)
         Button("Toggle Fullscreen", action: model.toggleFullscreen)
     }
 
@@ -353,12 +341,6 @@ struct PlayerView: View {
                         .accessibilityIdentifier("player.speed-menu")
                         .accessibilityLabel("Playback speed")
 
-                    Button(action: model.togglePiP) {
-                        Image(systemName: "pip")
-                    }
-                    .buttonStyle(ControlButtonStyle())
-                    .help("Picture in Picture")
-
                     Button {
                         sidebar = sidebar == .settings ? nil : .settings
                         revealControls()
@@ -427,7 +409,7 @@ struct PlayerView: View {
     private func revealControls() {
         controlsVisible = true
         hideControlsTask?.cancel()
-        guard !keepControlsVisible, !model.isPictureInPictureActive, !controlBarHovered, !sidebarHovered else { return }
+        guard !keepControlsVisible, !controlBarHovered, !sidebarHovered else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
@@ -446,16 +428,12 @@ struct PlayerView: View {
 
     private func scheduleControlsHide() {
         hideControlsTask?.cancel()
-        guard !keepControlsVisible, !model.isPictureInPictureActive else { return }
+        guard !keepControlsVisible else { return }
         hideControlsTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled, !controlBarHovered, !sidebarHovered else { return }
             controlsVisible = false
         }
-    }
-
-    private func togglePiP() {
-        model.togglePiP()
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -624,30 +602,6 @@ private struct SeekButton: View {
         let long = Int(longSeekSeconds)
         let action = direction < 0 ? L10n.text("backward") : L10n.text("forward")
         return L10n.format("Short press %@ %d seconds; long press %@ %d seconds", action, short, action, long)
-    }
-}
-
-private struct PiPPlaceholderView: View {
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.regularMaterial)
-                .overlay(Color.black.opacity(0.12))
-
-            VStack(spacing: 18) {
-                Image(systemName: "pip")
-                    .font(.system(size: 76, weight: .light))
-                    .foregroundStyle(.secondary)
-
-                Text("This video is playing in picture in picture")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityLabel("This video is playing in picture in picture")
     }
 }
 

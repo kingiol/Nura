@@ -34,7 +34,6 @@ enum OSDMessage: Equatable {
     case playlistShuffled
     case historyCleared
     case screenshot(String)
-    case piP(Bool)
     case windowOnTop(Bool)
     case fitWindow
     case searchingSubtitles
@@ -120,8 +119,6 @@ enum OSDMessage: Equatable {
             return L10n.text("Playback History Cleared")
         case .screenshot(let detail):
             return L10n.format("Screenshot %@", detail)
-        case .piP(let active):
-            return active ? L10n.text("Picture in Picture: On") : L10n.text("Picture in Picture: Off")
         case .windowOnTop(let enabled):
             return enabled ? L10n.text("Window on Top: On") : L10n.text("Window on Top: Off")
         case .fitWindow:
@@ -193,7 +190,6 @@ enum OSDMessage: Equatable {
         case .playlistShuffled: return "shuffle"
         case .historyCleared: return "clock.arrow.circlepath"
         case .screenshot: return "camera"
-        case .piP: return "pip"
         case .windowOnTop: return "pin"
         case .fitWindow: return "arrow.up.left.and.arrow.down.right"
         case .searchingSubtitles: return "magnifyingglass"

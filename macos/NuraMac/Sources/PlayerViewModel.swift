@@ -84,7 +84,6 @@ final class PlayerViewModel {
     private(set) var lastError: String?
     private(set) var alwaysOnTop = false
     private(set) var loopEnabled = false
-    private(set) var isPictureInPictureActive = false
     private var pendingPlaybackState: Bool?
     private var pendingMutedState: Bool?
     private var pendingABLoop: (start: Double?, end: Double?)?
@@ -141,37 +140,6 @@ final class PlayerViewModel {
     let settings: NuraSettings
     @ObservationIgnored
     private lazy var nowPlaying = NowPlayingCoordinator(model: self)
-    @ObservationIgnored
-    private lazy var pictureInPicture = PictureInPictureCoordinator(
-        onPlayingChange: { [weak self] playing in
-            guard let self, playing != self.isPlaying else { return }
-            self.togglePlayback()
-        },
-        onSeekRelative: { [weak self] offset in
-            self?.seekRelative(offset)
-        },
-        currentPlaybackState: { [weak self] in
-            guard let self else { return (false, 0) }
-            return (self.isPlaying, self.snapshot.durationSeconds ?? 0)
-        },
-        reportError: { [weak self] message in
-            self?.showError(message)
-        },
-        videoDimensions: { [weak self] in
-            guard let self,
-                  let width = self.snapshot.videoWidth,
-                  let height = self.snapshot.videoHeight else {
-                return nil
-            }
-            return (Int32(width), Int32(height))
-        },
-        renderFrame: { [weak self] framebuffer, width, height in
-            self?.render(fbo: framebuffer, width: width, height: height, flipY: false) ?? false
-        },
-        onActiveChange: { [weak self] active in
-            self?.isPictureInPictureActive = active
-        }
-    )
 
     init(
         launchConfiguration: PlayerLaunchConfiguration = .current,
@@ -1546,27 +1514,6 @@ final class PlayerViewModel {
         playerWindow?.toggleFullScreen(nil)
     }
 
-    func togglePiP() {
-        guard snapshot.item != nil, snapshot.videoWidth != nil, snapshot.videoHeight != nil else {
-            showError(L10n.text("Open a video before starting Picture in Picture"))
-            return
-        }
-        showOSD(.piP(!isPictureInPictureActive))
-        pictureInPicture.toggle()
-    }
-
-    func stopPiP() {
-        pictureInPicture.stop()
-    }
-
-    func capturePiPFrame(width: Int32, height: Int32, openGLContext: NSOpenGLContext) {
-        pictureInPicture.appendFrame(
-            width: width,
-            height: height,
-            openGLContext: openGLContext
-        )
-    }
-
     func fitWindowToVideo() {
         guard let geometry = currentVideoGeometry else {
             showError(L10n.text("Video dimensions are not available yet"))
@@ -1700,7 +1647,6 @@ final class PlayerViewModel {
             seekPosition = min(snapshot.positionSeconds, duration)
         }
         nowPlaying.update(snapshot: snapshot, enabled: settings.nowPlayingEnabled)
-        pictureInPicture.invalidatePlaybackState()
     }
 
     private var playbackRuntime: (any PlaybackRuntime)? {

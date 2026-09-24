@@ -1227,17 +1227,6 @@
         }
       }
     },
-    "Open a video before starting Picture in Picture" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请先打开视频，再启动画中画"
-          }
-        }
-      }
-    },
     "Open in New Window…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1421,28 +1410,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已暂停"
-          }
-        }
-      }
-    },
-    "Picture in Picture" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "画中画"
-          }
-        }
-      }
-    },
-    "Picture in Picture is not supported on this Mac" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此 Mac 不支持画中画"
           }
         }
       }
@@ -2172,16 +2139,6 @@
         }
       }
     },
-    "This video is playing in picture in picture" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此视频正在画中画模式播放"
-          }
-        }
-      }
-    },
     "Toggle Full Screen" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2258,17 +2215,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法将视频适配到此显示器"
-          }
-        }
-      }
-    },
-    "Unable to start Picture in Picture: %@" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法启动画中画：%@"
           }
         }
       }

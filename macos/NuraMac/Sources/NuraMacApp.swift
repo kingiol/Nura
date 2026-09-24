@@ -183,10 +183,6 @@ private struct NuraPlayerCommands: Commands {
                     .keyboardShortcut(settings.keyEquivalent(for: .chooseScreenshotFolder), modifiers: settings.modifiers(for: .chooseScreenshotFolder))
             }
         }
-        CommandMenu("Window") {
-            Button("Picture in Picture", action: { playerWindows.activeModel?.togglePiP() })
-                .disabled(!(playerWindows.activeModel?.canScreenshot ?? false))
-        }
         CommandMenu("Notes") {
             Button("New Note", action: { playerWindows.activeModel?.beginNoteCapture() })
                 .disabled(!(playerWindows.activeModel?.canUseLocalTranscriptTools ?? false))

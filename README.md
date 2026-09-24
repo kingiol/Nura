@@ -24,7 +24,6 @@
 - Load matching local subtitle files automatically or add external subtitles manually.
 - Adjust subtitle visibility, delay, scale, and position.
 - Tune video aspect ratio, rotation, and flipping, plus audio delay.
-- Use Picture in Picture while a video is playing.
 - Configure playback, video, audio, subtitle, and advanced mpv options from Settings.
 
 ## Building

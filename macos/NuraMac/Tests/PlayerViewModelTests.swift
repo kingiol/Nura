@@ -5,57 +5,6 @@ import XCTest
 
 @MainActor
 final class PlayerViewModelTests: XCTestCase {
-    func testPiPRenderSizeKeepsSystemRenderDimensions() {
-        XCTAssertEqual(
-            PictureInPictureRenderSize.validated(width: 1280, height: 720),
-            PictureInPictureRenderSize(width: 1280, height: 720)
-        )
-        XCTAssertEqual(
-            PictureInPictureRenderSize.validated(width: 160, height: 90),
-            PictureInPictureRenderSize(width: 160, height: 90)
-        )
-    }
-
-    func testPiPRenderSizeClampsInvalidDimensions() {
-        XCTAssertEqual(
-            PictureInPictureRenderSize.validated(width: 0, height: -1),
-            PictureInPictureRenderSize(width: 2, height: 2)
-        )
-    }
-
-    func testPiPRenderSizeFitsVideoAspectInsideSystemRenderDimensions() {
-        XCTAssertEqual(
-            PictureInPictureRenderSize.aspectFit(
-                sourceWidth: 1440,
-                sourceHeight: 1080,
-                targetWidth: 1280,
-                targetHeight: 720
-            ),
-            PictureInPictureRenderSize(width: 960, height: 720)
-        )
-
-        XCTAssertEqual(
-            PictureInPictureRenderSize.aspectFit(
-                sourceWidth: 2560,
-                sourceHeight: 1080,
-                targetWidth: 1280,
-                targetHeight: 720
-            ),
-            PictureInPictureRenderSize(width: 1280, height: 540)
-        )
-    }
-
-    func testPiPRenderSizeKeepsTargetBoundsForTallVideo() {
-        let renderSize = PictureInPictureRenderSize.aspectFit(
-            sourceWidth: 1080,
-            sourceHeight: 1920,
-            targetWidth: 1280,
-            targetHeight: 720
-        )
-
-        XCTAssertEqual(renderSize, PictureInPictureRenderSize(width: 405, height: 720))
-    }
-
     func testVideoMinimumSizePreservesAspectForWideVideo() {
         let geometry = VideoGeometry(width: 960, height: 400)
         let minimumSize = geometry.minimumSize

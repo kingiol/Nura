@@ -26,7 +26,6 @@
 		663B654482DF5A3A6473A8D8 /* OSDMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F41783BBEF2519556D10F36D /* OSDMessage.swift */; };
 		76E112E402EF0C0DA370EFE4 /* OpenSubtitlesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14D830CB19984101A2D5B53 /* OpenSubtitlesClient.swift */; };
 		7C98667F3F1365B0EBE3F613 /* PlayerBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FA942E24C35E04BDA160156 /* PlayerBridge.swift */; };
-		7EDE4B4FE32E716C17733169 /* PictureInPictureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A516691B759ABC0A323D38C6 /* PictureInPictureCoordinator.swift */; };
 		8267DC3249B1EC1F0A0FC29F /* TranscriptHTTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8435E4DDC148AE094E37C198 /* TranscriptHTTPClient.swift */; };
 		A465C3CF592BDB14C22B6F39 /* PlayerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770C0B1F09BD9113C0A2215A /* PlayerViewModelTests.swift */; };
 		B69A4EAC4EB74771821BDBBD /* SeekThumbnailGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7014F3F30A07D117AED39DA /* SeekThumbnailGenerator.swift */; };
@@ -67,7 +66,7 @@
 		41A317754DB1D2548BB68133 /* SubtitleParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleParser.swift; sourceTree = "<group>"; };
 		443E733149ECDCA15898AF24 /* NuraLocalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraLocalizer.swift; sourceTree = "<group>"; };
 		46A2FAAD67499D7F12EC0CFF /* NuraMacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacUITests.swift; sourceTree = "<group>"; };
-		4A6B25D0CE1245CFAFE4A390 /* Nura.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nura.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NuraMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D7FE4DC1C812A07D99779FC /* OSDMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSDMessageTests.swift; sourceTree = "<group>"; };
 		4EA3F9991C17BF1DD138A10E /* NuraMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NuraMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5164855D5B65C4D4E0B47091 /* NuraMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NuraMacApp.swift; sourceTree = "<group>"; };
@@ -84,7 +83,6 @@
 		9FA942E24C35E04BDA160156 /* PlayerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerBridge.swift; sourceTree = "<group>"; };
 		A14D830CB19984101A2D5B53 /* OpenSubtitlesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSubtitlesClient.swift; sourceTree = "<group>"; };
 		A24F0E5F48DB3AC6919307B8 /* RenderSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderSurfaceView.swift; sourceTree = "<group>"; };
-		A516691B759ABC0A323D38C6 /* PictureInPictureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PictureInPictureCoordinator.swift; sourceTree = "<group>"; };
 		B0CC00722A2F2EDCA7630766 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
 		C090FF4F2429F20BDF3893E4 /* AudioChunkExporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioChunkExporterTests.swift; sourceTree = "<group>"; };
 		C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerLaunchConfiguration.swift; sourceTree = "<group>"; };
@@ -110,7 +108,6 @@
 				56C15E9369ECED1A9DCC789C /* NuraSettingsView.swift */,
 				A14D830CB19984101A2D5B53 /* OpenSubtitlesClient.swift */,
 				F41783BBEF2519556D10F36D /* OSDMessage.swift */,
-				A516691B759ABC0A323D38C6 /* PictureInPictureCoordinator.swift */,
 				9FA942E24C35E04BDA160156 /* PlayerBridge.swift */,
 				C51771BD680CD27FAC9AA5F8 /* PlayerLaunchConfiguration.swift */,
 				D6D5FA583A78B02F836AA677 /* PlayerView.swift */,
@@ -139,7 +136,7 @@
 		8489C3E8D2D8D2449EE65E81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4A6B25D0CE1245CFAFE4A390 /* Nura.app */,
+				4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */,
 				4EA3F9991C17BF1DD138A10E /* NuraMacTests.xctest */,
 				6A9CD6C77A742F3A33A77F12 /* NuraMacUITests.xctest */,
 			);
@@ -234,7 +231,7 @@
 			packageProductDependencies = (
 			);
 			productName = NuraMac;
-			productReference = 4A6B25D0CE1245CFAFE4A390 /* Nura.app */;
+			productReference = 4A6B25D0CE1245CFAFE4A390 /* NuraMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -348,7 +345,6 @@
 				E512619560D8D7E75B875F0E /* NuraSettingsView.swift in Sources */,
 				663B654482DF5A3A6473A8D8 /* OSDMessage.swift in Sources */,
 				76E112E402EF0C0DA370EFE4 /* OpenSubtitlesClient.swift in Sources */,
-				7EDE4B4FE32E716C17733169 /* PictureInPictureCoordinator.swift in Sources */,
 				7C98667F3F1365B0EBE3F613 /* PlayerBridge.swift in Sources */,
 				1A9520FBB1D1088D370268AF /* PlayerLaunchConfiguration.swift in Sources */,
 				05F4E35A0210D7A243031717 /* PlayerView.swift in Sources */,
@@ -411,8 +407,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = "$(NURA_RUST_LIB_DIR)";
-				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				LIBRARY_SEARCH_PATHS = (
+					"$(NURA_RUST_LIB_DIR)",
+				);
 				OTHER_LDFLAGS = (
 					"-lnura_ffi",
 					"-framework",
@@ -425,8 +422,6 @@
 					MediaPlayer,
 					"-framework",
 					AVFoundation,
-					"-framework",
-					AVKit,
 				);
 				PRODUCT_NAME = Nura;
 				SDKROOT = macosx;
@@ -516,8 +511,9 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = "$(NURA_RUST_LIB_DIR)";
-				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				LIBRARY_SEARCH_PATHS = (
+					"$(NURA_RUST_LIB_DIR)",
+				);
 				OTHER_LDFLAGS = (
 					"-lnura_ffi",
 					"-framework",
@@ -530,8 +526,6 @@
 					MediaPlayer,
 					"-framework",
 					AVFoundation,
-					"-framework",
-					AVKit,
 				);
 				PRODUCT_NAME = Nura;
 				SDKROOT = macosx;
