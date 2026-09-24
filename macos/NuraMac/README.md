@@ -2,6 +2,23 @@
 
 The SwiftUI shell links the Rust `nura-ffi` static library from `target/debug` by default, so Xcode Debug builds can stop in both Swift and Rust code. The video surface is the existing OpenGL `NSView` wrapped by `NSViewRepresentable`.
 
+## Source layout
+
+The application target keeps all Swift sources in one module, organized by responsibility:
+
+```text
+Sources/
+├── Application/    App entry, launch configuration, and window lifecycle
+├── Player/         Rust bridge, playback state, and Now Playing integration
+├── Media/          Subtitle, audio export, thumbnail, and online subtitle services
+├── Transcript/     Transcript models and HTTP client
+├── Settings/       Settings model and settings UI
+├── UI/             Player screens, rendering views, controls, and OSD
+└── Support/        Shared localization helpers
+```
+
+Directories are organizational boundaries only. The files remain part of the same `NuraMac` target and can use the existing internal types without additional imports or module wiring.
+
 From the repository root, open the native Xcode project:
 
 ```sh
