@@ -27,27 +27,12 @@ enum OSDMessage: Equatable {
     case aspect(String)
     case rotate(Int)
     case flip(Bool)
-    case open(String)
     case playlistAdded(Int)
-    case playlistCleared
-    case playlistSorted
     case playlistShuffled
-    case historyCleared
     case screenshot(String)
     case windowOnTop(Bool)
     case fitWindow
-    case searchingSubtitles
-    case subtitlesFound(Int)
     case subtitleDownloaded(String)
-    case transcriptImport(String)
-    case transcriptExtracting
-    case transcriptExtracted
-    case transcriptAnalysis(String)
-    case transcriptReady
-    case transcriptCancelled
-    case noteSaved
-    case noteDeleted
-    case noteRestored
     case error(String)
 
     var title: String {
@@ -105,50 +90,18 @@ enum OSDMessage: Equatable {
             return L10n.format("Rotate: %d°", degrees)
         case .flip(let flipped):
             return flipped ? L10n.text("Flip: On") : L10n.text("Flip: Off")
-        case .open(let title):
-            return L10n.format("Opening: %@", title)
         case .playlistAdded(let count):
             return L10n.format("Added %d Files to Playlist", count)
-        case .playlistCleared:
-            return L10n.text("Playlist Cleared")
-        case .playlistSorted:
-            return L10n.text("Playlist Sorted")
         case .playlistShuffled:
             return L10n.text("Playlist Shuffled")
-        case .historyCleared:
-            return L10n.text("Playback History Cleared")
         case .screenshot(let detail):
             return L10n.format("Screenshot %@", detail)
         case .windowOnTop(let enabled):
             return enabled ? L10n.text("Window on Top: On") : L10n.text("Window on Top: Off")
         case .fitWindow:
             return L10n.text("Fit to Video")
-        case .searchingSubtitles:
-            return L10n.text("Searching Subtitles…")
-        case .subtitlesFound(let count):
-            return count == 0
-                ? L10n.text("No Subtitles Found")
-                : L10n.format("Found %d Subtitles", count)
         case .subtitleDownloaded(let name):
             return L10n.format("Subtitle Downloaded: %@", name)
-        case .transcriptImport(let source):
-            return L10n.format("Transcript Imported: %@", source)
-        case .transcriptExtracting:
-            return L10n.text("Extracting Subtitles…")
-        case .transcriptExtracted:
-            return L10n.text("Transcript Extracted")
-        case .transcriptAnalysis(let phase):
-            return L10n.format("Audio Analysis: %@", phase)
-        case .transcriptReady:
-            return L10n.text("Transcript Ready")
-        case .transcriptCancelled:
-            return L10n.text("Analysis Cancelled")
-        case .noteSaved:
-            return L10n.text("Note Saved")
-        case .noteDeleted:
-            return L10n.text("Note Deleted")
-        case .noteRestored:
-            return L10n.text("Note Restored")
         case .error(let message):
             return message
         }
@@ -183,25 +136,12 @@ enum OSDMessage: Equatable {
         case .aspect: return "rectangle.ratio.4.to.3"
         case .rotate: return "rotate.right"
         case .flip: return "arrow.up.and.down.righttriangle.up.righttriangle.down"
-        case .open: return "arrow.down.circle"
         case .playlistAdded: return "plus"
-        case .playlistCleared: return "trash"
-        case .playlistSorted: return "arrow.up.arrow.down"
         case .playlistShuffled: return "shuffle"
-        case .historyCleared: return "clock.arrow.circlepath"
         case .screenshot: return "camera"
         case .windowOnTop: return "pin"
         case .fitWindow: return "arrow.up.left.and.arrow.down.right"
-        case .searchingSubtitles: return "magnifyingglass"
-        case .subtitlesFound(let count): return count == 0 ? "exclamationmark" : "checkmark.circle"
         case .subtitleDownloaded: return "arrow.down.circle"
-        case .transcriptImport, .transcriptExtracted, .transcriptReady: return "doc.text"
-        case .transcriptExtracting: return "doc.text.magnifyingglass"
-        case .transcriptAnalysis: return "waveform.badge.magnifyingglass"
-        case .transcriptCancelled: return "xmark.circle"
-        case .noteSaved: return "note.text"
-        case .noteDeleted: return "trash"
-        case .noteRestored: return "arrow.uturn.backward"
         case .error: return "exclamationmark.triangle.fill"
         }
     }

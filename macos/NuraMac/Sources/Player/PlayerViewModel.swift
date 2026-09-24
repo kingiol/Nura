@@ -363,13 +363,11 @@ final class PlayerViewModel {
             case .media(let urls):
                 guard let first = urls.first else { return }
                 try bridge?.open(first)
-                showOSD(.open(Self.displayName(for: first)))
                 for url in urls.dropFirst() {
                     try bridge?.enqueue(url)
                 }
             case .url(let value):
                 try bridge?.openURL(value)
-                showOSD(.open(value))
             }
             lastError = nil
         } catch {
@@ -445,7 +443,6 @@ final class PlayerViewModel {
         do {
             try bridge?.clearHistory()
             lastError = nil
-            showOSD(.historyCleared)
         } catch {
             showError(error.localizedDescription)
         }
@@ -534,7 +531,6 @@ final class PlayerViewModel {
             try bridge?.clearPlaylist()
             loopEnabled = false
             lastError = nil
-            showOSD(.playlistCleared)
         } catch {
             showError(error.localizedDescription)
         }
@@ -550,7 +546,6 @@ final class PlayerViewModel {
 
     func sortPlaylist(by key: PlaylistSortKey, ascending: Bool) {
         guard snapshot.playlist.count > 1 else { return }
-        showOSD(.playlistSorted)
         let sortedIDs = snapshot.playlist.enumerated().sorted { lhs, rhs in
             let left = key.value(for: lhs.element)
             let right = key.value(for: rhs.element)
@@ -607,7 +602,6 @@ final class PlayerViewModel {
         do {
             try importTranscriptSubtitle(at: url)
             lastError = nil
-            showOSD(.transcriptImport(url.lastPathComponent))
         } catch {
             showError(error.localizedDescription)
         }
@@ -672,7 +666,6 @@ final class PlayerViewModel {
                 self.applyTranscript(document)
                 self.embeddedSubtitleMessage = nil
                 self.lastError = nil
-                self.showOSD(.transcriptExtracted)
             } catch {
                 guard let self, self.localAnalysisGeneration == generation else { return }
                 self.embeddedSubtitleMessage = error.localizedDescription
@@ -801,7 +794,6 @@ final class PlayerViewModel {
                 )
                 try bridge?.updateNote(updated)
                 replaceNote(updated)
-                showOSD(.noteSaved)
             } else {
                 let saved = try bridge?.createNote(
                     NewInstantNote(
@@ -817,7 +809,6 @@ final class PlayerViewModel {
                     notes.append(saved)
                     sortNotes()
                 }
-                showOSD(.noteSaved)
             }
             noteDraft = nil
             lastError = nil
@@ -834,7 +825,6 @@ final class PlayerViewModel {
                 deletedNote = deleted
             }
             lastError = nil
-            showOSD(.noteDeleted)
         } catch {
             showError(error.localizedDescription)
         }
@@ -859,7 +849,6 @@ final class PlayerViewModel {
             }
             self.deletedNote = nil
             lastError = nil
-            showOSD(.noteRestored)
         } catch {
             showError(error.localizedDescription)
         }
@@ -872,7 +861,6 @@ final class PlayerViewModel {
         }
         isSearchingOnlineSubtitles = true
         onlineSubtitleResults = []
-        showOSD(.searchingSubtitles)
         let query = URL(fileURLWithPath: item.title).deletingPathExtension().lastPathComponent
         let language = settings.subtitleSearchLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = settings.openSubtitlesAPIKey
@@ -886,7 +874,6 @@ final class PlayerViewModel {
                 guard let self else { return }
                 onlineSubtitleResults = results
                 isSearchingOnlineSubtitles = false
-                showOSD(.subtitlesFound(results.count))
             } catch {
                 guard let self else { return }
                 isSearchingOnlineSubtitles = false
@@ -897,7 +884,6 @@ final class PlayerViewModel {
 
     func loadOnlineSubtitle(_ result: OnlineSubtitleResult) {
         let apiKey = settings.openSubtitlesAPIKey
-        showOSD(.searchingSubtitles)
         Task { [weak self] in
             do {
                 let url = try await OpenSubtitlesClient().download(result: result, apiKey: apiKey)
@@ -1815,7 +1801,6 @@ final class PlayerViewModel {
             updateCloudFailure("Open media before analyzing audio.", generation: generation)
             return
         }
-        showOSD(.transcriptAnalysis("Started"))
         let taskID = UUID()
         let task = Task { [weak self] in
             guard let self else { return }
@@ -1914,7 +1899,6 @@ final class PlayerViewModel {
 
             try bridge.saveAnalysisRun(run)
             updateCloudProcessing(run: run, generation: generation)
-            showOSD(.transcriptAnalysis("Processing"))
             let client = TranscriptHTTPClient()
             for plannedChunk in plan.chunks where !run.completedChunkIndexes.contains(Int64(plannedChunk.index)) {
                 try Task.checkCancellation()
@@ -1974,7 +1958,6 @@ final class PlayerViewModel {
                     cloudAnalysisProgress = .idle
                     lastError = nil
                 }
-                showOSD(.transcriptReady)
                 return
             }
 
@@ -1994,10 +1977,8 @@ final class PlayerViewModel {
                 cloudAnalysisProgress = .idle
                 lastError = nil
             }
-            showOSD(.transcriptReady)
         } catch is CancellationError {
             await persistCloudInterruption(key: target.key, status: .cancelled, message: nil, generation: generation)
-            showOSD(.transcriptCancelled)
         } catch {
             if Task.isCancelled {
                 await persistCloudInterruption(key: target.key, status: .cancelled, message: nil, generation: generation)
